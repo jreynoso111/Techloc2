@@ -1,0 +1,1926 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>TechLoc • Vehicles Admin</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+
+  <script>
+
+    tailwind.config = {
+
+      theme: {
+
+        extend: {
+
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+
+          colors: { slate: { 950: '#020617' } },
+
+        },
+
+      },
+
+    };
+
+  </script>
+
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+  <style>
+    .admin-table th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: rgb(148 163 184);
+      position: relative;
+      user-select: none;
+    }
+    .admin-table td {
+      font-size: 12px;
+      line-height: 1.35rem;
+      word-break: break-word;
+    }
+    .admin-table .header-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: text;
+    }
+    .admin-table .header-label:hover {
+      color: #e2e8f0;
+    }
+    .admin-table .header-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .admin-table .header-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: rgb(148 163 184);
+    }
+    .admin-table .header-actions button {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+    .admin-table .header-actions button:hover {
+      background-color: rgba(51, 65, 85, 0.7);
+      color: #e2e8f0;
+    }
+    .admin-table th.drag-over {
+      outline: 2px dashed rgba(37, 99, 235, 0.5);
+      outline-offset: -3px;
+    }
+    .column-resizer {
+      position: absolute;
+      top: 0;
+      right: -4px;
+      width: 8px;
+      height: 100%;
+      cursor: col-resize;
+      z-index: 10;
+    }
+    .filter-popover {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 8px;
+      min-width: 180px;
+      border-radius: 12px;
+      border: 1px solid rgba(30, 41, 59, 0.8);
+      background: rgba(2, 6, 23, 0.95);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+      padding: 10px;
+    }
+    .filter-popover label {
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      color: rgb(148 163 184);
+      font-weight: 700;
+    }
+    .filter-popover .filter-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .filter-popover .filter-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(51, 65, 85, 0.5);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .filter-popover .filter-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .filter-popover button {
+      font-size: 12px;
+      font-weight: 700;
+    }
+  </style>
+
+</head>
+
+  <body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="Vehicles Admin" data-active-nav="dashboard">
+
+    <div class="sticky top-0 z-50 space-y-px">
+
+      <div data-shared-header></div>
+
+      <div data-admin-nav data-admin-nav="vehicles"></div>
+
+  </div>
+
+
+
+  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10"></canvas>
+
+
+
+    <main class="w-full px-6 py-8 lg:px-10 space-y-8">
+      <section class="space-y-8">
+
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            <div>
+
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Fleet controls</p>
+
+              <h2 class="text-2xl font-black text-white">Vehicle inventory and GPS health</h2>
+
+              <p class="text-sm text-slate-400">Review units, spot risky statuses, and prepare data replacements.</p>
+
+            </div>
+
+            <div class="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
+
+              <i data-lucide="file-up" class="h-4 w-4"></i>
+
+                  <span id="dataset-status">Supabase table</span>
+
+            </div>
+
+          </div>
+
+
+
+          <section class="grid gap-3 sm:grid-cols-3">
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+
+              <p class="text-sm font-semibold text-slate-300">Records</p>
+
+              <p id="vehicle-total" class="text-3xl font-black text-white">-</p>
+
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+
+              <p class="text-sm font-semibold text-slate-300">GPS issues</p>
+
+              <p id="vehicle-gps" class="text-3xl font-black text-amber-300">-</p>
+
+            </div>
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+
+              <p class="text-sm font-semibold text-slate-300">States covered</p>
+
+              <p id="vehicle-states" class="text-3xl font-black text-emerald-300">-</p>
+
+            </div>
+
+          </section>
+
+
+
+          <section class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-inner shadow-slate-900/60">
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+              <div>
+
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Inventory</p>
+
+                <h3 class="text-lg font-bold text-white">Vehicle list</h3>
+
+              </div>
+
+              <div class="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span id="dataset-status" class="rounded-full border border-slate-700/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Supabase table</span>
+                  <div class="relative">
+                    <button id="column-selector-toggle" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white">
+                      <i data-lucide="columns" class="h-4 w-4"></i>
+                      Columns
+                    </button>
+                    <div id="column-selector-panel" class="filter-popover hidden w-72 z-30">
+                      <label>Visible columns</label>
+                      <div id="column-selector-list" class="filter-options max-h-80"></div>
+                      <div class="filter-actions">
+                        <button id="column-selector-apply" type="button" class="flex-1 rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-500">Apply</button>
+                        <button id="column-selector-reset" type="button" class="flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-200 hover:border-blue-500">Reset</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="flex flex-col gap-3 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+
+              <p id="pagination-summary" class="text-sm text-slate-300">Showing 0-0 of 0</p>
+
+              <div class="flex items-center gap-2">
+
+                <button id="prev-page" class="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60" disabled>
+
+                  <i data-lucide="chevron-left" class="h-4 w-4"></i>
+
+                  Prev
+
+                </button>
+
+                <span id="page-indicator" class="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200">1 / 1</span>
+
+                <button id="next-page" class="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-60" disabled>
+
+                  Next
+
+                  <i data-lucide="chevron-right" class="h-4 w-4"></i>
+
+                </button>
+
+              </div>
+
+            </div>
+
+            <div class="space-y-2 rounded-xl border border-slate-800 bg-slate-950/40">
+              <div id="table-scroll-top" class="overflow-x-auto border-b border-slate-800 bg-slate-950/80">
+                <div id="table-scroll-shadow" class="h-2"></div>
+              </div>
+              <div id="table-scroll-container" class="overflow-x-auto">
+                <table id="vehicles-table" class="min-w-full table-fixed divide-y divide-slate-800 text-xs leading-tight admin-table">
+                  <thead id="table-head" class="bg-slate-950/60 text-slate-300"></thead>
+                  <tbody id="table-body" class="divide-y divide-slate-800 bg-slate-950/40"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </section>
+
+  
+
+      </section>
+
+  </main>
+
+
+
+  <script type="module">
+
+    import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
+    import {
+      loadPreferredBackgroundMode,
+      persistBackgroundMode,
+    } from '../../assets/scripts/backgroundPreference.js';
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+    import { logAdminEvent } from '../../assets/scripts/adminAudit.js';
+    import { bindStorageListener, setSelectedVehicle } from '../../assets/js/shared/selectedVehicleStore.js';
+
+
+
+    bindStorageListener();
+
+    const setupDashboardDropdown = () => {
+
+      document.querySelectorAll('[data-dropdown]').forEach((dropdown) => {
+
+        const trigger = dropdown.querySelector('[data-dropdown-trigger]');
+
+        const menu = dropdown.querySelector('[data-dropdown-menu]');
+
+        if (!trigger || !menu) return;
+
+
+
+        let hideTimeout;
+
+
+
+        const showMenu = () => {
+
+          clearTimeout(hideTimeout);
+
+          menu.classList.remove('hidden');
+
+        };
+
+
+
+        const scheduleHide = () => {
+
+          hideTimeout = setTimeout(() => {
+
+            menu.classList.add('hidden');
+
+          }, 500);
+
+        };
+
+
+
+        dropdown.addEventListener('mouseenter', showMenu);
+
+        dropdown.addEventListener('mouseleave', scheduleHide);
+
+        trigger.addEventListener('focus', showMenu);
+
+        trigger.addEventListener('blur', (event) => {
+
+          if (!dropdown.contains(event.relatedTarget)) {
+
+            scheduleHide();
+
+          }
+
+        });
+
+        menu.addEventListener('focusin', showMenu);
+
+        menu.addEventListener('focusout', (event) => {
+
+          if (!dropdown.contains(event.relatedTarget)) {
+
+            scheduleHide();
+
+          }
+
+        });
+
+      });
+
+    };
+
+
+
+    const ADMIN_ROLE = 'administrator';
+    const CHANGE_LOG_TABLE = 'admin_change_log';
+
+    const actor = { id: 'anon', email: '' };
+
+    const normalizeHeader = (header = '') => {
+      const aliases = {
+        'deal status': 'deal_status',
+        'deal_status': 'deal_status',
+        'dealstatus': 'deal_status',
+        'customer id': 'customer_id',
+        'customerid': 'customer_id',
+        'unit type': 'unit_type',
+        'unittype': 'unit_type',
+        'model year': 'model_year',
+        'modelyear': 'model_year',
+        'model': 'model',
+        'vin': 'VIN',
+        'vehicle vin': 'VIN',
+        'shortvin': 'shortvin',
+        'short vin': 'shortvin',
+        'short_vin': 'shortvin',
+        'inv. prep. stat.': 'inv_prep_stat',
+        'inv prep stat': 'inv_prep_stat',
+        'inv_prep_stat': 'inv_prep_stat',
+        'deal completion': 'deal_completion',
+        'gps fix': 'gps_fix',
+        'gps fix reason': 'gps_fix_reason',
+        'pt status': 'pt_status',
+        'pt_status': 'pt_status',
+        'pt serial ': 'pt_serial',
+        'pt serial': 'pt_serial',
+        'pt_serial': 'pt_serial',
+        'encore serial': 'encore_serial',
+        'moving': 'moving',
+        'pt last read': 'pt_last_read',
+        'pt_last_read': 'pt_last_read',
+        'state loc': 'state_loc',
+        'state_loc': 'state_loc',
+        'pt city': 'pt_city',
+        'pt_city': 'pt_city',
+        'pt zipcode': 'pt_zipcode',
+        'pt zip code': 'pt_zipcode',
+        'pt_zipcode': 'pt_zipcode',
+        'lat': 'lat',
+        'latitude': 'lat',
+        'long': 'long',
+        'lng': 'long',
+        'longitude': 'long',
+      };
+
+      const trimmed = header.trim();
+      const lowerTrimmed = trimmed.toLowerCase();
+      if (aliases[lowerTrimmed]) return aliases[lowerTrimmed];
+
+      return trimmed
+        .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+        .replace(/[^A-Za-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .toLowerCase();
+    };
+
+    const parseCsvLine = (line = '') => {
+
+      const values = [];
+
+      let current = '';
+
+      let inQuotes = false;
+
+
+
+      for (let i = 0; i < line.length; i += 1) {
+
+        const char = line[i];
+
+        if (char === '"') {
+
+          if (inQuotes && line[i + 1] === '"') {
+
+            current += '"';
+
+            i += 1;
+
+            continue;
+
+          }
+
+          inQuotes = !inQuotes;
+
+        } else if (char === ',' && !inQuotes) {
+
+          values.push(current);
+
+          current = '';
+
+        } else {
+
+          current += char;
+
+        }
+
+      }
+
+
+
+      values.push(current);
+
+      return values.map((value) => value.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+    };
+
+    const parseCsvText = (text = '') => {
+
+      const rawLines = text.split(/\r?\n/);
+
+      const records = [];
+
+      let buffer = '';
+
+      let inQuotes = false;
+
+
+
+      const flushRecord = () => {
+
+        if (buffer.length === 0) return;
+
+        records.push(buffer);
+
+        buffer = '';
+
+      };
+
+
+
+      rawLines.forEach((line, lineIndex) => {
+
+        const segment = buffer ? `\n${line}` : line;
+
+        buffer += segment;
+
+
+
+        for (let i = 0; i < line.length; i += 1) {
+
+          if (line[i] !== '"') continue;
+
+          const isEscaped = line[i + 1] === '"';
+
+          if (!isEscaped) {
+
+            inQuotes = !inQuotes;
+
+          } else {
+
+            i += 1; // skip escaped quote
+
+          }
+
+        }
+
+
+
+        if (!inQuotes) {
+
+          flushRecord();
+
+        }
+
+
+
+        if (lineIndex === rawLines.length - 1 && buffer) {
+
+          flushRecord();
+
+        }
+
+      });
+
+
+
+      let headerRecord = records.shift() || '';
+
+      let headerValues = parseCsvLine(headerRecord);
+
+      const valueRecords = records.map((record) => parseCsvLine(record)).filter((values) => values.length);
+
+      const targetColumns = Math.max(headerValues.length, ...valueRecords.map((values) => values.length));
+
+      while (headerValues.length < targetColumns && records.length) {
+
+        const nextPiece = records.shift();
+
+        const separator = headerRecord.endsWith(',') ? '' : ',';
+
+        headerRecord = `${headerRecord}${separator}${nextPiece}`;
+
+        headerValues = parseCsvLine(headerRecord);
+
+      }
+
+
+
+      const rows = records
+
+        .filter(Boolean)
+
+        .map((record) => {
+
+          const values = parseCsvLine(record);
+
+          return Object.fromEntries(headerValues.map((header, idx) => [header.trim(), (values[idx] || '').trim()]));
+
+        });
+
+      return { headers: headerValues, rows };
+
+    };
+
+    const normalizeRows = (rows = []) => rows.map((row) => Object.entries(row).reduce((acc, [key, value]) => {
+
+      const normalizedKey = normalizeHeader(key);
+
+      acc[normalizedKey] = (value || '').trim();
+
+      return acc;
+
+    }, {}));
+
+
+
+    const ensureToastContainer = () => {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'fixed bottom-6 right-6 z-50 flex flex-col gap-3';
+        document.body.appendChild(container);
+      }
+      return container;
+    };
+
+    const showToast = (message, type = 'info') => {
+      const container = ensureToastContainer();
+      const toast = document.createElement('div');
+      const variantClasses =
+        type === 'success'
+          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-50 shadow-emerald-500/30'
+          : 'border-red-500/60 bg-red-500/10 text-red-50 shadow-red-500/30';
+      toast.className = `flex min-w-[260px] max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${variantClasses}`;
+      const icon = document.createElement('span');
+      icon.className = `mt-0.5 h-2.5 w-2.5 rounded-full ${type === 'success' ? 'bg-emerald-400' : 'bg-red-400'}`;
+      const text = document.createElement('p');
+      text.className = 'whitespace-pre-line font-semibold leading-relaxed';
+      text.textContent = message;
+      toast.appendChild(icon);
+      toast.appendChild(text);
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2', 'transition', 'duration-300');
+        setTimeout(() => toast.remove(), 320);
+      }, 4200);
+    };
+
+    const setDatasetStatus = (text) => {
+      const status = document.getElementById('dataset-status');
+      if (status) status.textContent = text;
+    };
+
+    const fetchVehiclesFromSupabase = async () => {
+      if (!supabaseClient) throw new Error('Supabase client is not available.');
+      const { data, error } = await supabaseClient.from('vehicles').select('*');
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      const headers = rows.length ? Object.keys(rows[0]) : [];
+      setDatasetStatus('Supabase table');
+      return { headers, rows };
+    };
+
+    const loadVehiclesData = async () => {
+      let fetchedHeaders = [];
+      let fetchedRows = [];
+      let usedSupabase = false;
+      try {
+        const { headers, rows } = await fetchVehiclesFromSupabase();
+        fetchedHeaders = headers;
+        fetchedRows = rows;
+        usedSupabase = true;
+        setDatasetStatus('Supabase table');
+      } catch (error) {
+        console.error('Error loading vehicles from Supabase', error);
+        setDatasetStatus('Supabase unavailable');
+        showToast('Supabase data unavailable. Please verify the connection.', 'error');
+      }
+      if (!fetchedHeaders.length || !fetchedRows.length) {
+        setDatasetStatus('No data available');
+      }
+
+      state.headers = fetchedHeaders;
+      state.headers = applyHeaderOrder(state.headers);
+      applyVisibleColumns();
+      state.rows = fetchedRows;
+      state.pagination.page = 1;
+      state.remoteTotal = usedSupabase ? fetchedRows.length : null;
+      updateStats(fetchedRows);
+      refreshTable();
+      if (usedSupabase) await fetchVehiclesCount();
+      renderColumnSelector();
+    };
+
+
+
+    const renderTable = (rows) => {
+
+      const allowEdit = isAdminUser();
+
+      els.tableBody.innerHTML = '';
+
+      els.tableHead.innerHTML = '';
+
+
+
+      const headerRow = document.createElement('tr');
+      const headersToRender = getVisibleHeaders();
+
+      headersToRender.forEach((header) => {
+
+        const th = document.createElement('th');
+
+        th.className = 'px-3 py-2 text-left font-semibold whitespace-normal break-words leading-tight bg-slate-950/80 border-b border-slate-800';
+        th.dataset.header = header;
+        const storedWidth = state.columnWidths[header];
+        if (storedWidth) {
+          th.style.width = storedWidth;
+          th.style.minWidth = storedWidth;
+        }
+
+        const headerControls = document.createElement('div');
+        headerControls.className = 'header-controls';
+
+        const labelBtn = document.createElement('button');
+        labelBtn.type = 'button';
+        labelBtn.className = 'header-label text-[11px] font-semibold text-slate-300 break-words text-left leading-tight';
+        labelBtn.title = 'Double click to rename column';
+        labelBtn.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          renameHeader(header);
+        });
+        labelBtn.textContent = getHeaderLabel(header);
+        headerControls.appendChild(labelBtn);
+
+        const actions = document.createElement('div');
+        actions.className = 'header-actions';
+
+        const filterWrapper = document.createElement('div');
+        filterWrapper.className = 'relative z-20';
+        const filterBtn = document.createElement('button');
+        filterBtn.type = 'button';
+        filterBtn.title = 'Filter column';
+        const activeFilters = state.filters.columnFilters[header] || [];
+        const filterIcon = document.createElement('span');
+        filterIcon.textContent = activeFilters.length ? '●' : '⧉';
+        filterBtn.appendChild(filterIcon);
+
+        const filterPopover = document.createElement('div');
+        filterPopover.className = 'filter-popover hidden';
+        const label = document.createElement('label');
+        label.textContent = `Filter ${getHeaderLabel(header)}`;
+        filterPopover.appendChild(label);
+
+        const optionsWrapper = document.createElement('div');
+        optionsWrapper.className = 'filter-options';
+        const selected = new Set(activeFilters);
+        getFilterOptionsForHeader(header).forEach((value) => {
+          const optionLabel = document.createElement('label');
+          optionLabel.className = 'filter-option';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = value;
+          checkbox.checked = selected.has(value);
+          checkbox.addEventListener('change', (event) => {
+            if (event.target.checked) {
+              selected.add(value);
+            } else {
+              selected.delete(value);
+            }
+            setColumnFilter(header, Array.from(selected));
+          });
+          const text = document.createElement('span');
+          text.textContent = value ? value.toUpperCase() : 'N/A';
+          optionLabel.appendChild(checkbox);
+          optionLabel.appendChild(text);
+          optionsWrapper.appendChild(optionLabel);
+        });
+
+        filterPopover.appendChild(optionsWrapper);
+
+        const actionsRow = document.createElement('div');
+        actionsRow.className = 'filter-actions';
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'flex-1 rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-500';
+        applyBtn.textContent = 'Apply';
+        applyBtn.addEventListener('click', () => {
+          closePopover();
+        });
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-200 hover:border-blue-500';
+        clearBtn.textContent = 'Clear';
+        clearBtn.addEventListener('click', () => {
+          setColumnFilter(header, []);
+          selected.clear();
+          optionsWrapper.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+            checkbox.checked = false;
+          });
+          closePopover();
+        });
+
+        actionsRow.appendChild(applyBtn);
+        actionsRow.appendChild(clearBtn);
+        filterPopover.appendChild(actionsRow);
+
+        filterWrapper.appendChild(filterBtn);
+        filterWrapper.appendChild(filterPopover);
+
+        const closePopover = (event) => {
+          if (!event || !filterWrapper.contains(event.target)) {
+            filterPopover.classList.add('hidden');
+            document.removeEventListener('click', closePopover);
+          }
+        };
+
+        filterBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const willOpen = filterPopover.classList.contains('hidden');
+          filterPopover.classList.toggle('hidden');
+          if (willOpen) {
+            document.addEventListener('click', closePopover);
+          } else {
+            document.removeEventListener('click', closePopover);
+          }
+        });
+
+        const sortBtn = document.createElement('button');
+        sortBtn.type = 'button';
+        sortBtn.title = 'Sort column';
+        const sortIcon = document.createElement('span');
+        const isSorted = state.filters.sortKey === header;
+        sortIcon.textContent = isSorted ? (state.filters.sortDir === 'asc' ? '↑' : '↓') : '⇅';
+        sortBtn.appendChild(sortIcon);
+        sortBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          toggleSortForHeader(header);
+        });
+
+        actions.appendChild(filterWrapper);
+        actions.appendChild(sortBtn);
+
+        headerControls.appendChild(actions);
+        th.appendChild(headerControls);
+
+        const resizer = document.createElement('span');
+        resizer.className = 'column-resizer';
+        resizer.addEventListener('mousedown', (event) => {
+          event.stopPropagation();
+          const startX = event.clientX;
+          const startWidth = th.offsetWidth;
+          const columnIndex = Array.from(th.parentElement.children).indexOf(th);
+          const handleMove = (moveEvent) => {
+            const nextWidth = Math.max(90, startWidth + (moveEvent.clientX - startX));
+            th.style.width = `${nextWidth}px`;
+            state.columnWidths[header] = `${nextWidth}px`;
+            els.tableBody.querySelectorAll('tr').forEach((row) => {
+              const cell = row.children[columnIndex];
+              if (cell) cell.style.width = `${nextWidth}px`;
+            });
+            syncScrollbars();
+          };
+          const handleUp = () => {
+            document.removeEventListener('mousemove', handleMove);
+            document.removeEventListener('mouseup', handleUp);
+            saveColumnWidths();
+          };
+          document.addEventListener('mousemove', handleMove);
+          document.addEventListener('mouseup', handleUp);
+        });
+        th.appendChild(resizer);
+
+        th.draggable = true;
+        th.addEventListener('dragstart', () => {
+          state.draggingHeader = header;
+        });
+        th.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          if (state.draggingHeader && state.draggingHeader !== header) {
+            th.classList.add('drag-over');
+          }
+        });
+        th.addEventListener('dragleave', () => th.classList.remove('drag-over'));
+        th.addEventListener('drop', (event) => {
+          event.preventDefault();
+          th.classList.remove('drag-over');
+          if (!state.draggingHeader || state.draggingHeader === header) return;
+          const fromIndex = state.headers.indexOf(state.draggingHeader);
+          const toIndex = state.headers.indexOf(header);
+          if (fromIndex === -1 || toIndex === -1) return;
+          const [moved] = state.headers.splice(fromIndex, 1);
+          state.headers.splice(toIndex, 0, moved);
+          state.draggingHeader = null;
+          saveHeaderOrder();
+          refreshTable();
+        });
+        th.addEventListener('dragend', () => {
+          state.draggingHeader = null;
+          th.classList.remove('drag-over');
+        });
+
+        headerRow.appendChild(th);
+
+      });
+
+      els.tableHead.appendChild(headerRow);
+
+
+
+      const totalPages = Math.max(1, Math.ceil(rows.length / state.pagination.pageSize));
+
+      if (state.pagination.page > totalPages) state.pagination.page = totalPages;
+
+      const start = (state.pagination.page - 1) * state.pagination.pageSize;
+
+      const end = Math.min(rows.length, start + state.pagination.pageSize);
+
+
+
+      els.paginationSummary.textContent = rows.length
+
+        ? `Showing ${start + 1}-${end} of ${rows.length}`
+
+        : 'No entries to display';
+
+      els.pageIndicator.textContent = `${state.pagination.page} / ${totalPages}`;
+
+      els.prevPage.disabled = state.pagination.page === 1 || rows.length === 0;
+
+      els.nextPage.disabled = state.pagination.page >= totalPages || rows.length === 0;
+
+
+
+      rows.slice(start, end).forEach((row) => {
+
+        const tr = document.createElement('tr');
+
+        tr.className = 'transition hover:bg-slate-800/40';
+        const vinValue = getValue(row, 'VIN', 'vin', 'ShortVIN', 'shortvin');
+        const customerValue = getValue(row, 'Customer ID', 'customer_id', 'customer');
+        tr.addEventListener('click', (event) => {
+          if (state.inlineEdit.td) return;
+          if (event.target.closest('button, a, input, select, textarea')) return;
+          setSelectedVehicle({
+            id: row?.id ?? null,
+            vin: vinValue || '',
+            customerId: customerValue || '',
+          });
+        });
+
+        getVisibleHeaders().forEach((header, idx) => {
+          const td = document.createElement('td');
+          td.className = idx === 0
+            ? 'px-2 py-2 font-semibold text-white whitespace-normal leading-snug'
+            : 'px-2 py-2 text-slate-200 whitespace-normal leading-snug';
+          const storedWidth = state.columnWidths[header];
+          if (storedWidth) {
+            td.style.width = storedWidth;
+            td.style.minWidth = storedWidth;
+          }
+          const cellValue = getValue(row, header);
+          td.textContent = formatCellValue(header, cellValue);
+          if (allowEdit) {
+            td.title = 'Double click to edit cell';
+            td.addEventListener('dblclick', () => startCellEdit(td, row, header));
+          }
+          tr.appendChild(td);
+      });
+
+      els.tableBody.appendChild(tr);
+
+    });
+
+      applyColumnWidths();
+      lucide.createIcons();
+
+    };
+
+
+
+    const updateStats = (rows) => {
+
+      const total = typeof state.remoteTotal === 'number' ? state.remoteTotal : rows.length;
+
+      const gpsIssues = rows.filter((row) => String(getValue(row, 'GPS Fix', 'gps fix') || '').toLowerCase() !== 'all').length;
+
+      const states = new Set(rows.map((r) => (getValue(r, 'State Loc', 'state loc') || '').trim()).filter(Boolean)).size;
+
+      document.getElementById('vehicle-total').textContent = total.toLocaleString();
+
+      document.getElementById('vehicle-gps').textContent = gpsIssues.toLocaleString();
+
+      document.getElementById('vehicle-states').textContent = states;
+
+    };
+
+
+
+      const fetchVehiclesCount = async () => {
+
+      if (!supabaseClient) return;
+
+      try {
+
+          const { count, error } = await supabaseClient
+
+            .from('vehicles')
+
+            .select('*', { count: 'exact', head: true });
+
+        if (error) throw error;
+
+        state.remoteTotal = typeof count === 'number' ? count : null;
+
+        updateStats(state.rows);
+
+      } catch (error) {
+
+          console.error('Error fetching vehicles count:', error.message || error);
+
+      }
+
+    };
+
+
+
+    const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
+
+
+
+    const mapVehicleRows = (rows = []) => {
+
+      const normalizedRows = normalizeRows(rows);
+
+      const deduped = new Map();
+
+      normalizedRows.forEach((row) => {
+
+        const key = row.short_vin || row.shortvin;
+
+        if (!key) return;
+
+        deduped.set(key, row);
+
+      });
+
+      return Array.from(deduped.values());
+
+    };
+
+    const collectFixUpdatesSyncData = (rows = []) => {
+      const normalizedRows = normalizeRows(rows);
+      const vins = new Set();
+      const customers = new Set();
+      normalizedRows.forEach((row) => {
+        const vin = String(getValue(row, 'VIN')).trim();
+        const customer = String(getValue(row, 'customer_id', 'customer')).trim();
+        if (vin) vins.add(vin);
+        if (customer) customers.add(customer);
+      });
+      return {
+        vins: Array.from(vins),
+        customers: Array.from(customers),
+      };
+    };
+
+    const syncVehiclesFromFixUpdates = async ({ vins = [], customers = [] } = {}) => {
+      if (!supabaseClient) return;
+      if (!vins.length && !customers.length) return;
+      if (els.uploadStatus) {
+        els.uploadStatus.textContent = 'Syncing vehicles...';
+        els.uploadStatus.classList.remove('text-emerald-300', 'text-red-300');
+        els.uploadStatus.classList.add('text-amber-300');
+      }
+      try {
+        const { error } = await supabaseClient.rpc('sync_vehicles_from_fix_updates', {
+          p_vins: vins,
+          p_customers: customers,
+        });
+        if (error) throw error;
+        showToast('Vehicle sync complete.', 'success');
+      } catch (error) {
+        console.warn('Vehicle sync failed', error?.message || error);
+        showToast('Vehicle sync failed. Check console.', 'error');
+      }
+    };
+
+
+
+    const hydrateActor = async () => {
+
+      if (!supabaseClient) return;
+
+      try {
+
+        const { data } = await supabaseClient.auth.getSession();
+
+        actor.id = data?.session?.user?.id || 'anon';
+
+        actor.email = data?.session?.user?.email || '';
+
+      } catch (error) {
+
+        console.warn('Unable to load user session for change log', error?.message || error);
+
+      }
+
+    };
+
+
+
+    const logChange = async ({ action = 'edit', summary = '' } = {}) => {
+      await logAdminEvent({
+        client: supabaseClient,
+        action,
+        tableName: 'vehicles',
+        summary,
+        actor: actor.email || actor.id || 'anon',
+      });
+    };
+
+
+
+    const handleCsvUpload = async (file) => {
+
+      if (!supabaseClient) throw new Error('Supabase client is not available.');
+
+      if (!isAdminUser()) throw new Error('Only administrators can upload vehicle data.');
+
+      updateUploadProgress(5, 'Reading CSV');
+
+      const text = await file.text();
+
+      updateUploadProgress(20, 'Parsing rows');
+
+      const { rows } = parseCsvText(text);
+      const { vins, customers } = collectFixUpdatesSyncData(rows);
+
+      updateUploadProgress(40, 'Normalizing vehicles');
+
+      const mapped = mapVehicleRows(rows);
+
+      if (!mapped.length) throw new Error('No valid vehicle rows with ShortVIN found.');
+
+      const conflictKey = 'short_vin';
+
+      const conflictValues = mapped.map((row) => row[conflictKey]).filter(Boolean);
+
+      if (!conflictValues.length) throw new Error('No ShortVIN column found in the CSV file.');
+
+      updateUploadProgress(55, 'Removing duplicates');
+
+      const { error: deleteError } = await supabaseClient
+
+        .from('vehicles')
+
+        .delete()
+
+        .in(conflictKey, conflictValues);
+
+      if (deleteError) throw deleteError;
+
+      updateUploadProgress(75, 'Uploading to Supabase');
+
+      const { error } = await supabaseClient
+
+        .from('vehicles')
+
+        .insert(mapped);
+
+      if (error) throw error;
+
+      updateUploadProgress(90, 'Refreshing counts');
+
+      await loadVehiclesData();
+
+      finishUploadProgress();
+
+      logChange({
+        action: 'bulk_upsert',
+        summary: `Uploaded ${mapped.length} vehicle rows via CSV`,
+      });
+      await syncVehiclesFromFixUpdates({ vins, customers });
+
+    };
+
+
+
+    const getValue = (row = {}, ...keys) => {
+      if (!row) return '';
+
+      const lowerLookup = Object.keys(row).reduce((acc, key) => {
+
+        acc[key.toLowerCase()] = key;
+
+        return acc;
+
+      }, {});
+
+      for (const key of keys) {
+
+        const direct = row[key];
+
+        if (direct !== undefined) return direct;
+
+        const matchKey = lowerLookup[key.toLowerCase()];
+
+        if (matchKey !== undefined) return row[matchKey];
+
+      }
+
+      return '';
+
+    };
+
+    const getText = (value) => String(value || '').toLowerCase();
+
+
+    const getRowIdentifier = (row = {}) => {
+      return row.short_vin || row.shortvin || row.model || 'vehicle row';
+    };
+
+    const formatDateTime = (value) => {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(date.getUTCDate()).padStart(2, '0');
+      const hours = String(date.getUTCHours()).padStart(2, '0');
+      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes} UTC`;
+    };
+
+    const formatCellValue = (header, value) => {
+      const normalized = normalizeHeader(header);
+      if (normalized === 'pt_last_read') return formatDateTime(value);
+      return value ?? '';
+    };
+
+    const getVisibleHeaders = () => {
+      const fromState = Array.isArray(state.visibleColumns) ? state.visibleColumns : [];
+      const filtered = state.headers.filter((header) => fromState.includes(header));
+      return filtered.length ? filtered : [...state.headers];
+    };
+
+    const applyVisibleColumns = () => {
+      const stored = loadVisibleColumns();
+      const filtered = state.headers.filter((header) => stored.includes(header));
+      state.visibleColumns = filtered.length ? filtered : [...state.headers];
+    };
+
+    const updateVisibleColumns = (columns = []) => {
+      const filtered = state.headers.filter((header) => columns.includes(header));
+      state.visibleColumns = filtered.length ? filtered : [...state.headers];
+      saveVisibleColumns();
+      refreshTable();
+      renderColumnSelector();
+    };
+
+    const finishCellEdit = (cell, input, { commit = false, row, header, original }) => {
+      if (!cell.dataset.editing) return;
+      delete cell.dataset.editing;
+
+      const nextValue = commit ? input.value : original;
+      cell.textContent = nextValue;
+      if (!commit || nextValue === original) return;
+
+      row[header] = nextValue;
+      logChange({
+        action: 'update',
+        summary: `Updated "${header}" for ${getRowIdentifier(row)}`,
+      });
+      refreshTable();
+    };
+
+    const startCellEdit = (cell, row, header) => {
+      if (cell.dataset.editing) return;
+      const original = row[header] ?? '';
+      cell.dataset.editing = 'true';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = original;
+      input.className = 'w-full rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-50 focus:border-blue-500 focus:outline-none';
+
+      const endEdit = (commit = false) => finishCellEdit(cell, input, { commit, row, header, original });
+
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          endEdit(true);
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          endEdit(false);
+        }
+      });
+      input.addEventListener('blur', () => endEdit(true));
+
+      cell.textContent = '';
+      cell.appendChild(input);
+      input.focus();
+      input.select();
+    };
+
+
+
+    const state = {
+
+      headers: [],
+
+      rows: [],
+
+      columnLabels: {},
+
+      visibleColumns: [],
+
+      filters: {
+
+        search: '',
+
+        sortKey: '',
+
+        sortDir: 'asc',
+
+        columnFilters: {},
+
+      },
+
+      columnWidths: {},
+
+      draggingHeader: null,
+
+      pagination: {
+
+        page: 1,
+
+        pageSize: 25,
+
+      },
+
+      remoteTotal: null,
+
+    };
+
+    const LABEL_STORAGE_KEY = 'techloc_vehicle_column_labels';
+    const COLUMN_WIDTHS_KEY = 'techloc_vehicle_column_widths';
+    const VISIBLE_COLUMNS_KEY = 'techloc_vehicle_visible_columns';
+    const HEADER_ORDER_KEY = 'techloc_vehicle_header_order';
+    const storageKey = (base) => `${base}:${actor.id || 'anon'}`;
+    const FILTERABLE_KEYS = {
+      deal_status: 'Status',
+      gps_fix: 'GPS Fix',
+      state_loc: 'State',
+    };
+
+    const loadColumnLabels = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey(LABEL_STORAGE_KEY))) || {}; } catch { return {}; }
+    };
+    const saveColumnLabels = () => {
+      localStorage.setItem(storageKey(LABEL_STORAGE_KEY), JSON.stringify(state.columnLabels || {}));
+    };
+    const loadColumnWidths = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey(COLUMN_WIDTHS_KEY))) || {}; } catch { return {}; }
+    };
+    const saveColumnWidths = () => {
+      localStorage.setItem(storageKey(COLUMN_WIDTHS_KEY), JSON.stringify(state.columnWidths || {}));
+    };
+    const loadVisibleColumns = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey(VISIBLE_COLUMNS_KEY))) || []; } catch { return []; }
+    };
+    const saveVisibleColumns = () => {
+      localStorage.setItem(storageKey(VISIBLE_COLUMNS_KEY), JSON.stringify(state.visibleColumns || []));
+    };
+    const loadHeaderOrder = () => {
+      try { return JSON.parse(localStorage.getItem(storageKey(HEADER_ORDER_KEY))) || []; } catch { return []; }
+    };
+    const saveHeaderOrder = () => {
+      localStorage.setItem(storageKey(HEADER_ORDER_KEY), JSON.stringify(state.headers || []));
+    };
+    const getHeaderLabel = (header) => state.columnLabels[header] || header;
+    const renameHeader = (header) => {
+      const current = getHeaderLabel(header);
+      const next = prompt('New column name', current);
+      if (next === null) return;
+      const trimmed = next.trim();
+      if (!trimmed) return;
+      state.columnLabels[header] = trimmed;
+      saveColumnLabels();
+      refreshTable();
+    };
+    const getFilterableKey = (header) => {
+      const normalized = normalizeHeader(header);
+      return FILTERABLE_KEYS[normalized] ? normalized : null;
+    };
+    const getFilterOptionsForHeader = (header) => {
+      const values = Array.from(
+        new Set(
+          state.rows
+            .map((row) => getText(formatCellValue(header, getValue(row, header))))
+            .filter(Boolean),
+        ),
+      ).sort();
+      return values;
+    };
+    const setColumnFilter = (header, value) => {
+      const values = Array.isArray(value) ? value.filter(Boolean) : [];
+      if (!values.length) {
+        delete state.filters.columnFilters[header];
+      } else {
+        state.filters.columnFilters[header] = values;
+      }
+      refreshTable();
+    };
+    const renderColumnSelector = () => {
+      if (!els.columnSelectorList || !els.columnSelectorApply) return;
+      els.columnSelectorList.innerHTML = '';
+      const visibleSet = new Set(getVisibleHeaders());
+      state.headers.forEach((header) => {
+        const optionLabel = document.createElement('label');
+        optionLabel.className = 'filter-option';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = header;
+        checkbox.checked = visibleSet.has(header);
+        optionLabel.appendChild(checkbox);
+        const text = document.createElement('span');
+        text.textContent = getHeaderLabel(header);
+        optionLabel.appendChild(text);
+        els.columnSelectorList.appendChild(optionLabel);
+      });
+    };
+    const toggleSortForHeader = (header) => {
+      if (state.filters.sortKey === header) {
+        state.filters.sortDir = state.filters.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        state.filters.sortKey = header;
+        state.filters.sortDir = 'asc';
+      }
+      refreshTable();
+    };
+
+    const applyHeaderOrder = (headers = []) => {
+      const saved = loadHeaderOrder();
+      if (!saved.length) return headers;
+      const savedSet = new Set(saved);
+      const ordered = saved.filter((h) => headers.includes(h));
+      headers.forEach((header) => {
+        if (!savedSet.has(header)) ordered.push(header);
+      });
+      return ordered;
+    };
+
+
+
+    const els = {
+
+      tableBody: document.getElementById('table-body'),
+
+      tableHead: document.getElementById('table-head'),
+
+      paginationSummary: document.getElementById('pagination-summary'),
+
+      prevPage: document.getElementById('prev-page'),
+
+      nextPage: document.getElementById('next-page'),
+
+      pageIndicator: document.getElementById('page-indicator'),
+
+      uploadForm: document.getElementById('csv-upload-form'),
+
+      uploadInput: document.getElementById('csv-upload-input'),
+
+      uploadLabel: document.getElementById('csv-upload-label'),
+
+      uploadStatus: document.getElementById('csv-upload-status'),
+
+      uploadButton: document.getElementById('csv-upload-button'),
+
+      uploadProgress: document.getElementById('upload-progress'),
+
+      uploadProgressBar: document.getElementById('upload-progress-bar'),
+
+      uploadProgressLabel: document.getElementById('upload-progress-label'),
+
+      table: document.getElementById('vehicles-table'),
+      topScroller: document.getElementById('table-scroll-top'),
+      bottomScroller: document.getElementById('table-scroll-container'),
+      tableScrollShadow: document.getElementById('table-scroll-shadow'),
+
+      columnSelectorToggle: document.getElementById('column-selector-toggle'),
+      columnSelectorPanel: document.getElementById('column-selector-panel'),
+      columnSelectorList: document.getElementById('column-selector-list'),
+      columnSelectorApply: document.getElementById('column-selector-apply'),
+      columnSelectorReset: document.getElementById('column-selector-reset'),
+
+    };
+
+
+
+    const setUploadAvailability = (allowed) => {
+
+      const controls = [els.uploadInput, els.uploadButton];
+
+      controls.forEach((control) => {
+
+        if (!control) return;
+
+        control.disabled = !allowed;
+
+        control.classList.toggle('cursor-not-allowed', !allowed);
+
+        control.classList.toggle('opacity-60', !allowed);
+
+      });
+
+      if (els.uploadStatus) {
+
+        els.uploadStatus.textContent = allowed
+
+          ? 'Supabase import with dedupe'
+
+          : 'Admin role required to upload';
+
+        els.uploadStatus.classList.toggle('text-amber-300', !allowed);
+
+      }
+
+    };
+
+
+
+    const clampProgress = (value) => Math.min(100, Math.max(0, Math.round(value)));
+
+
+
+    const resetUploadProgress = () => {
+
+      if (els.uploadProgress) {
+
+        els.uploadProgress.classList.add('hidden');
+
+      }
+
+      if (els.uploadProgressBar) {
+
+        els.uploadProgressBar.style.width = '0%';
+
+      }
+
+      if (els.uploadProgressLabel) {
+
+        els.uploadProgressLabel.textContent = '0% Ready to upload';
+
+      }
+
+    };
+
+
+
+    const updateUploadProgress = (value, label = '') => {
+
+      const clamped = clampProgress(value);
+
+      if (els.uploadProgress) {
+
+        els.uploadProgress.classList.remove('hidden');
+
+      }
+
+      if (els.uploadProgressBar) {
+
+        els.uploadProgressBar.style.width = `${clamped}%`;
+
+      }
+
+      if (els.uploadProgressLabel) {
+
+        const suffix = label ? ` ${label}` : ' Uploading';
+
+        els.uploadProgressLabel.textContent = `${clamped}%${suffix}`;
+
+      }
+
+    };
+
+    const syncScrollbars = () => {
+      if (!els.table) return;
+      const tableWidth = els.table.scrollWidth;
+      if (els.tableScrollShadow) {
+        els.tableScrollShadow.style.width = `${tableWidth}px`;
+      }
+    };
+
+    const linkScrollContainers = () => {
+      const top = els.topScroller;
+      const bottom = els.bottomScroller;
+      if (!top || !bottom) return;
+      let syncing = false;
+      const sync = (from, to) => {
+        if (syncing) return;
+        syncing = true;
+        to.scrollLeft = from.scrollLeft;
+        requestAnimationFrame(() => {
+          syncing = false;
+        });
+      };
+      top.addEventListener('scroll', () => sync(top, bottom));
+      bottom.addEventListener('scroll', () => sync(bottom, top));
+    };
+
+    const applyColumnWidths = () => {
+      const headers = getVisibleHeaders();
+      headers.forEach((header, index) => {
+        const width = state.columnWidths[header];
+        if (!width) return;
+        const headCell = els.tableHead.querySelectorAll('th')[index];
+        if (headCell) {
+          headCell.style.width = width;
+          headCell.style.minWidth = width;
+        }
+        els.tableBody.querySelectorAll('tr').forEach((row) => {
+          const cell = row.children[index];
+          if (cell) {
+            cell.style.width = width;
+            cell.style.minWidth = width;
+          }
+        });
+      });
+      syncScrollbars();
+    };
+
+    const setupColumnSelector = () => {
+      if (!els.columnSelectorToggle || !els.columnSelectorPanel || !els.columnSelectorList) return;
+      const closePanel = () => {
+        els.columnSelectorPanel.classList.add('hidden');
+        document.removeEventListener('click', handleOutsideClick);
+      };
+      const openPanel = () => {
+        renderColumnSelector();
+        els.columnSelectorPanel.classList.remove('hidden');
+        document.addEventListener('click', handleOutsideClick);
+      };
+      const handleOutsideClick = (event) => {
+        if (!els.columnSelectorPanel.contains(event.target) && !els.columnSelectorToggle.contains(event.target)) {
+          closePanel();
+        }
+      };
+      els.columnSelectorToggle.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const willOpen = els.columnSelectorPanel.classList.contains('hidden');
+        if (willOpen) openPanel();
+        else closePanel();
+      });
+      if (els.columnSelectorApply) {
+        els.columnSelectorApply.addEventListener('click', () => {
+          const checked = Array.from(els.columnSelectorList.querySelectorAll('input[type="checkbox"]:checked')).map((input) => input.value);
+          updateVisibleColumns(checked);
+          closePanel();
+        });
+      }
+      if (els.columnSelectorReset) {
+        els.columnSelectorReset.addEventListener('click', () => {
+          updateVisibleColumns(state.headers);
+          closePanel();
+        });
+      }
+    };
+
+
+
+    const finishUploadProgress = (label = 'Upload complete') => {
+
+      updateUploadProgress(100, label);
+
+      setTimeout(() => {
+
+        resetUploadProgress();
+
+      }, 2000);
+
+    };
+
+
+
+    const wireUploadForm = () => {
+
+      if (!els.uploadForm || !els.uploadInput) return;
+
+      setUploadAvailability(isAdminUser());
+
+      window.addEventListener('auth:role-ready', (event) => {
+
+        const role = (event.detail?.role || '').toLowerCase();
+
+        setUploadAvailability(role === ADMIN_ROLE);
+
+      });
+
+      els.uploadInput.addEventListener('change', () => {
+
+        const file = els.uploadInput.files?.[0];
+
+        if (file && els.uploadLabel) {
+
+          els.uploadLabel.textContent = file.name;
+
+        }
+
+      });
+
+
+
+      els.uploadForm.addEventListener('submit', async (event) => {
+
+        event.preventDefault();
+
+        if (!isAdminUser()) {
+
+          alert('You must be an administrator to upload vehicle data.');
+
+          setUploadAvailability(false);
+
+          return;
+
+        }
+
+        const file = els.uploadInput.files?.[0];
+
+        if (!file) {
+
+          alert('Please choose a CSV file before uploading.');
+
+          return;
+
+        }
+
+        resetUploadProgress();
+
+        updateUploadProgress(0, 'Preparing upload');
+
+        if (els.uploadStatus) {
+
+          els.uploadStatus.textContent = 'Uploading...';
+
+          els.uploadStatus.classList.remove('text-emerald-300', 'text-red-300', 'text-amber-300');
+
+        }
+
+        try {
+
+          await handleCsvUpload(file);
+
+          if (els.uploadStatus) {
+
+            els.uploadStatus.textContent = 'Upload complete (vehicles replaced).';
+
+            els.uploadStatus.classList.add('text-emerald-300');
+
+          }
+
+        } catch (error) {
+
+          console.error('Upload failed', error);
+
+          updateUploadProgress(100, 'Upload failed');
+
+          if (els.uploadStatus) {
+
+            els.uploadStatus.textContent = 'Upload failed. Check console.';
+
+            els.uploadStatus.classList.add('text-red-300');
+
+          }
+
+          alert(error.message || 'Failed to upload CSV.');
+
+        }
+
+      });
+
+    };
+
+
+
+    const applyFiltersAndSort = (rows) => {
+
+      let result = [...rows];
+
+      Object.entries(state.filters.columnFilters || {}).forEach(([header, value]) => {
+        const filters = Array.isArray(value) ? value : [];
+        if (!filters.length) return;
+        result = result.filter((row) => filters.some((filterValue) => getText(formatCellValue(header, getValue(row, header))) === getText(filterValue)));
+      });
+
+      if (state.filters.sortKey) {
+        result = result.sort((a, b) => {
+          const comparison = getText(a[state.filters.sortKey]).localeCompare(getText(b[state.filters.sortKey]));
+          return state.filters.sortDir === 'asc' ? comparison : -comparison;
+        });
+      }
+
+      return result;
+
+    };
+
+
+
+    const refreshTable = () => {
+
+      const filtered = applyFiltersAndSort(state.rows);
+
+      renderTable(filtered);
+
+    };
+
+
+
+    const mount = async () => {
+
+      wireUploadForm();
+      linkScrollContainers();
+
+      await hydrateActor();
+
+      state.columnLabels = loadColumnLabels();
+      state.columnWidths = loadColumnWidths();
+      state.visibleColumns = loadVisibleColumns();
+      state.headers = applyHeaderOrder(state.headers);
+
+      await loadVehiclesData();
+      setupColumnSelector();
+    };
+
+
+
+    els.prevPage.addEventListener('click', () => {
+
+      if (state.pagination.page === 1) return;
+
+      state.pagination.page -= 1;
+
+      refreshTable();
+
+    });
+
+
+
+    els.nextPage.addEventListener('click', () => {
+
+      const filtered = applyFiltersAndSort(state.rows);
+
+      const totalPages = Math.max(1, Math.ceil(filtered.length / state.pagination.pageSize));
+
+      if (state.pagination.page >= totalPages) return;
+
+      state.pagination.page += 1;
+
+      renderTable(filtered);
+
+    });
+
+
+
+    const initBackground = async () => {
+      const initialMode = await loadPreferredBackgroundMode();
+      setupBackgroundManager({
+        canvasId: 'constellation-canvas',
+        initialMode,
+        onModeChange: persistBackgroundMode,
+      });
+    };
+
+    initBackground().catch((error) =>
+      console.error('Unable to initialize background manager', error)
+    );
+
+    setupDashboardDropdown();
+
+    mount();
+
+  </script>
+
+  <script type="module">
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    const redirectToLogin = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        window.location.href = '../login.html';
+      }
+    };
+
+    redirectToLogin();
+  </script>
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+</body>
+
+</html>

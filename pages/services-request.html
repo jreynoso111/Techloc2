@@ -1,0 +1,2550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Service Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../assets/scripts/authManager.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+
+  <link rel="stylesheet" href="../assets/visuals/theme.css" />
+
+  <style>
+    #topScrollWrap::-webkit-scrollbar { height: 12px; }
+    #topScrollWrap::-webkit-scrollbar-thumb { background: rgba(148,163,184,.35); border-radius: 999px; }
+    #topScrollWrap::-webkit-scrollbar-track { background: rgba(2,6,23,.35); border-radius: 999px; }
+
+    #tableScrollWrap::-webkit-scrollbar { height: 12px; width: 12px; }
+    #tableScrollWrap::-webkit-scrollbar-thumb { background: rgba(148,163,184,.35); border-radius: 999px; }
+    #tableScrollWrap::-webkit-scrollbar-track { background: rgba(2,6,23,.35); border-radius: 999px; }
+
+    th.dragging { opacity: .45; }
+    th.drop-target { outline: 2px solid rgba(59,130,246,.6); outline-offset: -2px; }
+
+    body.resizing { cursor: col-resize !important; user-select: none !important; }
+
+    .col-resizer {
+      position: absolute;
+      top: 0;
+      right: -2px;
+      width: 8px;
+      height: 100%;
+      cursor: col-resize;
+    }
+    .col-resizer::after{
+      content:"";
+      position:absolute;
+      right:3px;
+      top:20%;
+      width:1px;
+      height:60%;
+      background: rgba(148,163,184,.25);
+    }
+
+    .no-drag { -webkit-user-drag: none; user-drag: none; }
+    .table-header-label {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: normal;
+      line-height: 1.1;
+    }
+    .header-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 8px;
+      width: 220px;
+      background: rgba(2,6,23,.95);
+      border: 1px solid rgba(30,41,59,.8);
+      border-radius: 14px;
+      padding: 10px;
+      z-index: 40;
+      box-shadow: 0 18px 40px rgba(2,6,23,.6);
+    }
+    .header-menu button { text-align: left; }
+    .editable-cell { cursor: cell; }
+    .cell-editing { background: rgba(30,41,59,.35); }
+    .header-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-start;
+    }
+    .header-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    th.header-compact .header-actions { gap: 4px; }
+
+    /* --- Gantt --- */
+    .gantt-track {
+      position: relative;
+      height: 16px;
+      border-radius: 999px;
+      background: rgba(2,6,23,.45);
+      border: 1px solid rgba(148,163,184,.18);
+      overflow: hidden;
+    }
+    .gantt-bar {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-radius: 999px;
+      background: rgba(59,130,246,.55);
+      border: 1px solid rgba(59,130,246,.85);
+      box-shadow: 0 0 0 1px rgba(2,6,23,.35) inset;
+    }
+    .gantt-bar.waiting { background: rgba(245,158,11,.40); border-color: rgba(245,158,11,.80); }
+    .gantt-bar.closed { background: rgba(16,185,129,.40); border-color: rgba(16,185,129,.80); }
+    .gantt-bar.open { background: rgba(148,163,184,.25); border-color: rgba(148,163,184,.55); }
+    .gantt-bar.progress { background: rgba(59,130,246,.55); border-color: rgba(59,130,246,.85); }
+
+    .gantt-gridline {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: rgba(148,163,184,.10);
+      pointer-events: none;
+    }
+
+    /* VIN combobox dropdown */
+    .combo-menu::-webkit-scrollbar { width: 10px; }
+    .combo-menu::-webkit-scrollbar-thumb { background: rgba(148,163,184,.25); border-radius: 999px; }
+    .combo-menu::-webkit-scrollbar-track { background: rgba(2,6,23,.25); border-radius: 999px; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="Service Control" data-active-nav="services">
+  <div data-shared-header></div>
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+
+  <main class="relative z-10 flex flex-col gap-8 py-10" style="padding-left:1in; padding-right:1in;">
+
+    <section class="rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+      <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div class="space-y-1">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Board</p>
+          <h2 class="text-2xl font-black text-white">Service Requests</h2>
+          <p class="text-sm text-slate-300">Track any service requested for any vehicle — table, kanban, calendar, gantt, and saved filters.</p>
+        </div>
+
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+          <div class="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-1">
+            <button data-view="table" class="viewBtn rounded-2xl px-3 py-2 text-xs font-bold text-white bg-blue-600">Table</button>
+            <button data-view="kanban" class="viewBtn rounded-2xl px-3 py-2 text-xs font-bold text-slate-300 hover:text-white">Kanban</button>
+            <button data-view="calendar" class="viewBtn rounded-2xl px-3 py-2 text-xs font-bold text-slate-300 hover:text-white">Calendar</button>
+            <button data-view="gantt" class="viewBtn rounded-2xl px-3 py-2 text-xs font-bold text-slate-300 hover:text-white">Gantt</button>
+          </div>
+
+          <button id="newRequestBtn" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-black text-white shadow shadow-blue-500/20 transition hover:bg-blue-500">
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            New request
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap items-center gap-2 text-xs">
+        <button data-filter="Open" class="filterChip rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 font-semibold text-slate-200 hover:bg-slate-800/60">Open</button>
+        <button data-filter="In Progress" class="filterChip rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 font-semibold text-slate-200 hover:bg-slate-800/60">In progress</button>
+        <button data-filter="Waiting" class="filterChip rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 font-semibold text-slate-200 hover:bg-slate-800/60">Waiting</button>
+        <button data-filter="Closed" class="filterChip rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 font-semibold text-slate-200 hover:bg-slate-800/60">Closed</button>
+        <span class="ml-2 text-slate-500">Tip: these map to your status values.</span>
+      </div>
+    </section>
+
+    <!-- Table -->
+    <section id="tableView" class="rounded-3xl border border-slate-900 bg-slate-900/70 p-0 shadow-xl shadow-blue-900/30 overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+        <p class="text-sm font-bold text-white">All requests</p>
+        <p id="resultsMeta" class="text-xs text-slate-400">0 items</p>
+      </div>
+
+      <div class="flex flex-col gap-3 border-b border-slate-800 px-6 py-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-2">
+            <button id="prevPage" class="rounded-xl border border-slate-700 px-4 py-2 text-sm disabled:opacity-40">Previous</button>
+            <button id="nextPage" class="rounded-xl border border-slate-700 px-4 py-2 text-sm disabled:opacity-40">Next</button>
+
+            <div class="relative ml-2">
+              <button id="columnsBtn" type="button"
+                class="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-800">
+                <i data-lucide="columns-2" class="h-4 w-4"></i>
+                Columns
+                <i data-lucide="chevron-down" class="h-4 w-4 text-slate-400"></i>
+              </button>
+
+              <div id="columnsMenu"
+                class="hidden absolute left-0 mt-2 w-80 rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden z-50">
+                <div class="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+                  <p class="text-xs font-black uppercase tracking-[0.14em] text-slate-300">Show / Hide Columns</p>
+                  <div class="flex items-center gap-2">
+                    <button id="colsAll" type="button" class="text-xs font-bold text-blue-200 hover:text-white">All</button>
+                    <button id="colsNone" type="button" class="text-xs font-bold text-slate-300 hover:text-white">None</button>
+                  </div>
+                </div>
+
+                <div class="max-h-80 overflow-auto px-2 py-2" id="columnsList"></div>
+
+                <div class="border-t border-slate-800 px-4 py-3 flex items-center justify-between">
+                  <p class="text-xs text-slate-400">Drag headers to reorder • Drag edge to resize</p>
+                  <button id="colsClose" type="button" class="rounded-xl border border-slate-700 px-3 py-1 text-xs font-bold hover:bg-slate-800">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <p id="pageMeta" class="text-sm text-slate-400"></p>
+        </div>
+
+        <div id="topScrollWrap" class="overflow-x-auto overflow-y-hidden rounded-2xl border border-slate-800 bg-slate-950/40">
+          <div id="topScrollInner" class="h-4"></div>
+        </div>
+      </div>
+
+      <div id="tableScrollWrap" class="overflow-auto px-4 pb-4">
+        <table id="dataTable" class="min-w-[1200px] w-full text-left text-[11px]" style="table-layout: fixed;">
+          <colgroup id="colGroup"></colgroup>
+          <thead class="sticky top-0 bg-slate-950/80 backdrop-blur">
+            <tr id="tableHeaderRow" class="text-[10px] uppercase tracking-[0.14em] text-slate-400"></tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="hidden px-6 py-10">
+        <div class="rounded-3xl border border-slate-800 bg-slate-950/40 p-6">
+          <p id="emptyTitle" class="text-sm font-bold text-white">No service requests found</p>
+          <p id="emptyMsg" class="mt-1 text-sm text-slate-300">Create the first request, or adjust filters.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Kanban -->
+    <section id="kanbanView" class="hidden rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+      <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-bold text-white">Kanban</p>
+          <p class="text-xs text-slate-400 lg:hidden">Uses your status values.</p>
+        </div>
+
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+          <div class="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/40 p-2">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Date</span>
+              <select id="kbDateField" class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <option value="auto">Auto</option>
+                <option value="request">Request date</option>
+                <option value="work">Work date</option>
+                <option value="shipping">Shipping date</option>
+              </select>
+            </div>
+
+            <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button data-kb-range="today" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">Today</button>
+              <button data-kb-range="7d" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">7d</button>
+              <button data-kb-range="30d" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">30d</button>
+              <button data-kb-range="90d" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">90d</button>
+              <button data-kb-range="thisMonth" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">This month</button>
+              <button data-kb-range="all" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">All</button>
+              <button data-kb-range="custom" class="kbRangeBtn rounded-full border border-slate-800 bg-slate-950/30 px-3 py-1 text-xs font-bold text-slate-200 hover:bg-slate-800/60">Custom</button>
+            </div>
+
+            <div id="kbCustomWrap" class="hidden w-full flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:w-auto">
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">From</span>
+                <input id="kbFrom" type="date" class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">To</span>
+                <input id="kbTo" type="date" class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+              </div>
+            </div>
+          </div>
+
+          <p id="kbMeta" class="text-xs text-slate-400">—</p>
+        </div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-3" id="kanbanColumns"></div>
+    </section>
+
+    <!-- Calendar -->
+    <section id="calendarView" class="hidden rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+      <div class="space-y-3">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <p class="text-sm font-bold text-white">Calendar</p>
+            <p class="text-sm text-slate-300">Request, work, or shipping dates summarized for quick planning.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="calendarPrevBtn" type="button" class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800/60" title="Previous month">
+              ←
+            </button>
+            <button id="calendarTodayBtn" type="button" class="rounded-xl border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800/60">
+              Today
+            </button>
+            <button id="calendarNextBtn" type="button" class="rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800/60" title="Next month">
+              →
+            </button>
+          </div>
+        </div>
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <p id="calendarMonthLabel" class="text-sm font-semibold text-slate-200">—</p>
+          <p id="calendarMeta" class="text-xs text-slate-400">—</p>
+        </div>
+        <div id="calendarList" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- Gantt -->
+    <section id="ganttView" class="hidden rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+      <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="space-y-1">
+          <p class="text-sm font-bold text-white">Gantt</p>
+          <p class="text-sm text-slate-300">Timeline from Request → (Shipping/Work/Request). Uses current filters (including status chips + column filters).</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Scale</span>
+          <select id="ganttScale" class="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <option value="day">Day</option>
+            <option value="week" selected>Week</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="ganttMeta" class="text-xs text-slate-400 mb-3">—</div>
+
+      <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+        <div id="ganttHeader" class="min-w-[980px] flex items-center justify-between text-[11px] text-slate-400 mb-3"></div>
+        <div id="ganttList" class="min-w-[980px] space-y-3"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal -->
+  <div id="modalOverlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <!-- NOTE: max-w-5xl + compact paddings to fit on one screen -->
+    <div class="w-full max-w-5xl rounded-3xl border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4">
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200">Service request</p>
+          <h3 id="modalTitle" class="text-base font-black text-white">New request</h3>
+          <p class="text-xs text-slate-400 mt-0.5">Pick a VIN to auto-fill vehicle details. POC is the client contact.</p>
+        </div>
+        <button id="modalClose" class="rounded-2xl border border-slate-800 bg-slate-900/60 p-2 text-slate-200 hover:bg-slate-800">
+          <i data-lucide="x" class="h-5 w-5"></i>
+        </button>
+      </div>
+
+      <form id="requestForm" class="space-y-4 px-5 py-4">
+        <input type="hidden" id="requestId" />
+
+        <!-- Compact grid (12 cols) -->
+        <div class="grid grid-cols-12 gap-3">
+
+          <!-- Vehicle (VIN search + auto-fill) -->
+          <div class="col-span-12">
+            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Vehicle</p>
+          </div>
+
+          <label class="col-span-12 md:col-span-4 space-y-1 relative">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Short VIN</span>
+            <input id="shortVinInput" autocomplete="off"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              placeholder="Search VIN..." />
+            <div id="vinMenu" class="combo-menu hidden absolute left-0 right-0 mt-2 max-h-56 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 shadow-2xl z-50"></div>
+            <p id="vinHint" class="text-[11px] text-slate-500">Type to search. Select a VIN to fill Brand/Model/Year/Unit type.</p>
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Unit Type</span>
+            <input id="unitTypeInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Brand</span>
+            <input id="brandInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Model</span>
+            <input id="modelInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Model Year</span>
+            <input id="modelYearInput" type="number"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <!-- Request details -->
+          <div class="col-span-12 mt-1">
+            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Request details</p>
+          </div>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Company Name</span>
+            <input id="companyNameInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Company Phone</span>
+            <input id="companyPhoneInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Status</span>
+            <select id="statusInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="Open">Open</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Waiting">Waiting</option>
+              <option value="Closed">Closed</option>
+            </select>
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Quote</span>
+            <input id="quoteInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              placeholder="e.g. 1200" />
+          </label>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Service Category</span>
+            <select id="categoryInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Doc</span>
+            <input id="docInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-4 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Request Date</span>
+            <input id="requestDateInput" type="date"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-4 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Work Date</span>
+            <input id="workDateInput" type="date"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-4 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Shipping Date</span>
+            <input id="shippingDateInput" type="date"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <!-- Client Contact (POC) -->
+          <div class="col-span-12 mt-1">
+            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Client contact</p>
+          </div>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">POC Name</span>
+            <input id="pocNameInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">POC Phone</span>
+            <input id="pocPhoneInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-12 md:col-span-4 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Confirmed</span>
+            <select id="confirmedInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600">
+              <option value="">Pending</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+
+          <!-- Service Destination -->
+          <div class="col-span-12 mt-1">
+            <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Service destination</p>
+          </div>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">State</span>
+            <input id="stateInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-3 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">City</span>
+            <input id="cityInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-6 md:col-span-2 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">ZIP</span>
+            <input id="zipInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </label>
+
+          <label class="col-span-12 md:col-span-5 space-y-1">
+            <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">Address</span>
+            <input id="addressInput"
+              class="w-full rounded-2xl border border-slate-800 bg-slate-900/50 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-600"
+              placeholder="Destination where service will be provided" />
+          </label>
+
+        </div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800">
+          <p id="formError" class="text-sm text-red-300"></p>
+          <div class="flex items-center gap-2">
+            <button type="button" id="deleteBtn" class="hidden rounded-2xl border border-red-800 bg-red-950/40 px-4 py-2 text-sm font-black text-red-200 hover:bg-red-950/70">Delete</button>
+            <button type="submit" class="rounded-2xl bg-blue-600 px-5 py-2 text-sm font-black text-white hover:bg-blue-500">Save</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
+    import { supabase as supabaseClient } from '../assets/js/supabaseClient.js';
+
+    const TABLE_NAME = "services_request";
+    const CONFIG_TABLE = "user_table_configs";
+    const CONFIG_KEY = "services_request";
+    const VEHICLES_TABLE = "vehicles";
+    const CATEGORIES_TABLE = "services_categories";
+    const SERVICES_TABLE = "services";
+    const PAGE_SIZE = 20;
+
+    const LS_KEY = "tl_services_table_prefs_v5";
+
+    function fmtDate(v) {
+      if (!v) return '—';
+      const d = new Date(v);
+      if (isNaN(d)) return '—';
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yy = String(d.getFullYear()).slice(-2);
+      return `${mm}/${dd}/${yy}`;
+    }
+
+    function fmtUSD(value) {
+      if (value === null || value === undefined || value === '') return '—';
+      const n = Number(value);
+      if (isNaN(n)) return String(value);
+      return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
+    }
+
+    function parseMaybeDate(v) {
+      if (!v) return null;
+      const d = new Date(v);
+      return isNaN(d) ? null : d.getTime();
+    }
+
+    function normStr(v) { return (v === null || v === undefined) ? "" : String(v).toLowerCase(); }
+
+    const CANON_STATUSES = ['Open', 'In Progress', 'Waiting', 'Closed'];
+
+    function canonicalizeStatus(raw) {
+      const s = String(raw ?? '').trim();
+      if (!s) return null;
+      const t = s.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (t === 'open' || t === 'new') return 'Open';
+      if (t === 'in progress' || t === 'inprogress' || t === 'in-progress' || t === 'progress' || t === 'working') return 'In Progress';
+      if (t === 'waiting' || t === 'on hold' || t === 'hold' || t === 'pending' || t === 'awaiting' || t === 'awaiting parts') return 'Waiting';
+      if (t === 'closed' || t === 'done' || t === 'completed' || t === 'complete' || t === 'resolved') return 'Closed';
+      const exact = CANON_STATUSES.find(x => x.toLowerCase() === t);
+      return exact || s;
+    }
+
+    function startOfDay(ts) { const d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+    function endOfDay(ts) { const d = new Date(ts); d.setHours(23,59,59,999); return d.getTime(); }
+    function startOfMonth(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0).getTime(); }
+    function endOfMonth(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth()+1, 0, 23,59,59,999).getTime(); }
+    function getMonthStartDate(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+    function shiftMonth(d, offset) { return new Date(d.getFullYear(), d.getMonth() + offset, 1); }
+
+    function getRowDateTs(row, mode) {
+      const req = row['request date'] || row.request_date;
+      const work = row.workdate || row['work date'] || row.work_date;
+      const ship = row['shipping date'] || row.shipping_date;
+      if (mode === 'request') return parseMaybeDate(req);
+      if (mode === 'work') return parseMaybeDate(work);
+      if (mode === 'shipping') return parseMaybeDate(ship);
+      return parseMaybeDate(ship) ?? parseMaybeDate(work) ?? parseMaybeDate(req);
+    }
+
+    const BASE_COLUMN_DEFS = [
+      { key: 'company_name', label: 'Company Name', filter: 'text', defaultWidth: 180 },
+      { key: 'company phone', label: 'Company Phone', filter: 'text', defaultWidth: 150 },
+      { key: 'doc', label: 'Doc', filter: 'text', defaultWidth: 120 },
+      { key: 'unittype', label: 'Unit Type', filter: 'text', defaultWidth: 120 },
+      { key: 'brand', label: 'Brand', filter: 'text', defaultWidth: 120 },
+      { key: 'model', label: 'Model', filter: 'text', defaultWidth: 120 },
+      { key: 'model year', label: 'Model Year', filter: 'text', defaultWidth: 100 },
+      { key: 'shortvin', label: 'Short VIN', filter: 'text', defaultWidth: 100 },
+      { key: 'status', label: 'Status', filter: 'select', options: ['', 'Open', 'In Progress', 'Waiting', 'Closed'], defaultWidth: 120 },
+      { key: 'request date', label: 'Request Date', filter: 'text', isDate: true, defaultWidth: 120 },
+      { key: 'workdate', label: 'Work Date', filter: 'text', isDate: true, defaultWidth: 120 },
+      { key: 'shipping date', label: 'Shipping Date', filter: 'text', isDate: true, defaultWidth: 130 },
+      { key: 'quote', label: 'Quote', filter: 'text', isMoney: true, defaultWidth: 120 },
+      { key: 'poc name', label: 'POC Name', filter: 'text', defaultWidth: 140 },
+      { key: 'poc phone', label: 'POC Phone', filter: 'text', defaultWidth: 140 },
+      { key: 'confirmed', label: 'Confirmed', filter: 'select', options: ['', 'true', 'false'], isBoolean: true, defaultWidth: 110 },
+      { key: 'state', label: 'State', filter: 'text', defaultWidth: 70 },
+      { key: 'city', label: 'City', filter: 'text', defaultWidth: 120 },
+      { key: 'zip', label: 'ZIP', filter: 'text', defaultWidth: 80 },
+      { key: 'address', label: 'Address', filter: 'text', defaultWidth: 320, wide: true },
+      { key: 'Service_category', label: 'Service Category', filter: 'text', defaultWidth: 150 },
+      { key: 'Notes', label: 'Notes', filter: 'text', defaultWidth: 220, wide: true },
+      { key: 'POC email', label: 'POC Email', filter: 'text', defaultWidth: 170 },
+    ];
+
+    const state = {
+      view: 'table',
+      filterStatus: null,
+
+      kbDateField: 'auto',
+      kbRange: 'all',
+      kbFrom: null,
+      kbTo: null,
+      calendarMonth: null,
+
+      client: null,
+      loading: false,
+      lastError: null,
+
+      allRows: [],
+      filteredRows: [],
+      page: 1,
+      total: 0,
+
+      sortKey: null,
+      sortDir: 'asc',
+
+      colFilters: {},
+      colOrder: [],
+      colVisible: {},
+      colWidths: {},
+
+      dbColumns: [],
+
+      vehicles: [],           // cached vehicles list
+      vehiclesByVin: new Map(),
+      categories: [],         // cached categories
+      modalVinSelected: false, // for UI hints
+      pinnedRowId: null
+    };
+
+    const tableView = document.getElementById('tableView');
+    const kanbanView = document.getElementById('kanbanView');
+    const calendarView = document.getElementById('calendarView');
+    const ganttView = document.getElementById('ganttView');
+
+    const kanbanColumns = document.getElementById('kanbanColumns');
+    const calendarList = document.getElementById('calendarList');
+    const calendarPrevBtn = document.getElementById('calendarPrevBtn');
+    const calendarNextBtn = document.getElementById('calendarNextBtn');
+    const calendarTodayBtn = document.getElementById('calendarTodayBtn');
+    const calendarMonthLabel = document.getElementById('calendarMonthLabel');
+    const calendarMeta = document.getElementById('calendarMeta');
+
+    const tableScrollWrap = document.getElementById('tableScrollWrap');
+    const dataTable = document.getElementById('dataTable');
+    const colGroup = document.getElementById('colGroup');
+    const headerRow = document.getElementById('tableHeaderRow');
+    const tableBody = document.getElementById('tableBody');
+
+    const topScrollWrap = document.getElementById('topScrollWrap');
+    const topScrollInner = document.getElementById('topScrollInner');
+
+    const emptyState = document.getElementById('emptyState');
+    const emptyTitle = document.getElementById('emptyTitle');
+    const emptyMsg = document.getElementById('emptyMsg');
+
+    const resultsMeta = document.getElementById('resultsMeta');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const pageMeta = document.getElementById('pageMeta');
+
+    const columnsBtn = document.getElementById('columnsBtn');
+    const columnsMenu = document.getElementById('columnsMenu');
+    const columnsList = document.getElementById('columnsList');
+    const colsAll = document.getElementById('colsAll');
+    const colsNone = document.getElementById('colsNone');
+    const colsClose = document.getElementById('colsClose');
+
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalClose = document.getElementById('modalClose');
+    const newRequestBtn = document.getElementById('newRequestBtn');
+    const requestForm = document.getElementById('requestForm');
+
+    const requestId = document.getElementById('requestId');
+    const companyNameInput = document.getElementById('companyNameInput');
+    const companyPhoneInput = document.getElementById('companyPhoneInput');
+    const docInput = document.getElementById('docInput');
+    const unitTypeInput = document.getElementById('unitTypeInput');
+    const brandInput = document.getElementById('brandInput');
+    const modelInput = document.getElementById('modelInput');
+    const modelYearInput = document.getElementById('modelYearInput');
+    const shortVinInput = document.getElementById('shortVinInput');
+    const vinMenu = document.getElementById('vinMenu');
+    const vinHint = document.getElementById('vinHint');
+
+    const statusInput = document.getElementById('statusInput');
+    const quoteInput = document.getElementById('quoteInput');
+    const requestDateInput = document.getElementById('requestDateInput');
+    const workDateInput = document.getElementById('workDateInput');
+    const shippingDateInput = document.getElementById('shippingDateInput');
+    const pocNameInput = document.getElementById('pocNameInput');
+    const pocPhoneInput = document.getElementById('pocPhoneInput');
+    const confirmedInput = document.getElementById('confirmedInput');
+    const stateInput = document.getElementById('stateInput');
+    const cityInput = document.getElementById('cityInput');
+    const zipInput = document.getElementById('zipInput');
+    const addressInput = document.getElementById('addressInput');
+    const categoryInput = document.getElementById('categoryInput');
+
+    const formError = document.getElementById('formError');
+    const modalTitle = document.getElementById('modalTitle');
+    const deleteBtn = document.getElementById('deleteBtn');
+
+    // Kanban time filter UI
+    const kbDateField = document.getElementById('kbDateField');
+    const kbMeta = document.getElementById('kbMeta');
+    const kbCustomWrap = document.getElementById('kbCustomWrap');
+    const kbFrom = document.getElementById('kbFrom');
+    const kbTo = document.getElementById('kbTo');
+
+    // Gantt UI
+    const ganttScale = document.getElementById('ganttScale');
+    const ganttMeta = document.getElementById('ganttMeta');
+    const ganttHeader = document.getElementById('ganttHeader');
+    const ganttList = document.getElementById('ganttList');
+
+    function escapeHtml(s){
+      const v = String(s);
+      return v.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#039;");
+    }
+    function escapeAttr(s){ return escapeHtml(s).replaceAll('\n',' '); }
+
+    const statusPill = (status) => {
+      const map = {
+        'Open': 'bg-slate-800 text-slate-100 border-slate-700',
+        'In Progress': 'bg-blue-600/20 text-blue-200 border-blue-700/40',
+        'Waiting': 'bg-amber-600/20 text-amber-200 border-amber-700/40',
+        'Closed': 'bg-emerald-600/20 text-emerald-200 border-emerald-700/40',
+      };
+      const canonical = canonicalizeStatus(status);
+      const cls = map[canonical] || 'bg-slate-800 text-slate-100 border-slate-700';
+      return `<span class="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${cls}">${escapeHtml(canonical || '—')}</span>`;
+    };
+
+    function normalizeRow(raw) {
+      const companyPhone = raw?.['company phone'] ?? raw?.company_phone ?? null;
+      const pocPhone = raw?.['poc phone'] ?? raw?.poc_phone ?? null;
+
+      const statusRaw = raw?.status ?? raw?.Status ?? raw?.['status'] ?? raw?.service_status ?? raw?.request_status ?? null;
+      const status = canonicalizeStatus(statusRaw) || null;
+
+      const shortvin = raw?.shortvin ?? raw?.short_vin ?? null;
+
+      return {
+        ...raw,
+        status,
+        Service_category: raw?.Service_category ?? raw?.service_category ?? raw?.servicecategory ?? null,
+        'company phone': companyPhone,
+        unittype: raw?.unittype ?? raw?.unit_type ?? null,
+        'model year': raw?.['model year'] ?? raw?.model_year ?? null,
+        shortvin,
+        'request date': raw?.['request date'] ?? raw?.request_date ?? null,
+        workdate: raw?.workdate ?? raw?.work_date ?? raw?.['work date'] ?? null,
+        'shipping date': raw?.['shipping date'] ?? raw?.shipping_date ?? null,
+        'poc name': raw?.['poc name'] ?? raw?.poc_name ?? null,
+        'poc phone': pocPhone,
+      };
+    }
+
+    let savePrefsTimer = null;
+
+    function applyPrefs(prefs) {
+      if (prefs && typeof prefs === 'object') {
+        state.colOrder = Array.isArray(prefs.colOrder) ? prefs.colOrder : state.colOrder;
+        state.colVisible = prefs.colVisible && typeof prefs.colVisible === 'object' ? prefs.colVisible : state.colVisible;
+        state.colWidths = prefs.colWidths && typeof prefs.colWidths === 'object' ? prefs.colWidths : state.colWidths;
+        state.sortKey = prefs.sortKey ?? state.sortKey;
+        state.sortDir = prefs.sortDir ?? state.sortDir;
+        state.colFilters = prefs.colFilters && typeof prefs.colFilters === 'object' ? prefs.colFilters : state.colFilters;
+
+        state.kbDateField = prefs.kbDateField ?? state.kbDateField;
+        state.kbRange = prefs.kbRange ?? state.kbRange;
+        state.kbFrom = prefs.kbFrom ?? state.kbFrom;
+        state.kbTo = prefs.kbTo ?? state.kbTo;
+
+        if (prefs.ganttScale) {
+          try { ganttScale.value = prefs.ganttScale; } catch {}
+        }
+      }
+    }
+
+    function loadPrefs() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const prefs = JSON.parse(raw);
+        applyPrefs(prefs);
+      } catch {}
+    }
+
+    async function loadPrefsFromDb() {
+      try {
+        const { data } = await state.client.auth.getSession();
+        const session = data?.session;
+        if (!session?.user?.id) return;
+        const { data: prefsRow, error } = await state.client
+          .from(CONFIG_TABLE)
+          .select('config')
+          .eq('user_id', session.user.id)
+          .eq('table_key', CONFIG_KEY)
+          .maybeSingle();
+        if (error || !prefsRow?.config) return;
+        applyPrefs(prefsRow.config);
+      } catch (err) {
+        console.warn('Prefs load error:', err);
+      }
+    }
+
+    function scheduleSavePrefsToDb(prefs) {
+      if (savePrefsTimer) window.clearTimeout(savePrefsTimer);
+      savePrefsTimer = window.setTimeout(async () => {
+        try {
+          const { data } = await state.client.auth.getSession();
+          const session = data?.session;
+          if (!session?.user?.id) return;
+          await state.client
+            .from(CONFIG_TABLE)
+            .upsert({
+              user_id: session.user.id,
+              table_key: CONFIG_KEY,
+              config: prefs
+            }, { onConflict: 'user_id,table_key' });
+        } catch (err) {
+          console.warn('Prefs save error:', err);
+        }
+      }, 500);
+    }
+
+    function savePrefs() {
+      const prefs = {
+        colOrder: state.colOrder,
+        colVisible: state.colVisible,
+        colWidths: state.colWidths,
+        sortKey: state.sortKey,
+        sortDir: state.sortDir,
+        colFilters: state.colFilters,
+
+        kbDateField: state.kbDateField,
+        kbRange: state.kbRange,
+        kbFrom: state.kbFrom,
+        kbTo: state.kbTo,
+
+        ganttScale: ganttScale?.value || 'week'
+      };
+      try { localStorage.setItem(LS_KEY, JSON.stringify(prefs)); } catch {}
+      scheduleSavePrefsToDb(prefs);
+    }
+
+    function getAllColumnDefs() {
+      const byKey = new Map(BASE_COLUMN_DEFS.map(c => [c.key, c]));
+      for (const k of state.dbColumns) {
+        if (!byKey.has(k)) byKey.set(k, { key: k, label: k, filter: 'text', defaultWidth: 160, extra: true });
+      }
+      return Array.from(byKey.values());
+    }
+
+    function ensureColumnsInitialized() {
+      const allDefs = getAllColumnDefs();
+
+      if (!state.colOrder.length) state.colOrder = allDefs.map(d => d.key);
+      else {
+        const set = new Set(state.colOrder);
+        for (const d of allDefs) if (!set.has(d.key)) state.colOrder.push(d.key);
+      }
+
+      for (const d of allDefs) {
+        if (!(d.key in state.colVisible)) state.colVisible[d.key] = !d.extra;
+      }
+
+      for (const d of allDefs) {
+        if (!(d.key in state.colWidths)) state.colWidths[d.key] = d.defaultWidth ?? 160;
+      }
+
+      for (const d of allDefs) {
+        if (!(d.key in state.colFilters)) state.colFilters[d.key] = '';
+      }
+
+      savePrefs();
+    }
+
+    function getVisibleOrderedDefs() {
+      const allDefs = getAllColumnDefs();
+      const map = new Map(allDefs.map(d => [d.key, d]));
+      return state.colOrder.map(k => map.get(k)).filter(Boolean).filter(d => !!state.colVisible[d.key]);
+    }
+
+    function displayValueFor(def, row) {
+      const raw = row?.[def.key];
+      if (def.isDate) return fmtDate(raw);
+      if (def.isMoney) return fmtUSD(raw);
+      return (raw ?? '—');
+    }
+
+    function applyTimeFilterForViews(rows) {
+      if (state.view !== 'kanban' && state.view !== 'gantt') return rows;
+      if (!state.kbRange || state.kbRange === 'all') return rows;
+
+      const now = Date.now();
+      let fromTs = null;
+      let toTs = null;
+
+      if (state.kbRange === 'today') {
+        fromTs = startOfDay(now);
+        toTs = endOfDay(now);
+      } else if (state.kbRange === '7d') {
+        fromTs = startOfDay(now - 6 * 86400000);
+        toTs = endOfDay(now);
+      } else if (state.kbRange === '30d') {
+        fromTs = startOfDay(now - 29 * 86400000);
+        toTs = endOfDay(now);
+      } else if (state.kbRange === '90d') {
+        fromTs = startOfDay(now - 89 * 86400000);
+        toTs = endOfDay(now);
+      } else if (state.kbRange === 'thisMonth') {
+        fromTs = startOfMonth(now);
+        toTs = endOfMonth(now);
+      } else if (state.kbRange === 'custom') {
+        const f = state.kbFrom ? parseMaybeDate(state.kbFrom) : null;
+        const t = state.kbTo ? parseMaybeDate(state.kbTo) : null;
+        fromTs = f !== null ? startOfDay(f) : null;
+        toTs = t !== null ? endOfDay(t) : null;
+      }
+
+      return rows.filter(r => {
+        const ts = getRowDateTs(r, state.kbDateField);
+        if (ts === null) return false;
+        if (fromTs !== null && ts < fromTs) return false;
+        if (toTs !== null && ts > toTs) return false;
+        return true;
+      });
+    }
+
+    function computeDerivedRows() {
+      const allDefs = getAllColumnDefs();
+      const defMap = new Map(allDefs.map(d => [d.key, d]));
+
+      let out = [...state.allRows];
+
+      if (state.filterStatus) {
+        const target = canonicalizeStatus(state.filterStatus);
+        out = out.filter(r => canonicalizeStatus(r.status) === target);
+      }
+
+      for (const [key, val] of Object.entries(state.colFilters)) {
+        const fv = String(val ?? '').trim();
+        if (!fv) continue;
+        const d = defMap.get(key) || { key, filter: 'text' };
+
+        if (d.filter === 'select') out = out.filter(r => String(r[key] ?? '') === fv);
+        else {
+          const q = fv.toLowerCase();
+          out = out.filter(r => normStr(displayValueFor(d, r)).includes(q));
+        }
+      }
+
+      out = applyTimeFilterForViews(out);
+
+      if (state.sortKey) {
+        const key = state.sortKey;
+        const d = defMap.get(key);
+        const dir = state.sortDir === 'desc' ? -1 : 1;
+
+        out.sort((a, b) => {
+          const av = a[key];
+          const bv = b[key];
+
+          if (d?.isDate) {
+            const at = parseMaybeDate(av) ?? -Infinity;
+            const bt = parseMaybeDate(bv) ?? -Infinity;
+            return (at - bt) * dir;
+          }
+
+          if (d?.isMoney) {
+            const an = Number(av);
+            const bn = Number(bv);
+            const aOk = av !== null && av !== '' && av !== undefined && !isNaN(an);
+            const bOk = bv !== null && bv !== '' && bv !== undefined && !isNaN(bn);
+            if (aOk && bOk) return (an - bn) * dir;
+          }
+
+          const an = Number(av);
+          const bn = Number(bv);
+          const aIsNum = av !== null && av !== '' && av !== undefined && !isNaN(an);
+          const bIsNum = bv !== null && bv !== '' && bv !== undefined && !isNaN(bn);
+          if (aIsNum && bIsNum) return (an - bn) * dir;
+
+          const as = normStr(av);
+          const bs = normStr(bv);
+          if (as < bs) return -1 * dir;
+          if (as > bs) return  1 * dir;
+          return 0;
+        });
+      }
+
+      if (state.pinnedRowId) {
+        const pinnedIndex = out.findIndex(r => String(r.id) === String(state.pinnedRowId));
+        if (pinnedIndex > -1) {
+          const [pinned] = out.splice(pinnedIndex, 1);
+          out.unshift(pinned);
+        }
+      }
+
+      state.filteredRows = out;
+      state.total = out.length;
+
+      const maxPage = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+      if (state.page > maxPage) state.page = maxPage;
+    }
+
+    function getPageRows() {
+      const start = (state.page - 1) * PAGE_SIZE;
+      return state.filteredRows.slice(start, start + PAGE_SIZE);
+    }
+
+    function buildColumnsMenu() {
+      const allDefs = getAllColumnDefs();
+      columnsList.innerHTML = allDefs.map(d => {
+        const checked = state.colVisible[d.key] ? 'checked' : '';
+        const label = d.label || d.key;
+        const badge = d.extra ? '<span class="ml-2 rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400">DB</span>' : '';
+        return `
+          <label class="flex items-center justify-between gap-3 rounded-xl px-3 py-2 hover:bg-slate-900/60">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" class="colToggle h-4 w-4 accent-blue-600" data-col="${escapeAttr(d.key)}" ${checked} />
+              <span class="text-sm text-slate-200">${escapeHtml(label)}</span>
+              ${badge}
+            </div>
+            <span class="text-[11px] text-slate-500">${escapeHtml(d.key)}</span>
+          </label>
+        `;
+      }).join('');
+
+      columnsList.querySelectorAll('.colToggle').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const key = cb.dataset.col;
+          state.colVisible[key] = cb.checked;
+          savePrefs();
+          render();
+        });
+      });
+    }
+
+    function buildColGroup(visibleDefs) {
+      colGroup.innerHTML = '';
+
+      for (const d of visibleDefs) {
+        const w = Math.max(80, Number(state.colWidths[d.key] || d.defaultWidth || 160));
+        const col = document.createElement('col');
+        col.style.width = `${w}px`;
+        colGroup.appendChild(col);
+      }
+    }
+
+    function buildHeaderAndFilters() {
+      const visibleDefs = getVisibleOrderedDefs();
+      buildColGroup(visibleDefs);
+
+      headerRow.innerHTML = visibleDefs.map(d => {
+        const isActive = state.sortKey === d.key;
+        const icon = isActive ? (state.sortDir === 'asc' ? 'arrow-up' : 'arrow-down') : 'arrow-up-down';
+        const v = String(state.colFilters[d.key] ?? '');
+        const commonCls = `no-drag w-full rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600`;
+
+        const filterControl = d.filter === 'select'
+          ? `<select data-filter-key="${escapeAttr(d.key)}" class="${commonCls}">
+              ${(d.options || ['']).map(opt => {
+                const selected = String(opt) === String(v) ? 'selected' : '';
+                const label = opt === '' ? 'All' : opt;
+                return `<option value="${escapeAttr(opt)}" ${selected}>${escapeHtml(label)}</option>`;
+              }).join('')}
+            </select>`
+          : `<input data-filter-key="${escapeAttr(d.key)}" class="${commonCls}" placeholder="Search..." value="${escapeAttr(v)}" />`;
+
+        return `
+          <th class="relative px-3 py-2 align-top"
+              draggable="true"
+              data-col-key="${escapeAttr(d.key)}">
+            <div class="header-controls">
+              <span class="table-header-label text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">${escapeHtml(d.label || d.key)}</span>
+              <div class="header-actions">
+                <button
+                  type="button"
+                  class="header-sort-btn no-drag inline-flex items-center rounded-lg border border-slate-800 bg-slate-950/60 p-1 text-slate-300 hover:text-white hover:bg-slate-900"
+                  data-sort-toggle="${escapeAttr(d.key)}"
+                  title="Toggle sort">
+                  <i data-lucide="${icon}" class="h-3 w-3 ${isActive ? 'text-blue-300' : 'text-slate-600'}"></i>
+                </button>
+                <button
+                  type="button"
+                  class="header-menu-btn no-drag rounded-lg border border-slate-800 bg-slate-950/60 p-1 text-slate-300 hover:text-white hover:bg-slate-900"
+                  data-header-menu-btn="${escapeAttr(d.key)}"
+                  title="Filter & sort">
+                  <i data-lucide="sliders-horizontal" class="h-3 w-3"></i>
+                </button>
+              </div>
+            </div>
+            <div class="header-menu hidden" data-menu-for="${escapeAttr(d.key)}">
+              <div class="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-1">Filter</div>
+              ${filterControl}
+              <div class="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" class="no-drag rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900" data-sort-key="${escapeAttr(d.key)}" data-sort-dir="asc">Sort A → Z</button>
+                <button type="button" class="no-drag rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900" data-sort-key="${escapeAttr(d.key)}" data-sort-dir="desc">Sort Z → A</button>
+                <button type="button" class="no-drag col-span-2 rounded-lg border border-slate-800 bg-slate-950/60 px-2 py-1 text-[11px] text-slate-200 hover:bg-slate-900" data-sort-key="${escapeAttr(d.key)}" data-sort-dir="clear">Clear sort</button>
+              </div>
+              <button type="button" class="no-drag mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 hover:text-white" data-clear-filter="${escapeAttr(d.key)}">Clear filter</button>
+            </div>
+            <div class="col-resizer" data-resize-key="${escapeAttr(d.key)}"></div>
+          </th>
+        `;
+      }).join('');
+      openHeaderMenuKey = null;
+
+      enableHeaderDrag();
+      enableHeaderResize(visibleDefs);
+      updateHeaderControlLayout();
+
+      lucide.createIcons();
+    }
+
+    let openHeaderMenuKey = null;
+    function getHeaderMenuEl(key) {
+      const safe = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(key) : key.replace(/"/g, '\\"');
+      return headerRow.querySelector(`[data-menu-for="${safe}"]`);
+    }
+    function closeHeaderMenus() {
+      headerRow.querySelectorAll('.header-menu').forEach(menu => menu.classList.add('hidden'));
+      openHeaderMenuKey = null;
+    }
+    function toggleHeaderMenu(key) {
+      if (openHeaderMenuKey && openHeaderMenuKey !== key) closeHeaderMenus();
+      const menu = getHeaderMenuEl(key);
+      if (!menu) return;
+      const willOpen = menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', !willOpen);
+      openHeaderMenuKey = willOpen ? key : null;
+      if (willOpen) positionHeaderMenu(menu);
+    }
+
+    function updateHeaderControlLayout() {
+      const threshold = 140;
+      headerRow.querySelectorAll('th[data-col-key]').forEach(th => {
+        const width = th.getBoundingClientRect().width;
+        th.classList.toggle('header-compact', width < threshold);
+      });
+    }
+
+    function positionHeaderMenu(menu) {
+      menu.style.transform = '';
+      menu.style.left = '';
+      menu.style.right = '8px';
+      requestAnimationFrame(() => {
+        const menuRect = menu.getBoundingClientRect();
+        const wrapRect = tableScrollWrap.getBoundingClientRect();
+        let shift = 0;
+        if (menuRect.left < wrapRect.left + 8) {
+          shift = (wrapRect.left + 8) - menuRect.left;
+        } else if (menuRect.right > wrapRect.right - 8) {
+          shift = (wrapRect.right - 8) - menuRect.right;
+        }
+        if (shift !== 0) menu.style.transform = `translateX(${shift}px)`;
+      });
+    }
+
+    function enableHeaderDrag() {
+      const ths = headerRow.querySelectorAll('th[data-col-key]');
+      let dragKey = null;
+
+      ths.forEach(th => {
+        th.addEventListener('dragstart', (e) => {
+          if (e.target.closest('.no-drag')) {
+            e.preventDefault();
+            return;
+          }
+          dragKey = th.dataset.colKey;
+          th.classList.add('dragging');
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', dragKey); } catch {}
+        });
+
+        th.addEventListener('dragend', () => {
+          dragKey = null;
+          ths.forEach(x => x.classList.remove('dragging', 'drop-target'));
+        });
+
+        th.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          const overKey = th.dataset.colKey;
+          if (!dragKey || dragKey === overKey) return;
+          th.classList.add('drop-target');
+          e.dataTransfer.dropEffect = 'move';
+        });
+
+        th.addEventListener('dragleave', () => th.classList.remove('drop-target'));
+
+        th.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const toKey = th.dataset.colKey;
+          const fromKey = dragKey || (() => { try { return e.dataTransfer.getData('text/plain'); } catch { return null; } })();
+          if (!fromKey || !toKey || fromKey === toKey) return;
+
+          const order = [...state.colOrder];
+          const fromIdx = order.indexOf(fromKey);
+          const toIdx = order.indexOf(toKey);
+          if (fromIdx === -1 || toIdx === -1) return;
+
+          order.splice(fromIdx, 1);
+          order.splice(toIdx, 0, fromKey);
+          state.colOrder = order;
+
+          savePrefs();
+          render();
+        });
+      });
+    }
+
+    function enableHeaderResize(visibleDefs) {
+      const handles = headerRow.querySelectorAll('[data-resize-key]');
+      let activeKey = null, startX = 0, startW = 0;
+
+      const onMove = (e) => {
+        if (!activeKey) return;
+        const dx = (e.clientX - startX);
+        const newW = Math.max(80, startW + dx);
+        state.colWidths[activeKey] = newW;
+
+        const idx = visibleDefs.findIndex(d => d.key === activeKey);
+        const colIdx = idx;
+        if (idx >= 0 && colGroup.children[colIdx]) {
+          colGroup.children[colIdx].style.width = `${newW}px`;
+          syncTopScrollbarWidth();
+        }
+      };
+
+      const onUp = () => {
+        if (!activeKey) return;
+        document.body.classList.remove('resizing');
+        activeKey = null;
+        savePrefs();
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        syncTopScrollbarWidth();
+        updateHeaderControlLayout();
+      };
+
+      handles.forEach(h => {
+        h.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const key = h.dataset.resizeKey;
+          activeKey = key;
+          startX = e.clientX;
+          startW = Number(state.colWidths[key] || 160);
+          document.body.classList.add('resizing');
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+      });
+    }
+
+    function renderTableRows(rows) {
+      const visibleDefs = getVisibleOrderedDefs();
+      tableBody.innerHTML = '';
+
+      if (!rows.length) {
+        emptyState.classList.remove('hidden');
+        emptyTitle.textContent = state.lastError ? 'Could not load service requests' : 'No service requests found';
+        emptyMsg.textContent = state.lastError || 'Try adjusting filters/search.';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+
+      for (const r of rows) {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-950/30';
+        tr.dataset.rowId = r.id;
+
+        const cells = visibleDefs.map(d => {
+          const value = r[d.key];
+          const baseAttrs = `data-row-id="${escapeAttr(r.id)}" data-col-key="${escapeAttr(d.key)}"`;
+
+          if (d.key === 'status') return `<td ${baseAttrs} class="px-3 py-2 text-slate-200 editable-cell">${statusPill(value)}</td>`;
+          if (d.isDate) return `<td ${baseAttrs} class="px-3 py-2 text-slate-300 whitespace-nowrap editable-cell">${escapeHtml(fmtDate(value))}</td>`;
+          if (d.isMoney) return `<td ${baseAttrs} class="px-3 py-2 text-slate-200 whitespace-nowrap font-semibold text-right editable-cell">${escapeHtml(fmtUSD(value))}</td>`;
+          if (d.key === 'phones') return `<td ${baseAttrs} class="px-3 py-2 text-slate-200 whitespace-nowrap">${escapeHtml(value || '—')}</td>`;
+          if (d.key === 'address') return `<td ${baseAttrs} class="px-3 py-2 text-slate-200 whitespace-normal editable-cell">${escapeHtml(value ?? '—')}</td>`;
+          if (d.key === 'company_name' || d.key === 'brand' || d.key === 'model') return `<td ${baseAttrs} class="px-3 py-2 font-semibold text-white editable-cell">${escapeHtml(value || '—')}</td>`;
+          return `<td ${baseAttrs} class="px-3 py-2 text-slate-200 editable-cell">${escapeHtml(value ?? '—')}</td>`;
+        }).join('');
+
+        tr.innerHTML = cells;
+        tableBody.appendChild(tr);
+      }
+
+      lucide.createIcons();
+    }
+
+    function isEditableDef(def) {
+      if (!def || def.virtual) return false;
+      const blocked = new Set(['phones', 'id']);
+      return !blocked.has(def.key);
+    }
+
+    function getPayloadKeyFor(defKey) {
+      if (state.dbColumns?.includes(defKey)) return defKey;
+      return defKey;
+    }
+
+    function getInputValueForDef(def, value) {
+      if (def.isDate) return value ? String(value).slice(0, 10) : '';
+      if (def.isBoolean) {
+        if (value === null || value === undefined || value === '') return '';
+        return value ? 'true' : 'false';
+      }
+      if (value === null || value === undefined) return '';
+      return String(value);
+    }
+
+    function parseInputValue(def, raw) {
+      const v = typeof raw === 'string' ? raw.trim() : raw;
+      if (def.isDate) return v || null;
+      if (def.isMoney) {
+        if (v === '') return null;
+        const n = Number(v);
+        return isNaN(n) ? v : n;
+      }
+      if (def.isBoolean) {
+        if (v === '') return null;
+        return v === true || v === 'true';
+      }
+      if (def.filter === 'select') return v || null;
+      if (v === '') return null;
+      return v;
+    }
+
+    async function updateCellValue(rowId, defKey, value) {
+      const payloadKey = getPayloadKeyFor(defKey);
+      const payloadRaw = { id: rowId, [payloadKey]: value };
+      const payload = filterPayloadByKnownColumns(payloadRaw);
+      if (Object.keys(payload).length <= 1) return;
+      const updated = await upsertRequest(payload);
+      const idx = state.allRows.findIndex(x => String(x.id) === String(updated.id));
+      if (idx >= 0) state.allRows[idx] = updated;
+      render();
+    }
+
+    function startCellEdit(cell, row, def) {
+      if (cell.classList.contains('cell-editing')) return;
+      if (!isEditableDef(def)) return;
+
+      const originalDisplay = cell.innerHTML;
+      const originalValue = row?.[def.key];
+      const originalInputValue = getInputValueForDef(def, originalValue);
+
+      const input = document.createElement(def.filter === 'select' ? 'select' : 'input');
+      input.className = 'no-drag w-full rounded-md border border-slate-700 bg-slate-950/70 px-2 py-1 text-[11px] text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600';
+
+      if (input.tagName === 'INPUT') {
+        if (def.isDate) input.type = 'date';
+        if (def.isMoney) {
+          input.type = 'number';
+          input.step = '0.01';
+        }
+        input.value = originalInputValue;
+      } else {
+        const opts = (def.options || ['']).map(opt => {
+          const label = opt === '' ? '—' : opt;
+          return `<option value="${escapeAttr(opt)}">${escapeHtml(label)}</option>`;
+        }).join('');
+        input.innerHTML = opts;
+        input.value = originalInputValue;
+      }
+
+      cell.classList.add('cell-editing');
+      cell.innerHTML = '';
+      cell.appendChild(input);
+
+      const cancel = () => {
+        cell.classList.remove('cell-editing');
+        cell.innerHTML = originalDisplay;
+        lucide.createIcons();
+      };
+
+      const commit = async () => {
+        if (!cell.classList.contains('cell-editing')) return;
+        const rawValue = input.value;
+        const newValue = parseInputValue(def, rawValue);
+        const originalComparable = String(originalInputValue ?? '');
+        const newComparable = String(rawValue ?? '');
+        if (originalComparable === newComparable) {
+          cancel();
+          return;
+        }
+
+        try {
+          const ok = await requireLogin();
+          if (!ok) { cancel(); return; }
+
+          let finalValue = newValue;
+          if (def.key === 'status') finalValue = canonicalizeStatus(newValue) || null;
+
+          await updateCellValue(row.id, def.key, finalValue);
+        } catch (err) {
+          console.error(err);
+          state.lastError = err?.message || String(err);
+          cancel();
+          render();
+        }
+      };
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          cancel();
+        }
+        if (e.key === 'Enter' && input.tagName === 'INPUT') {
+          e.preventDefault();
+          commit();
+        }
+      });
+
+      input.addEventListener('blur', () => commit());
+
+      input.focus();
+      if (input.tagName === 'INPUT') input.select();
+    }
+
+    function renderKanbanMeta() {
+      const parts = [];
+      parts.push(`Time: ${state.kbRange || 'all'}`);
+      parts.push(`Date: ${state.kbDateField}`);
+      kbMeta.textContent = `${state.filteredRows.length} items • ${parts.join(' • ')}`;
+    }
+
+    function renderKanbanView() {
+      const buckets = new Map();
+      for (const s of CANON_STATUSES) buckets.set(s, []);
+      const unknownMap = new Map();
+
+      for (const row of state.filteredRows) {
+        const canon = canonicalizeStatus(row.status);
+        if (!canon) {
+          const key = 'Unspecified';
+          if (!unknownMap.has(key)) unknownMap.set(key, []);
+          unknownMap.get(key).push(row);
+          continue;
+        }
+        if (buckets.has(canon)) buckets.get(canon).push(row);
+        else {
+          if (!unknownMap.has(canon)) unknownMap.set(canon, []);
+          unknownMap.get(canon).push(row);
+        }
+      }
+
+      const unknownKeys = Array.from(unknownMap.keys());
+      const columnOrder = CANON_STATUSES.concat(unknownKeys.length ? ['Other'] : []);
+      const otherItems = [];
+      if (unknownKeys.length) for (const k of unknownKeys) otherItems.push(...(unknownMap.get(k) || []));
+
+      kanbanColumns.innerHTML = columnOrder.map(status => {
+        const items = status === 'Other' ? otherItems : (buckets.get(status) || []);
+        const cards = items.map(r => {
+          const primaryDate = fmtDate(r['shipping date'] || r.workdate || r['request date']);
+          const s = canonicalizeStatus(r.status);
+          return `
+            <div class="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 shadow-md shadow-blue-900/20">
+              <div class="flex items-center justify-between gap-3 text-xs text-slate-400">
+                <span>${escapeHtml(primaryDate)}</span>
+
+                <div class="flex items-center gap-2">
+                  ${statusPill(s)}
+                  <button
+                    type="button"
+                    class="kbEditBtn inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
+                    data-id="${escapeAttr(r.id)}"
+                    title="Edit"
+                  >
+                    <i data-lucide="pencil" class="h-4 w-4"></i>
+                    Edit
+                  </button>
+                </div>
+              </div>
+
+              <p class="mt-2 text-sm font-black text-white">${escapeHtml(r.company_name || '—')}</p>
+              <p class="text-sm text-slate-300">${escapeHtml(r.unittype || '')} ${escapeHtml(r.brand || '')} ${escapeHtml(r.model || '')}</p>
+              <p class="text-xs text-slate-400">VIN: ${escapeHtml(r.shortvin || '—')} • Cat: ${escapeHtml(r['Service_category'] || '—')}</p>
+              <p class="mt-1 text-xs text-slate-400">POC: ${escapeHtml(r['poc name'] || '—')}</p>
+              ${status === 'Other' && unknownKeys.length ? `<p class="mt-2 text-[11px] text-slate-500">Other includes: ${escapeHtml(unknownKeys.join(', '))}</p>` : ''}
+            </div>
+          `;
+        }).join('');
+
+        const meta = items.length === 1 ? '1 item' : `${items.length} items`;
+
+        return `
+          <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div class="flex items-center justify-between">
+              <p class="text-sm font-bold text-white">${escapeHtml(status)}</p>
+              <span class="text-xs text-slate-400">${meta}</span>
+            </div>
+            <div class="mt-3 space-y-3">
+              ${cards || '<p class="text-xs text-slate-500">No items</p>'}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      kanbanColumns.querySelectorAll('.kbEditBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          const item = state.allRows.find(x => String(x.id) === String(id));
+          if (item) openModal(item);
+        });
+      });
+
+      lucide.createIcons();
+    }
+
+    function renderCalendarView() {
+      const monthAnchor = state.calendarMonth ? new Date(state.calendarMonth) : new Date();
+      const monthStart = getMonthStartDate(monthAnchor);
+      const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
+
+      const events = state.filteredRows
+        .map(r => {
+          const rawDate = r.workdate || r['work date'];
+          const ts = parseMaybeDate(rawDate);
+          return { row: r, ts, key: rawDate ? new Date(rawDate).toISOString().slice(0, 10) : null };
+        })
+        .filter(e => e.ts !== null && e.key)
+        .filter(e => e.ts >= monthStart.getTime() && e.ts <= monthEnd.getTime())
+        .sort((a, b) => a.ts - b.ts);
+
+      const start = new Date(monthStart);
+      start.setDate(start.getDate() - start.getDay());
+      const end = new Date(monthEnd);
+      end.setDate(end.getDate() + (6 - end.getDay()));
+
+      const eventsByDay = new Map();
+      for (const evt of events) {
+        if (!eventsByDay.has(evt.key)) eventsByDay.set(evt.key, []);
+        eventsByDay.get(evt.key).push(evt.row);
+      }
+
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+      const cells = [];
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        const dayEvents = eventsByDay.get(key) || [];
+        const inMonth = d.getMonth() === monthAnchor.getMonth();
+        const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+
+        const cards = dayEvents.map(row => {
+          return `
+            <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3 text-left space-y-1">
+              <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span class="truncate max-w-[140px]">${escapeHtml(row.company_name || '—')}</span>
+                ${statusPill(row.status)}
+              </div>
+              <p class="text-xs text-slate-300 truncate">${escapeHtml(row.unittype || '')} ${escapeHtml(row.brand || '')} ${escapeHtml(row.model || '')}</p>
+              <p class="text-[11px] text-slate-400 truncate">VIN: ${escapeHtml(row.shortvin || '—')} • Cat: ${escapeHtml(row['Service_category'] || '—')}</p>
+            </div>
+          `;
+        }).join('');
+
+        cells.push(`
+          <div class="rounded-2xl border ${inMonth ? 'border-slate-800 bg-slate-950/60' : 'border-slate-900 bg-slate-950/30'} p-3 space-y-2">
+            <div class="flex items-center justify-between text-xs ${inMonth ? 'text-slate-200' : 'text-slate-500'}">
+              <span class="font-semibold">${escapeHtml(dateLabel)}</span>
+              <span class="text-[11px]">${dayNames[d.getDay()]}</span>
+            </div>
+            <div class="space-y-2 max-h-48 overflow-auto pr-1">
+              ${cards || '<p class="text-[11px] text-slate-500">No work scheduled</p>'}
+            </div>
+          </div>
+        `);
+      }
+
+      calendarMonthLabel.textContent = `${monthAnchor.toLocaleString('default', { month: 'long' })} ${monthAnchor.getFullYear()}`;
+      calendarMeta.textContent = events.length ? `${events.length} items in month` : 'No dated requests in this month.';
+
+      calendarList.innerHTML = `
+        <div class="overflow-x-auto">
+          <div class="min-w-[980px] grid grid-cols-7 gap-2">
+            ${cells.join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function ganttStatusClass(status) {
+      const s = canonicalizeStatus(status);
+      if (s === 'Waiting') return 'waiting';
+      if (s === 'Closed') return 'closed';
+      if (s === 'In Progress') return 'progress';
+      return 'open';
+    }
+
+    function toISODate(ts) {
+      const d = new Date(ts);
+      return d.toISOString().slice(0, 10);
+    }
+
+    function renderGanttView() {
+      const tasks = state.filteredRows.map(r => {
+        const req = parseMaybeDate(r['request date']);
+        const work = parseMaybeDate(r.workdate);
+        const ship = parseMaybeDate(r['shipping date']);
+        const start = req ?? work ?? ship;
+        const end = ship ?? work ?? req;
+        if (start === null || end === null) return null;
+        const s = Math.min(start, end);
+        const e = Math.max(start, end);
+        return { row: r, start: s, end: e };
+      }).filter(Boolean);
+
+      if (!tasks.length) {
+        ganttMeta.textContent = 'No tasks with dates match current filters.';
+        ganttHeader.innerHTML = '';
+        ganttList.innerHTML = '<p class="text-sm text-slate-400">No dated items.</p>';
+        return;
+      }
+
+      let minTs = Infinity, maxTs = -Infinity;
+      for (const t of tasks) {
+        if (t.start < minTs) minTs = t.start;
+        if (t.end > maxTs) maxTs = t.end;
+      }
+
+      const padDays = 3;
+      minTs = startOfDay(minTs - padDays * 86400000);
+      maxTs = endOfDay(maxTs + padDays * 86400000);
+
+      const totalMs = Math.max(1, (maxTs - minTs));
+      const totalDays = Math.max(1, Math.round(totalMs / 86400000));
+
+      ganttMeta.textContent = `${tasks.length} items • Range: ${fmtDate(toISODate(minTs))} → ${fmtDate(toISODate(maxTs))} • Scale: ${ganttScale.value}`;
+
+      const scale = ganttScale.value;
+      const tick = (scale === 'day') ? 1 : 7;
+
+      const ticks = [];
+      for (let day = 0; day <= totalDays; day += tick) {
+        const ts = minTs + day * 86400000;
+        ticks.push({ day, label: fmtDate(toISODate(ts)) });
+      }
+
+      ganttHeader.innerHTML = `
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-300">Company / Unit</span>
+          <span class="text-slate-500">Timeline</span>
+        </div>
+      `;
+
+      ganttList.innerHTML = tasks.map(t => {
+        const leftPct = ((t.start - minTs) / totalMs) * 100;
+        const widthPct = Math.max(0.8, ((t.end - t.start) / totalMs) * 100);
+        const r = t.row;
+
+        const label = `${r.company_name || '—'} • ${r.unittype || ''} ${r.brand || ''} ${r.model || ''}`.trim();
+        const datesLabel = `Req: ${fmtDate(r['request date'])} • Work: ${fmtDate(r.workdate)} • Ship: ${fmtDate(r['shipping date'])}`;
+
+        const gridLines = ticks.map(x => {
+          const xPct = (x.day / totalDays) * 100;
+          return `<div class="gantt-gridline" style="left:${xPct}%;"></div>`;
+        }).join('');
+
+        return `
+          <div class="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div class="min-w-[260px]">
+                <div class="flex items-center gap-2">
+                  <p class="text-sm font-black text-white">${escapeHtml(r.company_name || '—')}</p>
+                  ${statusPill(r.status)}
+                </div>
+                <p class="text-xs text-slate-400 mt-1">${escapeHtml(datesLabel)}</p>
+                <p class="text-xs text-slate-300 mt-1">${escapeHtml(label)}</p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="ganttEditBtn inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
+                  data-id="${escapeAttr(r.id)}"
+                >
+                  <i data-lucide="pencil" class="h-4 w-4"></i>
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-3 gantt-track">
+              ${gridLines}
+              <div class="gantt-bar ${ganttStatusClass(r.status)}" style="left:${leftPct}%; width:${widthPct}%;"></div>
+            </div>
+
+            <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+              <span class="rounded-full border border-slate-800 bg-slate-950/40 px-3 py-1">Doc: ${escapeHtml(r.doc || '—')}</span>
+              <span class="rounded-full border border-slate-800 bg-slate-950/40 px-3 py-1">VIN: ${escapeHtml(r.shortvin || '—')}</span>
+              <span class="rounded-full border border-slate-800 bg-slate-950/40 px-3 py-1">Cat: ${escapeHtml(r['Service_category'] || '—')}</span>
+              <span class="rounded-full border border-slate-800 bg-slate-950/40 px-3 py-1">POC: ${escapeHtml(r['poc name'] || '—')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      ganttList.querySelectorAll('.ganttEditBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = btn.dataset.id;
+          const item = state.allRows.find(x => String(x.id) === String(id));
+          if (item) openModal(item);
+        });
+      });
+
+      lucide.createIcons();
+    }
+
+    // Top scroll sync
+    let syncing = false;
+    function syncTopScrollbarWidth() { topScrollInner.style.width = (dataTable.scrollWidth) + "px"; }
+
+    function wireScrollSync() {
+      topScrollWrap.addEventListener('scroll', () => {
+        if (syncing) return;
+        syncing = true;
+        tableScrollWrap.scrollLeft = topScrollWrap.scrollLeft;
+        syncing = false;
+      });
+      tableScrollWrap.addEventListener('scroll', () => {
+        if (syncing) return;
+        syncing = true;
+        topScrollWrap.scrollLeft = tableScrollWrap.scrollLeft;
+        syncing = false;
+      });
+      window.addEventListener('resize', () => {
+        syncTopScrollbarWidth();
+        updateHeaderControlLayout();
+      });
+    }
+
+    function renderMeta() {
+      const maxPage = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+      pageMeta.textContent = `Page ${state.page} of ${maxPage}`;
+      prevPageBtn.disabled = state.page === 1 || state.loading;
+      nextPageBtn.disabled = state.page === maxPage || state.loading;
+
+      if (state.loading) resultsMeta.textContent = 'Loading...';
+      else if (state.lastError) resultsMeta.textContent = `Error: ${state.lastError}`;
+      else if (state.total === 0) resultsMeta.textContent = '0 items';
+      else resultsMeta.textContent = `${state.total} items • showing ${(state.page-1)*PAGE_SIZE + 1}-${Math.min(state.page*PAGE_SIZE, state.total)}`;
+    }
+
+    function renderKanbanFilterUI() {
+      kbDateField.value = state.kbDateField;
+      document.querySelectorAll('.kbRangeBtn').forEach(btn => {
+        const active = btn.dataset.kbRange === state.kbRange;
+        btn.classList.toggle('bg-blue-600', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('border-blue-600', active);
+      });
+
+      kbCustomWrap.classList.toggle('hidden', state.kbRange !== 'custom');
+      kbFrom.value = state.kbFrom || '';
+      kbTo.value = state.kbTo || '';
+    }
+
+    function render() {
+      ensureColumnsInitialized();
+      buildColumnsMenu();
+
+      computeDerivedRows();
+      buildHeaderAndFilters();
+      renderMeta();
+
+      if (state.view === 'table') {
+        renderTableRows(getPageRows());
+        requestAnimationFrame(() => syncTopScrollbarWidth());
+      }
+
+      if (state.view === 'kanban') {
+        renderKanbanFilterUI();
+        renderKanbanView();
+        renderKanbanMeta();
+      }
+
+      if (state.view === 'calendar') renderCalendarView();
+
+      if (state.view === 'gantt') renderGanttView();
+    }
+
+    async function requireLogin() {
+      const { data } = await state.client.auth.getSession();
+      const session = data?.session;
+      if (!session) {
+        state.lastError = "You must be logged in to view service requests.";
+        state.allRows = [];
+        state.filteredRows = [];
+        state.total = 0;
+        render();
+        return false;
+      }
+      return true;
+    }
+
+    async function loadAllRequests() {
+      state.lastError = null;
+      state.loading = true;
+      render();
+
+      const ok = await requireLogin();
+      if (!ok) { state.loading = false; render(); return; }
+
+      const { data, error } = await state.client.from(TABLE_NAME).select('*');
+
+      if (error) {
+        state.lastError = error.message || String(error);
+        state.allRows = [];
+        state.filteredRows = [];
+        state.total = 0;
+      } else {
+        const rows = (data || []).map(normalizeRow);
+        state.allRows = rows;
+
+        const first = rows[0] || null;
+        if (first) {
+          const keys = Object.keys(first).filter(k => !k.startsWith('_'));
+          state.dbColumns = keys.sort((a,b) => a.localeCompare(b));
+        } else state.dbColumns = [];
+      }
+
+      state.loading = false;
+      render();
+    }
+
+    async function upsertRequest(payload) {
+      const { data, error } = await state.client.from(TABLE_NAME).upsert(payload).select().single();
+      if (error) throw error;
+      return normalizeRow(data);
+    }
+
+    function buildEmptyRequestPayload() {
+      const payload = {};
+      const preferred = ['status', 'request date', 'workdate', 'shipping date', 'company_name'];
+      const cols = state.dbColumns || [];
+      if (!cols.length) {
+        payload.status = null;
+        return filterPayloadByKnownColumns(payload);
+      }
+
+      const colSet = new Set(cols);
+      const key = preferred.find(k => colSet.has(k)) || cols[0];
+      if (key) payload[key] = null;
+      return filterPayloadByKnownColumns(payload);
+    }
+
+    async function createEmptyRequestRow() {
+      try {
+        const ok = await requireLogin();
+        if (!ok) return;
+
+        newRequestBtn.disabled = true;
+        newRequestBtn.classList.add('opacity-60');
+
+        const payload = buildEmptyRequestPayload();
+        if (!Object.keys(payload).length) {
+          throw new Error('No writable columns found for a blank request.');
+        }
+
+        const created = await upsertRequest(payload);
+        state.allRows = [created, ...state.allRows.filter(x => String(x.id) !== String(created.id))];
+        state.page = 1;
+        state.pinnedRowId = created.id;
+
+        render();
+
+        requestAnimationFrame(() => {
+          if (state.view !== 'table') {
+            state.pinnedRowId = null;
+            return;
+          }
+          tableScrollWrap.scrollTop = 0;
+          const rowId = String(created.id);
+          const row = state.allRows.find(x => String(x.id) === rowId) || created;
+          const cells = tableBody.querySelectorAll('td[data-row-id][data-col-key]');
+          for (const cell of cells) {
+            if (cell.dataset.rowId !== rowId) continue;
+            const def = getAllColumnDefs().find(d => d.key === cell.dataset.colKey);
+            if (!def || !isEditableDef(def)) continue;
+            startCellEdit(cell, row, def);
+            break;
+          }
+          state.pinnedRowId = null;
+        });
+      } catch (err) {
+        console.error(err);
+        state.lastError = err?.message || String(err);
+        render();
+      } finally {
+        newRequestBtn.disabled = false;
+        newRequestBtn.classList.remove('opacity-60');
+      }
+    }
+
+    async function deleteRequestRow(id) {
+      const { error } = await state.client.from(TABLE_NAME).delete().eq('id', id);
+      if (error) throw error;
+    }
+
+    /* ---------------------------
+       VIN + Categories (dynamic)
+    ----------------------------*/
+
+    function mapVehicleRow(v) {
+      const short = v?.short_vin ?? v?.shortvin ?? v?.shortVin ?? v?.vin_short ?? v?.vin ?? null;
+      const unit = v?.unit_type ?? v?.unittype ?? v?.unitType ?? null;
+      const brand = v?.brand ?? null;
+      const model = v?.model ?? null;
+      const year = v?.model_year ?? v?.['model year'] ?? v?.year ?? null;
+      return { short_vin: short, unit_type: unit, brand, model, model_year: year };
+    }
+
+    async function loadVehiclesCache() {
+      const ok = await requireLogin();
+      if (!ok) return;
+
+      // Pull minimal fields. If some columns don't exist, you can adjust these names.
+      const { data, error } = await state.client
+        .from(VEHICLES_TABLE)
+        .select('short_vin, shortvin, unit_type, unittype, brand, model, model_year, "model year"');
+
+      if (error) {
+        console.warn('Vehicles load error:', error);
+        state.vehicles = [];
+        state.vehiclesByVin = new Map();
+        return;
+      }
+
+      const list = (data || [])
+        .map(mapVehicleRow)
+        .filter(x => x.short_vin);
+
+      list.sort((a,b) => String(a.short_vin).localeCompare(String(b.short_vin)));
+
+      state.vehicles = list;
+      state.vehiclesByVin = new Map(list.map(v => [String(v.short_vin).toUpperCase(), v]));
+    }
+
+    async function loadCategories() {
+      const ok = await requireLogin();
+      if (!ok) return;
+
+      // 1) Try services_categories
+      let cats = [];
+      try {
+        const r1 = await state.client.from(CATEGORIES_TABLE).select('category');
+        if (!r1.error) {
+          cats = (r1.data || [])
+            .map(x => x?.category)
+            .filter(Boolean)
+            .map(x => String(x).trim())
+            .filter(Boolean);
+        }
+      } catch {}
+
+      // 2) Fallback: services table distinct-ish (client-side unique)
+      if (!cats.length) {
+        try {
+          const r2 = await state.client.from(SERVICES_TABLE).select('category');
+          if (!r2.error) {
+            cats = (r2.data || [])
+              .map(x => x?.category)
+              .filter(Boolean)
+              .map(x => String(x).trim())
+              .filter(Boolean);
+          }
+        } catch {}
+      }
+
+      const uniq = Array.from(new Set(cats)).sort((a,b) => a.localeCompare(b));
+      state.categories = uniq;
+      renderCategoriesSelect();
+    }
+
+    function renderCategoriesSelect(selected = '') {
+      const opts = [''].concat(state.categories || []);
+      categoryInput.innerHTML = opts.map(v => {
+        const label = v === '' ? '— Select service category —' : v;
+        const sel = String(v) === String(selected) ? 'selected' : '';
+        return `<option value="${escapeAttr(v)}" ${sel}>${escapeHtml(label)}</option>`;
+      }).join('');
+    }
+
+    /* ---------------------------
+       VIN combobox UI
+    ----------------------------*/
+    function closeVinMenu() { vinMenu.classList.add('hidden'); }
+    function openVinMenu() { if (vinMenu.innerHTML.trim()) vinMenu.classList.remove('hidden'); }
+
+    function renderVinMenu(filterText = '') {
+      const q = String(filterText || '').trim().toLowerCase();
+      const list = state.vehicles || [];
+
+      const filtered = q
+        ? list.filter(v => {
+            const s = `${v.short_vin} ${v.brand || ''} ${v.model || ''} ${v.model_year || ''} ${v.unit_type || ''}`.toLowerCase();
+            return s.includes(q);
+          })
+        : list.slice(0, 50);
+
+      if (!filtered.length) {
+        vinMenu.innerHTML = `<div class="px-3 py-2 text-sm text-slate-400">No matches.</div>`;
+        openVinMenu();
+        return;
+      }
+
+      vinMenu.innerHTML = filtered.slice(0, 60).map(v => {
+        const meta = `${v.brand || '—'} • ${v.model || '—'} • ${v.model_year || '—'} • ${v.unit_type || '—'}`;
+        return `
+          <button type="button"
+            class="w-full text-left px-3 py-2 hover:bg-slate-900/60 border-b border-slate-800 last:border-b-0"
+            data-vin="${escapeAttr(v.short_vin)}">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm font-black text-white">${escapeHtml(v.short_vin)}</span>
+              <span class="text-[11px] text-slate-500 truncate">${escapeHtml(meta)}</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      vinMenu.querySelectorAll('button[data-vin]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const vin = btn.dataset.vin;
+          pickVin(vin);
+          closeVinMenu();
+        });
+      });
+
+      openVinMenu();
+    }
+
+    function pickVin(vin) {
+      const key = String(vin || '').toUpperCase().trim();
+      if (!key) return;
+
+      shortVinInput.value = vin;
+
+      const v = state.vehiclesByVin.get(key);
+      if (v) {
+        // Auto-fill from vehicles DB
+        unitTypeInput.value = v.unit_type || '';
+        brandInput.value = v.brand || '';
+        modelInput.value = v.model || '';
+        modelYearInput.value = v.model_year ?? '';
+        state.modalVinSelected = true;
+        vinHint.textContent = 'Vehicle auto-filled from Vehicles. You can adjust fields if needed.';
+      } else {
+        state.modalVinSelected = false;
+        vinHint.textContent = 'Type to search. Select a VIN to fill Brand/Model/Year/Unit type.';
+      }
+    }
+
+    function clearVinAutofillHint() {
+      state.modalVinSelected = false;
+      vinHint.textContent = 'Type to search. Select a VIN to fill Brand/Model/Year/Unit type.';
+    }
+
+    /* ---------------------------
+       Modal
+    ----------------------------*/
+    function openModal(item = null) {
+      formError.textContent = '';
+
+      const isEdit = !!item;
+      modalTitle.textContent = isEdit ? 'Edit request' : 'New request';
+      deleteBtn.classList.toggle('hidden', !isEdit);
+
+      requestId.value = item?.id || '';
+      companyNameInput.value = item?.company_name || '';
+      companyPhoneInput.value = item?.['company phone'] || item?.company_phone || '';
+      docInput.value = item?.doc || '';
+
+      // Vehicle fields
+      shortVinInput.value = item?.shortvin || item?.short_vin || '';
+      unitTypeInput.value = item?.unittype || item?.unit_type || '';
+      brandInput.value = item?.brand || '';
+      modelInput.value = item?.model || '';
+      modelYearInput.value = item?.['model year'] || item?.model_year || '';
+
+      // Status + request details
+      statusInput.value = canonicalizeStatus(item?.status) || 'Open';
+      quoteInput.value = item?.quote ?? '';
+      categoryInput.value = item?.['Service_category'] ?? item?.service_category ?? item?.servicecategory ?? '';
+
+      requestDateInput.value = item?.['request date'] ? String(item['request date']).slice(0, 10) : (item?.request_date ? String(item.request_date).slice(0,10) : '');
+      workDateInput.value = item?.workdate ? String(item.workdate).slice(0, 10) : (item?.work_date ? String(item.work_date).slice(0,10) : '');
+      shippingDateInput.value = item?.['shipping date'] ? String(item['shipping date']).slice(0, 10) : (item?.shipping_date ? String(item.shipping_date).slice(0,10) : '');
+
+      // Client contact (POC)
+      pocNameInput.value = item?.['poc name'] || item?.poc_name || '';
+      pocPhoneInput.value = item?.['poc phone'] || item?.poc_phone || '';
+      confirmedInput.value = item?.confirmed === true ? 'true' : (item?.confirmed === false ? 'false' : '');
+
+      // Destination
+      stateInput.value = item?.state || '';
+      cityInput.value = item?.city || '';
+      zipInput.value = item?.zip || '';
+      addressInput.value = item?.address || '';
+
+      // update hint based on VIN
+      if (shortVinInput.value.trim()) pickVin(shortVinInput.value.trim());
+      else clearVinAutofillHint();
+
+      // Ensure categories are available in modal
+      renderCategoriesSelect(categoryInput.value || '');
+
+      modalOverlay.classList.remove('hidden');
+      modalOverlay.classList.add('flex');
+      lucide.createIcons();
+
+      // pre-render VIN menu with first options
+      renderVinMenu(shortVinInput.value);
+    }
+
+    function closeModal() {
+      closeVinMenu();
+      modalOverlay.classList.add('hidden');
+      modalOverlay.classList.remove('flex');
+    }
+
+    function toggleColumnsMenu(force) {
+      const willOpen = typeof force === 'boolean' ? force : columnsMenu.classList.contains('hidden');
+      columnsMenu.classList.toggle('hidden', !willOpen);
+      if (willOpen) buildColumnsMenu();
+      lucide.createIcons();
+    }
+
+    function renderCategoriesIfNeeded() {
+      if (!state.categories?.length) {
+        categoryInput.innerHTML = `<option value="">Loading…</option>`;
+      } else {
+        renderCategoriesSelect(categoryInput.value || '');
+      }
+    }
+
+    /* ---------------------------
+       Safe payload: only send keys that exist if we know dbColumns
+    ----------------------------*/
+    function filterPayloadByKnownColumns(payload) {
+      const cols = state.dbColumns || [];
+      if (!cols.length) {
+        // When table is empty and we don't know columns, use safer known keys only.
+        const safe = {};
+        const allow = new Set([
+          'id','company_name','company phone','doc','unittype','brand','model','model year','shortvin',
+          'status','quote','request date','workdate','shipping date','poc name','poc phone','confirmed',
+          'state','city','zip','address','Service_category','Notes','POC email'
+        ]);
+        for (const [k,v] of Object.entries(payload)) if (allow.has(k)) safe[k] = v;
+        return safe;
+      }
+
+      const set = new Set(cols);
+      const out = {};
+      for (const [k,v] of Object.entries(payload)) {
+        if (k === 'id' || set.has(k)) out[k] = v;
+      }
+      return out;
+    }
+
+    /* ---------------------------
+       Events
+    ----------------------------*/
+
+    // Pagination
+    prevPageBtn.addEventListener('click', () => { if (state.page > 1) { state.page--; render(); } });
+    nextPageBtn.addEventListener('click', () => {
+      const maxPage = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+      if (state.page < maxPage) { state.page++; render(); }
+    });
+
+    // Views
+    document.querySelectorAll('.viewBtn').forEach(btn => btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      state.view = view;
+
+      tableView.classList.toggle('hidden', view !== 'table');
+      kanbanView.classList.toggle('hidden', view !== 'kanban');
+      calendarView.classList.toggle('hidden', view !== 'calendar');
+      ganttView.classList.toggle('hidden', view !== 'gantt');
+
+      document.querySelectorAll('.viewBtn').forEach(b => {
+        const active = b.dataset.view === view;
+        b.classList.toggle('bg-blue-600', active);
+        b.classList.toggle('text-white', active);
+        b.classList.toggle('text-slate-300', !active);
+      });
+
+      render();
+    }));
+
+    // Status chips
+    document.querySelectorAll('.filterChip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const f = btn.dataset.filter;
+        state.filterStatus = (state.filterStatus === f) ? null : f;
+        document.querySelectorAll('.filterChip').forEach(x => x.classList.remove('bg-blue-600','text-white','border-blue-600'));
+        if (state.filterStatus === f) btn.classList.add('bg-blue-600','text-white','border-blue-600');
+        state.page = 1;
+        render();
+      });
+    });
+
+    // Kanban time filter events
+    kbDateField.addEventListener('change', () => {
+      state.kbDateField = kbDateField.value;
+      savePrefs();
+      render();
+    });
+
+    document.querySelectorAll('.kbRangeBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.kbRange = btn.dataset.kbRange;
+        if (state.kbRange === 'custom') {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth()+1).padStart(2,'0');
+          if (!state.kbFrom) state.kbFrom = `${y}-${m}-01`;
+          if (!state.kbTo) state.kbTo = `${y}-${m}-${String(new Date(y, now.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+        }
+        savePrefs();
+        render();
+      });
+    });
+
+    kbFrom.addEventListener('change', () => {
+      state.kbFrom = kbFrom.value || null;
+      savePrefs();
+      render();
+    });
+    kbTo.addEventListener('change', () => {
+      state.kbTo = kbTo.value || null;
+      savePrefs();
+      render();
+    });
+
+    // Gantt scale
+    ganttScale.addEventListener('change', () => {
+      savePrefs();
+      if (state.view === 'gantt') renderGanttView();
+    });
+
+    // Columns dropdown
+    columnsBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleColumnsMenu(); });
+    colsClose.addEventListener('click', () => toggleColumnsMenu(false));
+    colsAll.addEventListener('click', () => {
+      const allDefs = getAllColumnDefs();
+      for (const d of allDefs) state.colVisible[d.key] = true;
+      savePrefs(); render(); buildColumnsMenu();
+    });
+    colsNone.addEventListener('click', () => {
+      const allDefs = getAllColumnDefs();
+      for (const d of allDefs) state.colVisible[d.key] = false;
+      state.colVisible['company_name'] = true;
+      savePrefs(); render(); buildColumnsMenu();
+    });
+    document.addEventListener('click', () => toggleColumnsMenu(false));
+    columnsMenu.addEventListener('click', (e) => e.stopPropagation());
+
+    // Header filter/sort menus
+    headerRow.addEventListener('click', (e) => {
+      const menuBtn = e.target.closest('[data-header-menu-btn]');
+      if (menuBtn) {
+        e.stopPropagation();
+        toggleHeaderMenu(menuBtn.dataset.headerMenuBtn);
+        return;
+      }
+
+      const sortToggle = e.target.closest('[data-sort-toggle]');
+      if (sortToggle) {
+        e.stopPropagation();
+        const key = sortToggle.dataset.sortToggle;
+        if (state.sortKey !== key) {
+          state.sortKey = key;
+          state.sortDir = 'asc';
+        } else if (state.sortDir === 'asc') {
+          state.sortDir = 'desc';
+        } else {
+          state.sortKey = null;
+          state.sortDir = 'asc';
+        }
+        savePrefs();
+        render();
+        return;
+      }
+
+      if (e.target.closest('.header-menu')) {
+        e.stopPropagation();
+      }
+
+      const clearBtn = e.target.closest('[data-clear-filter]');
+      if (clearBtn) {
+        e.stopPropagation();
+        const key = clearBtn.dataset.clearFilter;
+        state.colFilters[key] = '';
+        state.page = 1;
+        savePrefs();
+        render();
+        closeHeaderMenus();
+        return;
+      }
+
+      const sortBtn = e.target.closest('[data-sort-key][data-sort-dir]');
+      if (sortBtn) {
+        e.stopPropagation();
+        const key = sortBtn.dataset.sortKey;
+        const dir = sortBtn.dataset.sortDir;
+        if (dir === 'clear') {
+          state.sortKey = null;
+          state.sortDir = 'asc';
+        } else {
+          state.sortKey = key;
+          state.sortDir = dir;
+        }
+        savePrefs();
+        render();
+        closeHeaderMenus();
+      }
+    });
+
+    headerRow.addEventListener('input', (e) => {
+      const el = e.target.closest('[data-filter-key]');
+      if (!el) return;
+      const key = el.getAttribute('data-filter-key');
+      state.colFilters[key] = el.value;
+      state.page = 1;
+      savePrefs();
+      render();
+    });
+
+    headerRow.addEventListener('change', (e) => {
+      const el = e.target.closest('[data-filter-key]');
+      if (!el) return;
+      const key = el.getAttribute('data-filter-key');
+      state.colFilters[key] = el.value;
+      state.page = 1;
+      savePrefs();
+      render();
+    });
+
+    document.addEventListener('click', () => closeHeaderMenus());
+
+    // Calendar navigation
+    calendarPrevBtn.addEventListener('click', () => {
+      state.calendarMonth = shiftMonth(state.calendarMonth || new Date(), -1);
+      renderCalendarView();
+    });
+    calendarNextBtn.addEventListener('click', () => {
+      state.calendarMonth = shiftMonth(state.calendarMonth || new Date(), 1);
+      renderCalendarView();
+    });
+    calendarTodayBtn.addEventListener('click', () => {
+      state.calendarMonth = getMonthStartDate(new Date());
+      renderCalendarView();
+    });
+
+    // Table inline editing
+    tableBody.addEventListener('dblclick', (e) => {
+      const cell = e.target.closest('td[data-row-id][data-col-key]');
+      if (!cell) return;
+      const rowId = cell.dataset.rowId;
+      const colKey = cell.dataset.colKey;
+      const def = getAllColumnDefs().find(d => d.key === colKey);
+      if (!def || !isEditableDef(def)) return;
+      const row = state.allRows.find(x => String(x.id) === String(rowId));
+      if (!row) return;
+      startCellEdit(cell, row, def);
+    });
+
+    // Modal open/close
+    newRequestBtn.addEventListener('click', () => createEmptyRequestRow());
+    modalClose.addEventListener('click', closeModal);
+    modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+    // VIN combobox interactions
+    shortVinInput.addEventListener('focus', () => { renderVinMenu(shortVinInput.value); });
+    shortVinInput.addEventListener('input', () => {
+      renderVinMenu(shortVinInput.value);
+      // if they typed exact VIN, try auto-fill
+      const key = shortVinInput.value.trim().toUpperCase();
+      if (state.vehiclesByVin.has(key)) pickVin(shortVinInput.value.trim());
+      else clearVinAutofillHint();
+    });
+
+    document.addEventListener('click', (e) => {
+      const inside = shortVinInput.contains(e.target) || vinMenu.contains(e.target);
+      if (!inside) closeVinMenu();
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      try {
+        const id = requestId.value;
+        if (!id) return;
+        const ok = await requireLogin();
+        if (!ok) return;
+        await deleteRequestRow(id);
+        closeModal();
+        await loadAllRequests();
+      } catch (err) {
+        console.error(err);
+        formError.textContent = `Could not delete. ${err?.message || 'Check RLS policies.'}`;
+      }
+    });
+
+    requestForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formError.textContent = '';
+
+      try {
+        const ok = await requireLogin();
+        if (!ok) return;
+
+        const quoteRaw = quoteInput.value.trim();
+        const quoteVal = quoteRaw === '' ? null : (isNaN(Number(quoteRaw)) ? quoteRaw : Number(quoteRaw));
+
+        const catVal = categoryInput.value.trim() || null;
+        const confirmedVal = confirmedInput.value === '' ? null : confirmedInput.value === 'true';
+
+        // Always store in known column keys (then filter by known columns)
+        const payloadRaw = {
+          id: requestId.value || undefined,
+
+          company_name: companyNameInput.value.trim() || null,
+          'company phone': companyPhoneInput.value.trim() || null,
+          doc: docInput.value.trim() || null,
+
+          shortvin: shortVinInput.value.trim() || null,
+          unittype: unitTypeInput.value.trim() || null,
+          brand: brandInput.value.trim() || null,
+          model: modelInput.value.trim() || null,
+          'model year': modelYearInput.value ? Number(modelYearInput.value) : null,
+
+          status: statusInput.value,
+          quote: quoteVal,
+
+          'request date': requestDateInput.value || null,
+          workdate: workDateInput.value || null,
+          'shipping date': shippingDateInput.value || null,
+
+          // Client contact
+          'poc name': pocNameInput.value.trim() || null,
+          'poc phone': pocPhoneInput.value.trim() || null,
+          confirmed: confirmedVal,
+
+          // Destination
+          state: stateInput.value.trim() || null,
+          city: cityInput.value.trim() || null,
+          zip: zipInput.value.trim() || null,
+          address: addressInput.value.trim() || null,
+
+          Service_category: catVal,
+        };
+
+        const payload = filterPayloadByKnownColumns(payloadRaw);
+
+        await upsertRequest(payload);
+        closeModal();
+        await loadAllRequests();
+      } catch (err) {
+        console.error(err);
+        formError.textContent = `Could not save. ${err?.message || 'Check RLS policies + table columns.'}`;
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      setupBackgroundManager();
+      lucide.createIcons();
+
+      state.calendarMonth = getMonthStartDate(new Date());
+
+      state.client = supabaseClient;
+      loadPrefs();
+      await loadPrefsFromDb();
+      wireScrollSync();
+
+      renderKanbanFilterUI();
+      renderCategoriesIfNeeded();
+
+      // Load initial data
+      await loadAllRequests();
+      await loadVehiclesCache();
+      await loadCategories();
+
+      // Ensure category select is correct after load
+      renderCategoriesSelect('');
+    });
+  </script>
+  <script type="module" src="../assets/scripts/sharedHeader.js"></script>
+</body>
+</html>

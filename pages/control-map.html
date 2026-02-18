@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>TechLoc • Control Map</title>
+
+  <!-- Styles & Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { slate: { 850: '#1a2233', 950: '#020617' } }
+        },
+      },
+    };
+  </script>
+
+    <link rel="stylesheet" href="../assets/visuals/control-map.css" />
+
+  <link rel="stylesheet" href="../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 font-sans text-slate-50 text-sm overflow-hidden flex flex-col" data-page-title="Control Map" data-active-nav="control-map">
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-80 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+  <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
+    <div class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/60">
+      <span class="h-3 w-3 animate-pulse rounded-full bg-blue-400"></span>
+      <p class="text-sm font-semibold text-slate-200">Validating secure session…</p>
+    </div>
+  </div>
+
+  <div id="loading-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm pointer-events-none">
+    <div class="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-900/90 px-4 py-2 text-sm font-semibold text-slate-100 shadow-lg shadow-slate-900/50">
+      <span class="spinner h-5 w-5 animate-spin rounded-full border-2 border-slate-500"></span>
+      <span id="loading-text">Loading…</span>
+    </div>
+  </div>
+
+  <div data-auth-protected class="hidden min-h-0 flex-1 flex flex-col">
+    <div data-shared-header></div>
+
+    <main id="map-layout" class="relative flex-1 overflow-hidden bg-slate-950">
+
+    <div class="absolute inset-0">
+      <div id="tech-map"></div>
+    </div>
+
+    <div id="selection-banner" class="pointer-events-auto absolute bottom-4 right-4 z-[450] hidden rounded-full border border-amber-400/60 bg-amber-500/15 px-4 py-2 text-xs font-semibold text-amber-100 shadow-lg shadow-amber-500/20 backdrop-blur">
+      <span id="selection-text">Filtered by selection</span>
+      <button id="clear-selection" class="ml-3 rounded-full bg-amber-400/20 px-3 py-1 text-[11px] font-bold text-amber-50 hover:bg-amber-400/30 border border-amber-300/70">Clear</button>
+    </div>
+
+    <div class="sidebar-toggle-group left-3">
+      <button id="open-left-sidebar" class="sidebar-toggle-btn">GPS Technicians</button>
+      <button id="open-reseller-sidebar" class="sidebar-toggle-btn">Resellers</button>
+      <button id="open-repair-sidebar" class="sidebar-toggle-btn">Repair Shops</button>
+      <div id="custom-toggle-slot" class="flex flex-col gap-2 items-start self-start">
+        <div id="custom-category-toggles" class="flex flex-col gap-2 items-start self-start"></div>
+      </div>
+    </div>
+    <div id="map-visibility-group" class="pointer-events-none absolute top-4 left-1/2 z-[500] -translate-x-1/2 transform flex flex-wrap justify-center gap-2">
+      <button id="toggle-hotspots" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Hotspot Areas</button>
+      <button id="toggle-blacklist" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Blacklist Marks</button>
+      <button id="toggle-vehicle-markers" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Vehicles Marks</button>
+    </div>
+    <div id="right-toggle-group" class="sidebar-toggle-group right-3 items-end">
+      <button id="open-right-sidebar" class="sidebar-toggle-btn text-[11px]">Show Vehicles</button>
+    </div>
+
+    <!-- Floating Legend -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl backdrop-blur">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-8">
+          <div class="flex-1 space-y-2">
+            <p class="legend-heading">Services</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="legend-pill" data-legend="tech">
+                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#3b82f6" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Tech
+              </div>
+              <div class="legend-pill" data-legend="reseller">
+                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#34d399" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Reseller
+              </div>
+              <div class="legend-pill" data-legend="repair">
+                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#fb923c" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Repair
+              </div>
+              <div id="custom-legend-slot" class="flex flex-wrap gap-2"></div>
+            </div>
+          </div>
+          <div class="flex-1 space-y-2 md:text-right">
+            <p class="legend-heading md:justify-end">Vehicles</p>
+            <div class="flex flex-wrap items-center gap-2 md:justify-end">
+              <div class="legend-pill">
+                <span class="legend-dot bg-red-500"></span>
+                GPS Fix: All
+              </div>
+              <div class="legend-pill">
+                <span class="legend-dot bg-emerald-400"></span>
+                Fully Working
+              </div>
+              <div class="legend-pill">
+                <span class="legend-dot bg-amber-500"></span>
+                Other states
+              </div>
+              <div class="legend-pill">
+                <span class="vehicle-cross-badge">✕</span>
+                Not moving
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 md:justify-end">
+              <div class="legend-pill">
+                <span class="legend-dot bg-red-500 border-white/90"></span>
+                Client location
+              </div>
+              <div class="legend-pill">
+                <span class="legend-hotspot"></span>
+                Hotspot Area
+              </div>
+              <div class="legend-pill">
+                <span class="legend-badge">!</span>
+                Blacklist
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    <!-- Sidebar: Control Panel -->
+    <aside id="left-sidebar" class="resizable-sidebar left-0 border-r border-slate-800 flex flex-col z-30 shadow-2xl collapsed-left" style="width: var(--left-sidebar-width)">
+      <div class="resize-handle right-0"></div>
+
+      <!-- Search -->
+      <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10 space-y-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[10px] font-bold uppercase text-slate-400 mb-1">Client starting point</p>
+            <h2 class="text-xl font-black text-white leading-tight">Find the nearest installer</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <p class="text-[10px] uppercase text-slate-400 font-bold">Installers</p>
+              <p id="total-count" class="text-2xl font-black text-white leading-none">0</p>
+            </div>
+            <button id="collapse-left" class="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 text-lg font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize sidebar">-</button>
+          </div>
+        </div>
+        <form id="search-form" class="relative">
+          <input
+            id="address-input"
+            type="text"
+            class="block w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+            placeholder="Ex: 33101, Phoenix, AZ..."
+            autocomplete="off"
+          >
+          <button type="submit" id="search-btn" class="absolute inset-y-1.5 right-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-4 text-xs font-bold transition-colors flex items-center justify-center min-w-[90px]">
+            CALCULATE
+          </button>
+        </form>
+
+        <div class="flex justify-between items-end">
+          <div id="search-status" class="hidden text-xs text-blue-400 animate-pulse font-medium">Locating address...</div>
+          <div id="file-error" class="hidden text-xs text-red-300">Unable to read installer partner data.</div>
+        </div>
+      </div>
+
+      <!-- Technicians List -->
+      <div id="tech-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+        <div class="text-center mt-10 text-slate-600 text-xs">Waiting for installer data...</div>
+      </div>
+    </aside>
+
+    <div id="partner-sidebars"></div>
+
+    <!-- Vehicles Sidebar -->
+    <aside id="right-sidebar" class="resizable-sidebar right-0 border-l border-slate-800 flex flex-col z-30 shadow-2xl collapsed-right" style="width: var(--right-sidebar-width)">
+      <div class="resize-handle left-0"></div>
+      <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-[10px] font-bold uppercase text-amber-300 mb-1">Control Map</p>
+            <h2 class="text-xl font-black text-white leading-tight">GPS issues around the network</h2>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <p class="text-[10px] uppercase text-slate-400 font-bold">Total</p>
+              <p id="vehicles-count" class="text-2xl font-black text-white leading-none">0</p>
+            </div>
+            <button id="collapse-right" class="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 text-lg font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize vehicles sidebar">-</button>
+          </div>
+        </div>
+        <div class="mt-4 relative">
+          <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
+          <svg class="h-4 w-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </div>
+        <div class="mt-2 space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
+          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+            <span>Vehicle filters</span>
+            <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[10px] font-bold">Reset</button>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 text-[10px]">
+            <div class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">Inv. Prep. Stat</span>
+              <div class="relative">
+                <button id="filter-invprep-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span>Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-invprep" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">GPS Fix</span>
+              <div class="relative">
+                <button id="filter-gps-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span>Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-gps" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">Moving</span>
+              <div class="relative">
+                <button id="filter-moving-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span>Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-moving" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">Deal status</span>
+              <div class="relative">
+                <button id="filter-deal-status-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span>Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-deal-status" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">PT Status</span>
+              <div class="relative">
+                <button id="filter-pt-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span>Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-pt" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <label class="space-y-0.5">
+              <span class="block text-slate-400 font-semibold">Deal completion %</span>
+              <div class="flex items-center gap-1.5 text-[10px] text-slate-300">
+                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
+                <span class="text-slate-500">to</span>
+                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div id="vehicle-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+        <div class="text-center mt-10 text-slate-600 text-xs">Waiting for vehicle data...</div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Vehicle detail modal -->
+  <div id="vehicle-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div class="flex w-[90vw] max-w-7xl flex-col border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden max-h-[85vh]">
+      <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-4 py-3 backdrop-blur">
+        <div>
+          <p class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Vehicle details</p>
+          <h3 id="vehicle-modal-title" class="text-lg font-bold text-white"></h3>
+          <p id="vehicle-modal-vin" class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="vehicle-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
+          <button id="vehicle-modal-close" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
+        </div>
+      </div>
+      <div id="vehicle-modal-columns-panel" class="hidden border-b border-slate-800 bg-slate-950/70 px-4 py-3">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold text-slate-200">Choose columns</p>
+            <p class="text-[10px] text-slate-400">Drag rows in the table to reorder columns.</p>
+          </div>
+        </div>
+        <div id="vehicle-modal-columns-list" class="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-200"></div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4" id="vehicle-modal-body"></div>
+    </div>
+  </div>
+  <script type="module" src="../assets/js/control-map/main-control.js"></script>
+  <script type="module" src="../assets/scripts/sharedHeader.js"></script>
+
+</div>
+</body>
+</html>

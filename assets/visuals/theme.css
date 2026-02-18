@@ -1,0 +1,35 @@
+/* Global darker tone for TechLoc pages */
+:root {
+  --page-bg: #030712;
+  --page-bg-secondary: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.08), transparent 35%),
+    radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.08), transparent 30%),
+    #030712;
+  --card-surface: rgba(15, 23, 42, 0.7);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --muted-foreground: #94a3b8;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--page-bg-secondary);
+  color: #e2e8f0;
+}
+
+.frosted-card {
+  background: var(--card-surface) !important;
+  border-color: var(--card-border) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.muted-border {
+  border-color: var(--card-border) !important;
+}
+
+.muted-text {
+  color: var(--muted-foreground) !important;
+}
+
+.dark-panel {
+  background: rgba(2, 6, 23, 0.65) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}

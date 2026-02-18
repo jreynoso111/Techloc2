@@ -1,0 +1,114 @@
+.admin-loading {
+  background: radial-gradient(circle at top, rgba(37, 99, 235, 0.18), rgba(2, 6, 23, 0.96) 55%);
+  backdrop-filter: blur(10px);
+}
+
+.admin-loading-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.7));
+  padding: 1.25rem 1.5rem;
+  color: #e2e8f0;
+  box-shadow: 0 25px 60px rgba(15, 23, 42, 0.65);
+  overflow: hidden;
+}
+
+.admin-loading-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent, rgba(96, 165, 250, 0.15), transparent);
+  animation: admin-loading-shimmer 2.8s ease-in-out infinite;
+}
+
+.admin-loading-orbit {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 2px dashed rgba(148, 163, 184, 0.45);
+  animation: admin-loading-rotate 3s linear infinite;
+}
+
+.admin-loading-orbit::before,
+.admin-loading-orbit::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  background: #60a5fa;
+  box-shadow: 0 0 16px rgba(96, 165, 250, 0.7);
+}
+
+.admin-loading-orbit::before {
+  width: 10px;
+  height: 10px;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.admin-loading-orbit::after {
+  width: 6px;
+  height: 6px;
+  right: -4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #38bdf8;
+}
+
+.admin-loading-dots {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.admin-loading-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #93c5fd;
+  opacity: 0.4;
+  animation: admin-loading-dot 1.4s ease-in-out infinite;
+}
+
+.admin-loading-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.admin-loading-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes admin-loading-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes admin-loading-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes admin-loading-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  60% {
+    transform: translateX(120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Profiles Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+  
+  <script type="module">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-50 relative" data-page-title="Profiles Admin" data-active-nav="dashboard">
+  <div class="sticky top-0 z-50 space-y-px">
+    <div data-shared-header></div>
+    <div data-admin-nav data-admin-nav="profiles"></div>
+  </div>
+
+  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen"></canvas>
+
+  <main class="w-full px-6 py-8 lg:px-10 space-y-8">
+      <section class="space-y-8">
+        <header class="rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Identity controls</p>
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 class="text-3xl font-black text-white">Profile Directory</h1>
+              <p class="text-sm text-slate-300">Create, review and manage roles from a single workspace.</p>
+            </div>
+            <div class="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200">
+              <span class="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Secure session active
+            </div>
+          </div>
+        </header>
+
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" id="profile-stats"></section>
+
+        <section class="grid gap-6 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">Access registry</p>
+              <h2 class="text-xl font-bold text-white">Profiles & Roles</h2>
+              <p class="text-sm text-slate-400">Monitor who can access the platform and adjust privileges instantly.</p>
+            </div>
+          </div>
+
+          <div class="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 sm:grid-cols-[2fr_1fr]">
+            <div class="space-y-4">
+              <div class="flex flex-wrap gap-2 text-xs font-semibold text-slate-300">
+                <span class="flex items-center gap-1 rounded-full bg-slate-800 px-3 py-1"><span class="h-2 w-2 rounded-full bg-emerald-400"></span> Active</span>
+                </div>
+              
+              <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                <table class="min-w-full divide-y divide-slate-800" id="profiles-table">
+                  <thead class="bg-slate-900/70">
+                    <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-300">
+                      <th class="px-4 py-3">Full Name</th>
+                      <th class="px-4 py-3">Email</th>
+                      <th class="px-4 py-3">Role</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Last Connection</th>
+                      <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-800" id="profiles-body"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="space-y-4 rounded-2xl border border-slate-800 bg-slate-950 p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">Manage profile</p>
+                  <h3 class="text-lg font-bold text-white">Quick actions</h3>
+                </div>
+                <div class="rounded-full bg-slate-800/80 p-2">
+                  <i data-lucide="user-cog" class="h-5 w-5 text-blue-200"></i>
+                </div>
+              </div>
+              
+              <form id="profile-form" class="space-y-3">
+                <input type="hidden" id="profile-id" value="">
+                
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold uppercase text-slate-400">Full Name</label>
+                  <input id="profile-name" type="text" class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="John Doe" required />
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold uppercase text-slate-400">Email</label>
+                  <input id="profile-email" type="email" class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none" placeholder="user@techloc.io" required />
+                </div>
+                
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold uppercase text-slate-400">Role</label>
+                  <select id="profile-role" class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none">
+                    <option value="user">User</option>
+                    <option value="moderator">Moderator</option>
+                    <option value="administrator">Administrator</option>
+                  </select>
+                </div>
+
+                <div class="space-y-1">
+                  <label class="text-xs font-semibold uppercase text-slate-400">Status</label>
+                  <select id="profile-status" class="w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none">
+                    <option value="active">Active</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+                
+                <div class="flex gap-2">
+                  <button type="submit" id="btn-save" class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500">
+                    <i data-lucide="save" class="h-4 w-4"></i>
+                    <span id="btn-text">Save profile</span>
+                  </button>
+                  <button type="button" id="btn-cancel" onclick="resetForm()" class="hidden rounded-lg border border-slate-700 px-3 py-2 text-slate-300 hover:bg-slate-800 hover:text-white">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+      </section>
+  </main>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
+    import {
+      loadPreferredBackgroundMode,
+      persistBackgroundMode,
+    } from '../../assets/scripts/backgroundPreference.js';
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+    import { logAdminEvent } from '../../assets/scripts/adminAudit.js';
+
+    const supabase = supabaseClient;
+    let profiles = [];
+    const recordAudit = (details = {}) =>
+      logAdminEvent({
+        client: supabase,
+        tableName: 'profiles',
+        action: 'edit',
+        ...details,
+      });
+
+    // PENDING REMOVIDO DE ESTILOS
+    const statusStyles = {
+      active: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30',
+      suspended: 'bg-rose-500/20 text-rose-100 border-rose-400/30',
+    };
+
+    const roleIcons = {
+      administrator: 'shield',
+      moderator: 'key-round',
+      user: 'user'
+    };
+
+    const formatLastConnection = (value) => {
+      if (!value) return '—';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return String(value);
+      return parsed.toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+    };
+
+    function renderProfiles() {
+      const body = document.getElementById('profiles-body');
+      body.innerHTML = '';
+
+      if (!profiles.length) {
+        body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-sm text-slate-400">No profiles found.</td></tr>`;
+        renderStats();
+        lucide.createIcons();
+        return;
+      }
+
+      profiles.forEach((profile) => {
+        const row = document.createElement('tr');
+        row.className = 'text-sm text-slate-200';
+        
+        // Default a 'active' si no hay status (ya no usamos pending)
+        const safeStatus = (profile.status || 'active').toLowerCase();
+        const styleClass = statusStyles[safeStatus] || statusStyles['active'];
+        const safeRole = (profile.role || 'user').toLowerCase();
+
+        row.innerHTML = `
+          <td class="px-4 py-3 font-semibold text-white capitalize">${profile.name}</td>
+          <td class="px-4 py-3 text-slate-300">${profile.email}</td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold capitalize">
+              <i data-lucide="${roleIcons[safeRole] || 'user'}" class="h-4 w-4"></i>
+              ${safeRole}
+            </span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${styleClass}">
+              ${safeStatus}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-slate-300">${formatLastConnection(profile.lastConnection)}</td>
+          <td class="px-4 py-3 text-right flex justify-end gap-2">
+            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-blue-200 transition hover:border-blue-500 hover:text-white" onclick="editProfile('${profile.id}')">Edit</button>
+            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-white" onclick="promoteProfile('${profile.id}')">Promote</button>
+            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-500 hover:text-white" onclick="removeProfile('${profile.id}')">Remove</button>
+          </td>
+        `;
+        body.appendChild(row);
+      });
+
+      lucide.createIcons();
+      renderStats();
+    }
+
+    function renderStats() {
+      const statsContainer = document.getElementById('profile-stats');
+      
+      const activeCount = profiles.filter(p => (p.status || '').toLowerCase() === 'active').length;
+      const suspendedCount = profiles.filter(p => (p.status || '').toLowerCase() === 'suspended').length;
+      const adminCount = profiles.filter(p => (p.role || '').toLowerCase() === 'administrator').length;
+      const modCount = profiles.filter(p => (p.role || '').toLowerCase() === 'moderator').length;
+
+      const stats = [
+        { label: 'Administrators', value: adminCount, accent: 'from-blue-500 to-indigo-600', icon: 'shield-check' },
+        { label: 'Moderators', value: modCount, accent: 'from-emerald-500 to-teal-600', icon: 'key-round' },
+        { label: 'Active Users', value: activeCount, accent: 'from-amber-500 to-orange-600', icon: 'users' },
+        { label: 'Suspended', value: suspendedCount, accent: 'from-rose-500 to-pink-600', icon: 'slash' },
+      ];
+
+      statsContainer.innerHTML = stats.map(stat => `
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 shadow-lg shadow-black/10">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">${stat.label}</p>
+              <p class="text-3xl font-black text-white">${stat.value}</p>
+            </div>
+            <div class="rounded-xl bg-gradient-to-br ${stat.accent} p-3 text-white shadow shadow-blue-900/30">
+              <i data-lucide="${stat.icon}" class="h-5 w-5"></i>
+            </div>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    // --- LÓGICA DE EDICIÓN ---
+    window.editProfile = (id) => {
+      const profile = profiles.find(p => p.id === id);
+      if (!profile) return;
+
+      document.getElementById('profile-id').value = profile.id;
+      document.getElementById('profile-name').value = profile.name;
+      document.getElementById('profile-email').value = profile.email;
+      
+      const roleSelect = document.getElementById('profile-role');
+      roleSelect.value = (profile.role || 'user').toLowerCase();
+      
+      const statusSelect = document.getElementById('profile-status');
+      // Default a active si viene nulo
+      statusSelect.value = (profile.status || 'active').toLowerCase();
+      
+      document.getElementById('btn-text').textContent = 'Update profile';
+      const btnSave = document.getElementById('btn-save');
+      btnSave.classList.remove('bg-blue-600');
+      btnSave.classList.add('bg-emerald-600');
+      document.getElementById('btn-cancel').classList.remove('hidden');
+    };
+
+    window.resetForm = () => {
+      document.getElementById('profile-form').reset();
+      document.getElementById('profile-id').value = '';
+      document.getElementById('btn-text').textContent = 'Save profile';
+      const btnSave = document.getElementById('btn-save');
+      btnSave.classList.remove('bg-emerald-600');
+      btnSave.classList.add('bg-blue-600');
+      document.getElementById('btn-cancel').classList.add('hidden');
+    }
+
+    document.getElementById('profile-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      
+      const id = document.getElementById('profile-id').value;
+      const name = document.getElementById('profile-name').value.trim();
+      const email = document.getElementById('profile-email').value.trim();
+      const role = document.getElementById('profile-role').value;
+      const status = document.getElementById('profile-status').value;
+
+      if (!email) return;
+
+      if (id) {
+        // UPDATE: Incluye name
+        const { error } = await supabase
+          .from('profiles')
+          .update({ 
+            name: name,
+            email, 
+            role, 
+            status
+          })
+          .eq('id', id);
+
+        if (error) { 
+          console.error('Error updating', error); 
+          alert('Error: ' + error.message); 
+          return; 
+        }
+
+        const index = profiles.findIndex(p => p.id === id);
+        if (index !== -1) {
+          profiles[index] = { ...profiles[index], name, email, role, status };
+        }
+        await recordAudit({
+          action: 'edit',
+          summary: `Updated profile for ${email}`,
+          recordId: id,
+          newValue: JSON.stringify({ role, status, name }),
+        });
+      } else {
+        // INSERT: Incluye name
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert([{ 
+            name: name,
+            email, 
+            role, 
+            status,
+            created_at: new Date().toISOString()
+          }])
+          .select()
+          .single();
+
+        if (error) { 
+          console.error('Error creating', error); 
+          alert('Error: ' + error.message); 
+          return; 
+        }
+        profiles.unshift(normalizeProfile(data));
+        await recordAudit({
+          action: 'insert',
+          summary: `Created profile for ${email}`,
+          recordId: data?.id ?? null,
+        });
+      }
+
+      resetForm();
+      renderProfiles();
+    });
+
+    window.promoteProfile = async (id) => {
+      const profile = profiles.find((p) => p.id === id);
+      if (!profile) return;
+      
+      const order = ['user', 'moderator', 'administrator'];
+      const currentRole = (profile.role || 'user').toLowerCase();
+      const currentIndex = order.indexOf(currentRole);
+      const nextRole = order[Math.min(order.length - 1, currentIndex + 1)];
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: nextRole, status: 'active' })
+        .eq('id', id);
+
+      if (error) { console.error('Error promoting', error); return; }
+
+      profile.role = nextRole;
+      profile.status = 'active';
+      await recordAudit({
+        action: 'edit',
+        summary: `Promoted ${profile.email} to ${nextRole}`,
+        recordId: id,
+        newValue: JSON.stringify({ role: nextRole, status: 'active' }),
+      });
+      renderProfiles();
+    };
+
+    window.removeProfile = async (id) => {
+      if(!confirm("Are you sure?")) return;
+      const index = profiles.findIndex((p) => p.id === id);
+      if (index === -1) return;
+      const profile = profiles[index];
+      const { error } = await supabase.from('profiles').delete().eq('id', id);
+      if (error) { console.error('Error deleting', error); return; }
+      await recordAudit({
+        action: 'delete',
+        summary: `Removed profile for ${profile?.email || 'user'}`,
+        recordId: id,
+        previousValue: profile ? JSON.stringify(profile) : null,
+      });
+      profiles.splice(index, 1);
+      renderProfiles();
+    };
+
+    function normalizeProfile(record) {
+      return {
+        id: record.id,
+        name: record.name || 'Unnamed',
+        email: record.email || 'unknown',
+        role: record.role || 'user', 
+        // Default a 'active' si nulo
+        status: record.status || 'active',
+        lastConnection:
+          record.last_connection ||
+          record.last_sign_in_at ||
+          record.last_login_at ||
+          record.last_login ||
+          record.updated_at ||
+          null,
+      };
+    }
+
+    async function fetchProfiles() {
+      const body = document.getElementById('profiles-body');
+      body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-sm text-slate-400">Loading profiles...</td></tr>`;
+
+      if (!supabase) return;
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error', error);
+        body.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-sm text-rose-200">Error loading data.</td></tr>`;
+        return;
+      }
+      profiles = (data || []).map(normalizeProfile);
+      renderProfiles();
+    }
+
+    const initBackground = async () => {
+      const initialMode = await loadPreferredBackgroundMode();
+      setupBackgroundManager({
+        canvasId: 'constellation-canvas',
+        initialMode,
+        onModeChange: persistBackgroundMode,
+      });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initBackground().catch((error) =>
+        console.error('Unable to initialize background manager', error)
+      );
+      fetchProfiles();
+    });
+  </script>
+  <script type="module">
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    const redirectToLogin = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        window.location.href = '../login.html';
+      }
+    };
+
+    redirectToLogin();
+  </script>
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+</body>
+</html>

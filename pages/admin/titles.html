@@ -1,0 +1,2350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Titles Admin</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.5/dist/chart.umd.min.js"></script>
+  
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+  
+  <style>
+    /* Table Layout Locks */
+    #main-table { table-layout: fixed; width: 100%; border-collapse: collapse; }
+    .analytics-table { table-layout: auto; width: auto; border-collapse: collapse; min-width: max-content; }
+    
+    /* Resizer Handles */
+    .resizer {
+      position: absolute; top: 0; right: 0; bottom: 0; width: 6px;
+      cursor: col-resize; user-select: none; z-index: 20; touch-action: none;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    th:hover .resizer { opacity: 1; background: rgba(59, 130, 246, 0.3); }
+    .resizer:hover, .resizing .resizer { opacity: 1; background: #3b82f6; }
+    body.resizing { cursor: col-resize !important; user-select: none; }
+
+    /* Editable Input Styling */
+    .cell-input {
+      width: 100%; height: 100%;
+      background: #1e293b; color: #fff;
+      border: 2px solid #3b82f6; border-radius: 0;
+      padding: 4px 6px; outline: none;
+      position: absolute; top: 0; left: 0;
+      font-size: 11px; z-index: 10;
+    }
+
+    select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+    
+    /* Custom Scrollbar */
+    .custom-scrollbar::-webkit-scrollbar { height: 10px; width: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #020617; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 5px; border: 2px solid #020617; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    /* Analytics layout */
+    #analytics-content { display: block; }
+    #analytics-layout {
+      position: relative;
+      display: grid;
+      grid-template-columns: 45% 55%;
+      gap: 1.25rem;
+      align-items: start;
+    }
+    @media (max-width: 1280px) { #analytics-layout { grid-template-columns: 1fr; } }
+    #analytics-charts {
+      position: relative;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      display: flex;
+      justify-content: center;
+    }
+    #charts-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      align-items: stretch;
+      min-width: max-content;
+      margin-inline: auto;
+    }
+    #chart-primary-row {
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr);
+      margin-inline: auto;
+    }
+    #chart-secondary-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(220px, 1fr));
+      gap: 0.75rem;
+      margin-inline: auto;
+    }
+    .chart-resizer {
+      position: absolute;
+      top: 8px;
+      bottom: 8px;
+      width: 12px;
+      cursor: col-resize;
+      z-index: 20;
+      background: transparent;
+    }
+    .chart-vresizer {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: -6px;
+      height: 10px;
+      cursor: row-resize;
+      z-index: 20;
+      background: transparent;
+    }
+    #analytics-table-container {
+      display: flex;
+      justify-content: flex-end;
+      overflow-x: auto;
+    }
+    #analytics-table-container table { margin-left: auto; }
+
+    /* Analytics resizing */
+    .analytics-header {
+      position: relative;
+      user-select: none;
+    }
+    .analytics-resizer {
+      position: absolute;
+      top: 0;
+      right: -4px;
+      width: 8px;
+      bottom: 0;
+      cursor: col-resize;
+      z-index: 30;
+      opacity: 0;
+      transition: opacity 0.15s;
+      touch-action: none;
+    }
+    .analytics-header:hover .analytics-resizer,
+    .analytics-resizing .analytics-resizer {
+      opacity: 1;
+    }
+
+    /* Analytics totals */
+    .analytics-total-col {
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .analytics-total-row {
+      background: rgba(59, 130, 246, 0.12);
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .analytics-grand-row {
+      background: rgba(59, 130, 246, 0.18);
+      font-weight: 800;
+      color: #f8fafc;
+    }
+
+    /* Analytics band */
+    .analytics-band {
+      background: linear-gradient(90deg, rgba(59,130,246,0.15), rgba(14,165,233,0.12), rgba(236,72,153,0.12));
+      border: 1px solid rgba(59,130,246,0.4);
+      box-shadow: 0 10px 40px -20px rgba(59,130,246,0.6);
+      width: 100%;
+    }
+
+    .chart-card {
+      background: radial-gradient(circle at 20% 20%, rgba(59,130,246,0.18), rgba(15,23,42,0.9));
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      box-shadow: 0 10px 30px -18px rgba(59, 130, 246, 0.65);
+      min-width: 220px;
+      border-radius: 14px;
+    }
+
+    .layout-resizer {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: calc(55% - 0.375rem);
+      width: 10px;
+      cursor: col-resize;
+      z-index: 25;
+      background: transparent;
+    }
+
+    /* Text Wrapping Styles */
+    .wrap-2-lines {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: normal;
+        line-height: 1.2;
+        min-width: 0;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    /* Responsive table sizing */
+    #table-container,
+    #top-scroller {
+      max-width: 100vw;
+    }
+    #main-table {
+      width: 100%;
+    }
+    @media (max-width: 1024px) {
+      #table-container {
+        max-height: calc(100vh - 240px);
+      }
+    }
+    @media (max-width: 768px) {
+      #main-table {
+        font-size: 11px;
+      }
+      #table-container {
+        max-height: calc(100vh - 260px);
+      }
+      th, td {
+        padding-left: 6px !important;
+        padding-right: 6px !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen w-full overflow-x-hidden flex flex-col bg-slate-950 text-slate-50" data-page-title="Titles Admin" data-active-nav="dashboard">
+
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <div class="sticky top-0 z-50 space-y-px">
+    <div data-shared-header></div>
+    <div data-admin-nav data-admin-nav="titles"></div>
+  </div>
+
+  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen"></canvas>
+
+  <main class="flex-1 flex flex-col min-h-0 relative">
+    
+    <div class="shrink-0 border-b border-slate-800 bg-slate-950/80 p-3">
+        <div class="flex items-center gap-3 overflow-x-auto no-scrollbar flex-nowrap">
+            <div class="w-32">
+                <label class="text-[10px] font-bold text-slate-500 uppercase ml-1">Terms</label>
+                <div class="flex mt-1 border border-slate-700 rounded-lg bg-slate-900 overflow-hidden">
+                    <select id="terms-operator" class="bg-slate-800 text-blue-400 text-xs font-bold px-2 py-1.5 outline-none border-r border-slate-700">
+                        <option value="<">&lt;</option>
+                        <option value=">">&gt;</option>
+                    </select>
+                    <input id="search-terms" type="number" placeholder="#" class="w-full bg-transparent text-xs text-white px-2 outline-none">
+                </div>
+            </div>
+
+            <div class="relative">
+                <button id="columns-btn" class="flex items-center gap-2 text-xs font-bold text-slate-300 bg-slate-900 border border-slate-700 hover:border-slate-500 px-3 py-1 rounded-lg transition-colors">
+                    <i data-lucide="columns-3" class="h-3.5 w-3.5"></i> Columns
+                </button>
+                <div id="columns-popover" class="hidden absolute top-full left-0 mt-2 w-64 bg-slate-950 border border-slate-800 rounded-xl shadow-2xl z-50 p-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[10px] font-bold uppercase text-slate-500">Toggle Visibility</span>
+                        <div class="flex gap-1">
+                            <button id="cols-all" class="text-[10px] text-blue-400 hover:text-blue-300">All</button>
+                            <span class="text-slate-700">|</span>
+                            <button id="cols-none" class="text-[10px] text-blue-400 hover:text-blue-300">None</button>
+                        </div>
+                    </div>
+                    <div id="columns-list" class="max-h-48 overflow-y-auto space-y-1 custom-scrollbar"></div>
+                </div>
+            </div>
+
+            <div id="sheet-tabs" class="flex-1 min-w-[220px] flex items-center gap-2 overflow-x-auto no-scrollbar mask-fade"></div>
+
+            <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                <button id="prev-page" class="p-1 hover:bg-slate-800 rounded text-slate-400 disabled:opacity-30"><i data-lucide="chevron-left" class="h-3.5 w-3.5"></i></button>
+                <span id="page-indicator" class="text-[10px] font-mono text-slate-300 px-1 min-w-[40px] text-center">1/1</span>
+                <button id="next-page" class="p-1 hover:bg-slate-800 rounded text-slate-400 disabled:opacity-30"><i data-lucide="chevron-right" class="h-3.5 w-3.5"></i></button>
+            </div>
+
+            <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 shadow-lg shadow-slate-900/20">
+                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300">
+                    <i data-lucide="table-2" class="h-4 w-4"></i>
+                </div>
+                <div class="leading-tight">
+                    <p class="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Registros</p>
+                    <p id="filtered-total" class="text-lg font-black text-white">0</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                <i data-lucide="database" class="h-3.5 w-3.5"></i>
+                <span id="dataset-status">Connecting…</span>
+            </div>
+
+            <div class="flex items-center gap-2 ml-auto">
+                 <div class="relative">
+                    <button id="download-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors shadow-lg shadow-slate-900/20">
+                        <i data-lucide="download" class="h-3.5 w-3.5"></i> Download
+                    </button>
+                    <div id="download-menu" class="hidden absolute right-0 mt-2 w-36 rounded-lg border border-slate-800 bg-slate-900 shadow-xl z-50">
+                        <button id="download-csv" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-t-lg">Download CSV</button>
+                        <button id="download-xlsx" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 rounded-b-lg">Download XLSX</button>
+                    </div>
+                 </div>
+                 <button id="add-row-btn" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors shadow-lg shadow-emerald-900/20">
+                    <i data-lucide="plus" class="h-3.5 w-3.5"></i> Add Row
+                 </button>
+                 <button id="refresh-button" class="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                    <i data-lucide="refresh-ccw" class="h-4 w-4"></i>
+                 </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="top-scroller" class="overflow-x-auto custom-scrollbar bg-slate-900/30 border-b border-slate-800 shrink-0 h-2">
+        <div id="top-scroller-content" class="h-px"></div>
+    </div>
+
+    <div id="table-container" class="flex-grow overflow-auto custom-scrollbar relative bg-slate-950">
+        <table id="main-table" class="min-w-full divide-y divide-slate-800/80">
+            <colgroup id="table-colgroup"></colgroup>
+            <thead id="table-head" class="bg-slate-950 sticky top-0 z-20 shadow-md shadow-black/20"></thead>
+            <tbody id="table-body" class="divide-y divide-slate-800/50 bg-slate-950/20"></tbody>
+        </table>
+        
+        <div id="empty-state" class="hidden absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="text-center">
+                <i data-lucide="inbox" class="h-10 w-10 text-slate-700 mx-auto mb-2"></i>
+                <p class="text-slate-500 text-sm">No records found</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="analytics-panel" class="bg-slate-900/60 border-t border-slate-800 px-6 py-5">
+        <div class="w-full flex">
+            <div class="w-full space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-3"></div>
+                <div class="analytics-band rounded-xl px-4 py-2 border border-slate-800/70">
+                    <p class="text-[10px] uppercase tracking-[0.2em] text-blue-100 font-semibold">Titles • Analytics</p>
+                    <p class="text-xs text-slate-100">Visual summary and pivot table for the filtered titles.</p>
+                </div>
+                <div id="analytics-content" class="space-y-4 mt-3">
+                    <div class="flex flex-wrap items-center gap-3 justify-end">
+                        <div class="relative">
+                            <button id="analytics-location-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors">
+                                <i data-lucide="map-pin" class="h-3.5 w-3.5"></i>
+                                <span id="analytics-location-label">All locations</span>
+                            </button>
+                            <div id="analytics-location-menu" class="hidden absolute left-0 mt-2 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-2xl z-50 p-3 space-y-2">
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
+                                    <span>Locations</span>
+                                    <div class="flex items-center gap-2">
+                                        <button id="analytics-locations-all" class="text-blue-400 hover:text-blue-300">All</button>
+                                        <span class="text-slate-700">|</span>
+                                        <button id="analytics-locations-none" class="text-blue-400 hover:text-blue-300">None</button>
+                                    </div>
+                                </div>
+                                <div id="analytics-location-list" class="max-h-64 overflow-auto space-y-1 custom-scrollbar pr-1"></div>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <button id="analytics-unit-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors">
+                                <i data-lucide="package" class="h-3.5 w-3.5"></i>
+                                <span id="analytics-unit-label">All unit types</span>
+                            </button>
+                            <div id="analytics-unit-menu" class="hidden absolute left-0 mt-2 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-2xl z-50 p-3 space-y-2">
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
+                                    <span>Unit type</span>
+                                    <div class="flex items-center gap-2">
+                                        <button id="analytics-unit-all" class="text-blue-400 hover:text-blue-300">All</button>
+                                        <span class="text-slate-700">|</span>
+                                        <button id="analytics-unit-none" class="text-blue-400 hover:text-blue-300">None</button>
+                                    </div>
+                                </div>
+                                <div id="analytics-unit-list" class="max-h-64 overflow-auto space-y-1 custom-scrollbar pr-1"></div>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <button id="analytics-lien-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors">
+                                <i data-lucide="shield-check" class="h-3.5 w-3.5"></i>
+                                <span id="analytics-lien-label">All lien status</span>
+                            </button>
+                            <div id="analytics-lien-menu" class="hidden absolute left-0 mt-2 w-56 rounded-lg border border-slate-800 bg-slate-950 shadow-2xl z-50 p-3 space-y-2">
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase">
+                                    <span>Lien status</span>
+                                    <div class="flex items-center gap-2">
+                                        <button id="analytics-lien-all" class="text-blue-400 hover:text-blue-300">All</button>
+                                        <span class="text-slate-700">|</span>
+                                        <button id="analytics-lien-none" class="text-blue-400 hover:text-blue-300">None</button>
+                                    </div>
+                                </div>
+                                <div id="analytics-lien-list" class="max-h-64 overflow-auto space-y-1 custom-scrollbar pr-1"></div>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <button id="analytics-download-btn" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-100 px-3 py-1.5 rounded-lg text-[11px] font-semibold tracking-wide transition-colors">
+                                <i data-lucide="download" class="h-3.5 w-3.5"></i>
+                                <span>Download analytics</span>
+                            </button>
+                            <div id="analytics-download-menu" class="hidden absolute left-0 mt-2 w-40 rounded-lg border border-slate-800 bg-slate-950 shadow-2xl z-50 overflow-hidden">
+                                <button id="analytics-download-csv" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">Download CSV</button>
+                                <button id="analytics-download-xlsx" class="w-full text-left px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 border-t border-slate-800">Download XLSX</button>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-slate-500">Location (rows) × Lien status (columns)</span>
+                    </div>
+                    <div id="analytics-layout">
+                        <div id="analytics-charts"></div>
+                        <div id="analytics-layout-resizer" class="layout-resizer"></div>
+                        <div id="analytics-table-container" class="custom-scrollbar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="shrink-0 bg-slate-950 border-t border-slate-800 px-4 py-1 flex justify-between items-center text-[10px] text-slate-500 select-none">
+        <span id="pagination-summary">Ready</span>
+        <span>TechLoc Admin v2.5</span>
+    </div>
+
+  </main>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
+    import {
+      loadPreferredBackgroundMode,
+      persistBackgroundMode,
+    } from '../../assets/scripts/backgroundPreference.js';
+    import { supabase as supabaseClientModule } from '../../assets/js/supabaseClient.js';
+    import { SUPABASE_KEY, SUPABASE_URL } from '../../assets/scripts/env.js';
+    import { logAdminEvent } from '../../assets/scripts/adminAudit.js';
+
+    const READ_TABLE = 'Titles';
+    const PRIMARY_KEY = 'UID'; 
+    const CONFIG_TABLE = 'user_table_configs';
+
+    const supabaseClient = supabaseClientModule || (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY
+        ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: { persistSession: true, autoRefreshToken: true },
+          })
+        : null);
+    const primaryKeyCandidates = [PRIMARY_KEY, (PRIMARY_KEY || '').toLowerCase(), 'id'];
+    const recordAuditEvent = (details = {}) =>
+      logAdminEvent({
+        client: supabaseClient,
+        tableName: READ_TABLE,
+        action: 'edit',
+        ...details,
+      });
+
+    const DEFAULT_LABELS = {
+      'account status': 'Vehicle Status',
+      'account_status': 'Vehicle Status'
+    };
+
+    const els = {
+      status: document.getElementById('dataset-status'),
+      searchPrimary: document.getElementById('search-primary'),
+      searchSecondary: document.getElementById('search-secondary'),
+      searchTerms: document.getElementById('search-terms'),
+      termsOperator: document.getElementById('terms-operator'),
+      sheetTabs: document.getElementById('sheet-tabs'), 
+      paginationSummary: document.getElementById('pagination-summary'),
+      prevPage: document.getElementById('prev-page'),
+      nextPage: document.getElementById('next-page'),
+      pageIndicator: document.getElementById('page-indicator'),
+      refresh: document.getElementById('refresh-button'),
+      addRowBtn: document.getElementById('add-row-btn'), 
+      colgroup: document.getElementById('table-colgroup'),
+      thead: document.getElementById('table-head'),
+      tbody: document.getElementById('table-body'),
+      tableContainer: document.getElementById('table-container'),
+      topScroller: document.getElementById('top-scroller'),
+      topScrollerContent: document.getElementById('top-scroller-content'),
+      mainTable: document.getElementById('main-table'),
+      columnsBtn: document.getElementById('columns-btn'),
+      columnsPopover: document.getElementById('columns-popover'),
+      columnsList: document.getElementById('columns-list'),
+      colsAll: document.getElementById('cols-all'),
+      colsNone: document.getElementById('cols-none'),
+      toastContainer: document.getElementById('toast-container'),
+      emptyState: document.getElementById('empty-state'),
+      filteredTotal: document.getElementById('filtered-total'),
+      analyticsContent: document.getElementById('analytics-content'),
+      analyticsLocationBtn: document.getElementById('analytics-location-btn'),
+      analyticsLocationMenu: document.getElementById('analytics-location-menu'),
+      analyticsLocationList: document.getElementById('analytics-location-list'),
+      analyticsLocationLabel: document.getElementById('analytics-location-label'),
+      analyticsLocationsAll: document.getElementById('analytics-locations-all'),
+      analyticsLocationsNone: document.getElementById('analytics-locations-none'),
+      analyticsUnitBtn: document.getElementById('analytics-unit-btn'),
+      analyticsUnitMenu: document.getElementById('analytics-unit-menu'),
+      analyticsUnitList: document.getElementById('analytics-unit-list'),
+      analyticsUnitLabel: document.getElementById('analytics-unit-label'),
+      analyticsUnitAll: document.getElementById('analytics-unit-all'),
+      analyticsUnitNone: document.getElementById('analytics-unit-none'),
+      analyticsLienBtn: document.getElementById('analytics-lien-btn'),
+      analyticsLienMenu: document.getElementById('analytics-lien-menu'),
+      analyticsLienList: document.getElementById('analytics-lien-list'),
+      analyticsLienLabel: document.getElementById('analytics-lien-label'),
+      analyticsLienAll: document.getElementById('analytics-lien-all'),
+      analyticsLienNone: document.getElementById('analytics-lien-none'),
+      analyticsCharts: document.getElementById('analytics-charts'),
+      analyticsTableContainer: document.getElementById('analytics-table-container'),
+      analyticsDownloadBtn: document.getElementById('analytics-download-btn'),
+      analyticsDownloadMenu: document.getElementById('analytics-download-menu'),
+      analyticsDownloadCsv: document.getElementById('analytics-download-csv'),
+      analyticsDownloadXlsx: document.getElementById('analytics-download-xlsx'),
+      downloadBtn: document.getElementById('download-btn'),
+      downloadMenu: document.getElementById('download-menu'),
+      downloadCsv: document.getElementById('download-csv'),
+      downloadXlsx: document.getElementById('download-xlsx')
+    };
+
+    const state = {
+      user_id: null,
+      rows: [],
+      columns: [],
+      columnLabels: {},
+      columnOrder: [],
+      columnVisibility: {},
+      columnWidths: {}, 
+      columnFilters: {},
+      pagination: { page: 1, pageSize: 50 }, 
+      sort: { column: null, direction: 'none' },
+      search: { primary: '', secondary: '', terms: '', termsOperator: '<', sheet: '' }, 
+      isDragging: false, dragSourceIndex: null,
+      isResizing: false, resizeColId: null, resizeStartX: 0, resizeStartWidth: 0,
+      filterCols1: [], filterCols2: [], filterCols3: [],
+      analyticsLocations: null,
+      analyticsUnits: null,
+      analyticsLiens: null,
+      analyticsColumnWidths: {},
+      analyticsCharts: {},
+      analyticsChartWidths: [380, 260, 260],
+      analyticsChartHeights: [360, 260, 260],
+      analyticsExportData: null,
+      analyticsChartColumns: {
+        unitType: null,
+        dealStatus: null,
+        dealType: null
+      },
+      analyticsLayoutSplit: 45
+    };
+
+    const labelize = (key = '') => key.replace(/_/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+    const cleanId = (key) => 'col-' + key.replace(/[^a-zA-Z0-9-_]/g, '_');
+    let columnMenus = [];
+    const resolvePrimaryKey = (row = {}) => {
+        const key = primaryKeyCandidates.find(k => k && Object.prototype.hasOwnProperty.call(row, k) && row[k] !== undefined && row[k] !== null);
+        return { key: key || PRIMARY_KEY, value: key ? row[key] : undefined };
+    };
+
+    const closeColumnMenus = (except = null) => {
+        columnMenus.forEach(menu => {
+            if (menu !== except) menu.classList.add('hidden');
+        });
+    };
+    const renameColumn = (colId) => {
+        if (!colId) return;
+        const currentLabel = state.columns.find(c => c.id === colId)?.label || labelize(colId);
+        const next = prompt('Nuevo nombre de columna', currentLabel);
+        if (next === null) return;
+        const trimmed = next.trim();
+        if (!trimmed) return;
+        state.columnLabels[colId] = trimmed;
+        const col = state.columns.find(c => c.id === colId);
+        if (col) col.label = trimmed;
+        savePrefs();
+        renderTable();
+        updateColumnsList();
+    };
+
+    const showToast = (message, type = 'info') => {
+        const toast = document.createElement('div');
+        const colors = type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' : 'bg-slate-800/90 border-blue-500 text-blue-100';
+        toast.className = `px-4 py-2 rounded-lg border shadow-xl text-xs font-bold backdrop-blur transform transition-all duration-300 translate-y-4 opacity-0 ${colors}`;
+        toast.textContent = message;
+        els.toastContainer.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.remove('translate-y-4', 'opacity-0'));
+        setTimeout(() => {
+            toast.classList.add('translate-y-4', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    };
+
+    const syncScrollbars = () => {
+        let isSyncingTop = false;
+        let isSyncingTable = false;
+        els.topScroller.addEventListener('scroll', () => {
+            if (!isSyncingTable) { isSyncingTop = true; els.tableContainer.scrollLeft = els.topScroller.scrollLeft; }
+            isSyncingTable = false;
+        });
+        els.tableContainer.addEventListener('scroll', () => {
+            if (!isSyncingTop) { isSyncingTable = true; els.topScroller.scrollLeft = els.tableContainer.scrollLeft; }
+            isSyncingTop = false;
+        });
+    };
+    const updateScrollWidths = () => {
+        if(els.mainTable && els.topScrollerContent) {
+            els.topScrollerContent.style.width = els.mainTable.scrollWidth + 'px';
+        }
+    };
+
+    const populateSheetFilter = (rows) => {
+        const currentScroll = els.sheetTabs.scrollLeft;
+        const sheets = new Set();
+        rows.forEach(r => {
+            if(r['Sheet']) sheets.add(r['Sheet']);
+            if(r['sheet']) sheets.add(r['sheet']); 
+        });
+        
+        const sortedSheets = Array.from(sheets).sort();
+        els.sheetTabs.innerHTML = ''; 
+
+        const createTab = (label, value) => {
+            const btn = document.createElement('button');
+            const isActive = state.search.sheet === value;
+            const baseClass = "shrink-0 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all duration-200 whitespace-nowrap mb-1";
+            const activeClass = "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/40 transform scale-105";
+            const inactiveClass = "bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-white hover:border-slate-500";
+            btn.className = `${baseClass} ${isActive ? activeClass : inactiveClass}`;
+            btn.textContent = label || 'Unknown';
+            btn.onclick = () => {
+                state.search.sheet = value;
+                state.pagination.page = 1; 
+                savePrefs();
+                renderTable();
+                populateSheetFilter(state.rows);
+            };
+            return btn;
+        };
+
+        els.sheetTabs.appendChild(createTab('All Sheets', ''));
+        sortedSheets.forEach(sheet => {
+            els.sheetTabs.appendChild(createTab(sheet, sheet));
+        });
+
+        requestAnimationFrame(() => {
+            els.sheetTabs.scrollLeft = currentScroll;
+        });
+    };
+
+    const addNewRow = async () => {
+        if (!supabaseClient) { showToast('Offline: Cannot add rows', 'error'); return; }
+        const originalText = els.addRowBtn.innerHTML;
+        els.addRowBtn.disabled = true;
+        els.addRowBtn.innerHTML = `<i data-lucide="loader-2" class="h-3 w-3 animate-spin"></i>`;
+        if (window.lucide) lucide.createIcons();
+
+        try {
+            const { data, error } = await supabaseClient.from(READ_TABLE).insert({}).select().single();
+            if (error) throw error;
+            state.rows.unshift(data);
+            state.pagination.page = 1;
+            renderTable();
+            populateSheetFilter(state.rows);
+            showToast('Row added', 'info');
+            const { key: primaryKeyField, value: newRowId } = resolvePrimaryKey(data);
+            recordAuditEvent({
+              action: 'insert',
+              summary: `Created new ${READ_TABLE} row (${primaryKeyField || 'id'}: ${newRowId ?? 'pending'})`,
+              recordId: newRowId ?? null,
+            });
+            els.tableContainer.scrollTop = 0;
+        } catch (err) {
+            console.error(err);
+            showToast('Error creating row', 'error');
+        } finally {
+            els.addRowBtn.disabled = false;
+            els.addRowBtn.innerHTML = originalText;
+            if (window.lucide) lucide.createIcons();
+        }
+    };
+
+    // --- BORRAR FILA ---
+    const deleteRow = async (rowData, btn) => {
+        if (!confirm('Are you sure you want to delete this row? This cannot be undone.')) return;
+        
+        // UI optimista
+        const tr = btn.closest('tr');
+        tr.style.opacity = '0.5';
+        const { key: primaryKeyField, value: rowId } = resolvePrimaryKey(rowData);
+        if (rowId === undefined || rowId === null) {
+            showToast('Missing row identifier', 'error');
+            tr.style.opacity = '1';
+            return;
+        }
+
+        if (supabaseClient) {
+            const { error } = await supabaseClient.from(READ_TABLE).delete().eq(primaryKeyField, rowId);
+            if (error) {
+                showToast('Error deleting row', 'error');
+                tr.style.opacity = '1';
+                return;
+            }
+            recordAuditEvent({
+              action: 'delete',
+              summary: `Deleted ${READ_TABLE} row (${primaryKeyField || 'id'}: ${rowId})`,
+              recordId: rowId,
+            });
+        }
+        
+        // Actualizar estado local
+        state.rows = state.rows.filter(r => resolvePrimaryKey(r).value !== rowId);
+        renderTable();
+        showToast('Row deleted', 'info');
+    };
+
+    const cleanLeadingPrefix = (value, removeEnDash = false) => {
+        if (typeof value !== 'string') return value;
+        let cleaned = value;
+        if (removeEnDash) cleaned = cleaned.replace(/^[-–—]\s*/, '');
+        cleaned = cleaned.replace(/^[\d\s-]+/, '');
+        return cleaned;
+    };
+
+    const sanitizeForColumn = (colId, value) => {
+        if (typeof value !== 'string') return value;
+        if (colId === 'Prep Status' || colId === 'prep_status') return cleanLeadingPrefix(value, true);
+        if (colId === 'Location' || colId === 'location') return cleanLeadingPrefix(value);
+        return value;
+    };
+
+    const findColumnId = (candidates = []) => {
+        const normalized = candidates.map(c => c.toLowerCase());
+        const normalizeId = (id = '') => id.replace(/_/g, ' ').toLowerCase();
+        const match = state.columns.find(c => normalized.includes(normalizeId(c.id)));
+        return match ? match.id : null;
+    };
+
+    const getFilteredSortedRows = () => {
+      let rows = state.rows;
+      const t1 = state.search.primary.trim().toLowerCase();
+      const t2 = state.search.secondary.trim().toLowerCase();
+      const t3_raw = state.search.terms;
+      const t3_op = state.search.termsOperator;
+      const sheet = state.search.sheet;
+
+      rows = rows.filter(row => {
+          const matches1 = !t1 || (state.filterCols1.length ? state.filterCols1.some(k => String(row[k]||'').toLowerCase().includes(t1)) : Object.values(row).some(v => String(v).toLowerCase().includes(t1)));
+          const matches2 = !t2 || (state.filterCols2.length ? state.filterCols2.some(k => String(row[k]||'').toLowerCase().includes(t2)) : true);
+          let matches3 = true;
+          if (t3_raw) {
+              const termCol = state.filterCols3[0];
+              if (termCol) {
+                  const cellVal = parseFloat(row[termCol]); const searchVal = parseFloat(t3_raw);
+                  if (isNaN(cellVal)) matches3 = false;
+                  else if (!isNaN(searchVal)) matches3 = t3_op === '<' ? cellVal < searchVal : cellVal > searchVal;
+              }
+          }
+          let matchesSheet = !sheet || (row['Sheet'] === sheet || row['sheet'] === sheet);
+
+          const menuFilters = Object.entries(state.columnFilters || {});
+          const matchesMenuFilters = menuFilters.every(([colId, value]) => {
+              if (value === undefined || value === null || value === '') return true;
+              const cellVal = row[colId];
+              return String(cellVal ?? '').toLowerCase().includes(String(value).toLowerCase());
+          });
+
+          return matches1 && matches2 && matches3 && matchesSheet && matchesMenuFilters;
+      });
+
+      if (state.sort.column && state.sort.direction !== 'none') {
+        const { column, direction } = state.sort;
+        const normalizeText = (value) => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') return value.trim().toLowerCase();
+            const asString = String(value);
+            return asString.trim().toLowerCase();
+        };
+        rows = [...rows].sort((a, b) => {
+          const valA = a[column]; const valB = b[column];
+          const bothNumbers = typeof valA === 'number' && typeof valB === 'number';
+          if (bothNumbers) return direction === 'asc' ? valA - valB : valB - valA;
+
+          const textA = normalizeText(valA);
+          const textB = normalizeText(valB);
+          const result = textA.localeCompare(textB, undefined, { sensitivity: 'base', numeric: true });
+          return direction === 'asc' ? result : -result;
+        });
+      }
+
+      return rows;
+    };
+
+    const renderCellContent = (td, val) => {
+        td.innerHTML = ''; 
+        const wrapper = document.createElement('div');
+        wrapper.className = 'wrap-2-lines px-1 text-[11px]'; // APLICADO: Estilo 2 líneas
+        wrapper.title = (val === null || val === undefined) ? '' : String(val);
+        wrapper.textContent = (val === null || val === undefined || String(val).trim() === '') ? '—' : String(val);
+        td.appendChild(wrapper);
+    };
+
+    const editCell = (td, rowData, colId) => {
+        if (state.isResizing || state.isDragging) return;
+        if (td.querySelector('input')) return;
+        const currentValue = rowData[colId];
+        if (typeof currentValue === 'object' && currentValue !== null) return;
+        const { key: primaryKeyField, value: rowId } = resolvePrimaryKey(rowData);
+        if (rowId === undefined || rowId === null) {
+            showToast('Missing row identifier', 'error');
+            return;
+        }
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue === null ? '' : currentValue;
+        input.className = 'cell-input'; 
+        td.textContent = ''; 
+        td.appendChild(input);
+        input.focus();
+        let isSaving = false;
+
+        const save = async () => {
+            if (isSaving) return;
+            isSaving = true;
+            let newValue = input.value.trim();
+            newValue = sanitizeForColumn(colId, newValue);
+            
+            const payloadValue = newValue === '' ? null : newValue;
+            renderCellContent(td, payloadValue);
+
+            if (String(payloadValue) === String(currentValue === null ? '' : currentValue) && payloadValue !== '') return;
+            if (payloadValue === null && currentValue === null) return;
+
+            const row = state.rows.find(r => resolvePrimaryKey(r).value === rowId);
+            if (row) row[colId] = payloadValue;
+
+            if (supabaseClient) {
+                const { error } = await supabaseClient.from(READ_TABLE).update({ [colId]: payloadValue }).eq(primaryKeyField, rowId);
+                if (error) {
+                    showToast('Save failed', 'error');
+                    renderCellContent(td, currentValue); 
+                    if (row) row[colId] = currentValue;
+                } else {
+                    showToast('Saved', 'info');
+                    recordAuditEvent({
+                      action: 'edit',
+                      summary: `Updated ${colId} for ${primaryKeyField || 'id'}: ${rowId}`,
+                      recordId: rowId,
+                      columnName: colId,
+                      previousValue: currentValue,
+                      newValue: payloadValue,
+                    });
+                }
+            }
+        };
+
+        const cancel = () => { isSaving = true; renderCellContent(td, currentValue); };
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); } 
+            else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+    };
+
+    // --- PREFS REALES (USER TABLE CONFIGS) ---
+    const savePrefs = async () => {
+      const config = {
+        columnOrder: state.columnOrder,
+        columnVisibility: state.columnVisibility,
+        columnWidths: state.columnWidths,
+        columnLabels: state.columnLabels,
+      columnFilters: state.columnFilters,
+      pagination: state.pagination,
+      sort: state.sort,
+      search: state.search,
+      analyticsLocations: state.analyticsLocations,
+      analyticsUnits: state.analyticsUnits,
+      analyticsLiens: state.analyticsLiens,
+      analyticsColumnWidths: state.analyticsColumnWidths,
+      analyticsChartWidths: state.analyticsChartWidths,
+      analyticsChartHeights: state.analyticsChartHeights,
+      analyticsExportData: state.analyticsExportData,
+      analyticsChartColumns: state.analyticsChartColumns,
+      analyticsLayoutSplit: state.analyticsLayoutSplit
+      };
+      
+      // Fallback localstorage
+      localStorage.setItem(`local_${READ_TABLE}_prefs`, JSON.stringify(config));
+
+      // Guardado Remoto en Supabase
+      if (supabaseClient && state.user_id) {
+        // Upsert simple basado en user_id + table_name
+        const { error } = await supabaseClient.from(CONFIG_TABLE).upsert(
+          { user_id: state.user_id, table_name: READ_TABLE, config: config },
+          { onConflict: 'user_id, table_name' }
+        );
+        if (!error) {
+          recordAuditEvent({
+            action: 'upsert',
+            tableName: CONFIG_TABLE,
+            summary: `Saved ${READ_TABLE} preferences for user ${state.user_id}`,
+            recordId: state.user_id,
+          });
+        }
+      }
+    };
+
+    const loadPrefs = async () => {
+      let config = null;
+      
+      // 1. Intentar cargar de Supabase primero
+      if (supabaseClient) {
+         const { data: { user } } = await supabaseClient.auth.getUser();
+         if (user) {
+            state.user_id = user.id;
+            const { data, error } = await supabaseClient.from(CONFIG_TABLE)
+                .select('config')
+                .eq('user_id', user.id)
+                .eq('table_name', READ_TABLE)
+                .maybeSingle(); // maybeSingle evita errores 406 si no existe
+            
+            if (data && data.config) config = data.config;
+         }
+      }
+
+      // 2. Si falla Supabase, intentar LocalStorage
+      if (!config) {
+         try { config = JSON.parse(localStorage.getItem(`local_${READ_TABLE}_prefs`)); } catch (e) {}
+      }
+
+      // 3. Aplicar configuración
+      if (config) {
+        if (Array.isArray(config.columnOrder)) state.columnOrder = config.columnOrder;
+        if (config.columnVisibility) state.columnVisibility = config.columnVisibility;
+        if (config.columnWidths) state.columnWidths = config.columnWidths;
+        if (config.columnLabels) state.columnLabels = config.columnLabels;
+        if (config.pagination) state.pagination = { ...state.pagination, ...config.pagination };
+        if (config.sort) state.sort = config.sort;
+        if (config.columnFilters) state.columnFilters = config.columnFilters;
+        if (config.search) {
+            state.search = { ...state.search, ...config.search };
+            if(els.searchPrimary) els.searchPrimary.value = state.search.primary || '';
+            if(els.searchSecondary) els.searchSecondary.value = state.search.secondary || '';
+            if(els.searchTerms) els.searchTerms.value = state.search.terms || '';
+            if(els.termsOperator) els.termsOperator.value = state.search.termsOperator || '<';
+        }
+        if (Array.isArray(config.analyticsLocations) || config.analyticsLocations === null) state.analyticsLocations = config.analyticsLocations;
+        if (Array.isArray(config.analyticsUnits) || config.analyticsUnits === null) state.analyticsUnits = config.analyticsUnits;
+        if (Array.isArray(config.analyticsLiens) || config.analyticsLiens === null) state.analyticsLiens = config.analyticsLiens;
+        if (config.analyticsColumnWidths) state.analyticsColumnWidths = config.analyticsColumnWidths;
+        if (Array.isArray(config.analyticsChartWidths)) state.analyticsChartWidths = config.analyticsChartWidths;
+        if (Array.isArray(config.analyticsChartHeights)) state.analyticsChartHeights = config.analyticsChartHeights;
+        if (config.analyticsExportData) state.analyticsExportData = config.analyticsExportData;
+        if (config.analyticsChartColumns) state.analyticsChartColumns = { ...state.analyticsChartColumns, ...config.analyticsChartColumns };
+        if (typeof config.analyticsLayoutSplit === 'number') state.analyticsLayoutSplit = config.analyticsLayoutSplit;
+      }
+    };
+
+    const inferColumns = (rows = []) => {
+      const keys = new Set();
+      rows.forEach(row => Object.keys(row || {}).forEach(key => keys.add(key)));
+      const uniqueKeys = Array.from(keys);
+      state.filterCols1 = uniqueKeys.filter(k => /vin|customer|stock|prep/i.test(k));
+      state.filterCols2 = uniqueKeys.filter(k => /lien|book|title/i.test(k));
+      state.filterCols3 = uniqueKeys.filter(k => /term/i.test(k)); 
+      if (uniqueKeys.length > 0) {
+        state.columns = uniqueKeys.sort().map(key => {
+          const normalizedKey = key.toLowerCase();
+          const defaultLabel = DEFAULT_LABELS[normalizedKey];
+          const label = state.columnLabels[key] || defaultLabel || labelize(key);
+          if (defaultLabel && !state.columnLabels[key]) state.columnLabels[key] = defaultLabel;
+          return { id: key, label };
+        });
+      } else {
+        const defaults = [PRIMARY_KEY, 'VIN', 'Updated', 'vin_combined', 'created_at'];
+        state.columns = defaults.map(id => ({ id, label: state.columnLabels[id] || labelize(id) }));
+      }
+      const known = new Set(state.columns.map(c => c.id));
+      if (!state.columnOrder.length || state.columnOrder.length < 2) {
+          state.columnOrder = state.columns.map(c => c.id);
+      } else {
+          state.columnOrder = state.columnOrder.filter(c => known.has(c));
+          state.columns.forEach(c => {
+             if (!state.columnOrder.includes(c.id)) state.columnOrder.push(c.id);
+             if (!(c.id in state.columnVisibility)) state.columnVisibility[c.id] = true;
+          });
+      }
+    };
+
+    const getVisibleColumns = () => state.columnOrder
+      .map(id => state.columns.find(c => c.id === id))
+      .filter(Boolean)
+      .filter(c => state.columnVisibility[c.id] !== false);
+
+    const initResize = (e, colId) => {
+      e.stopPropagation(); e.preventDefault();
+      state.isResizing = true; state.resizeColId = colId; state.resizeStartX = e.pageX;
+      const colEl = document.getElementById(cleanId(colId));
+      state.resizeStartWidth = colEl ? colEl.offsetWidth : 150; 
+      document.body.classList.add('resizing');
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeUp);
+    };
+    const handleResizeMove = (e) => {
+      if (!state.isResizing) return;
+      const diff = e.pageX - state.resizeStartX;
+      const newWidth = Math.max(50, state.resizeStartWidth + diff); 
+      state.columnWidths[state.resizeColId] = newWidth;
+      const colEl = document.getElementById(cleanId(state.resizeColId));
+      if (colEl) colEl.style.width = `${newWidth}px`;
+      updateScrollWidths();
+    };
+    const handleResizeUp = () => {
+      state.isResizing = false; document.body.classList.remove('resizing');
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeUp);
+      savePrefs(); 
+    };
+    const handleDragStart = (e, colId) => {
+      if (state.isResizing) { e.preventDefault(); return; }
+      state.isDragging = true; state.dragSourceIndex = state.columnOrder.indexOf(colId);
+      e.dataTransfer.effectAllowed = 'move';
+      e.target.closest('th').classList.add('opacity-50');
+    };
+    const handleDragOver = (e) => { if (state.isDragging) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } };
+    const handleDrop = (e, targetColId) => {
+      e.stopPropagation();
+      const th = e.target.closest('th'); if (th) th.classList.remove('opacity-50');
+      state.isDragging = false;
+      const sourceIdx = state.dragSourceIndex; const targetIdx = state.columnOrder.indexOf(targetColId);
+      if (sourceIdx !== targetIdx && sourceIdx > -1 && targetIdx > -1) {
+        const [moved] = state.columnOrder.splice(sourceIdx, 1);
+        state.columnOrder.splice(targetIdx, 0, moved);
+        savePrefs(); renderTable();
+      }
+    };
+    const renderTable = (options = {}) => {
+      const { keepFilterOpen = null } = options;
+      columnMenus = [];
+      const visible = getVisibleColumns();
+      els.colgroup.innerHTML = '';
+      
+      // 1. COLUMNA DE BORRADO (Ancho Fijo)
+      const deleteCol = document.createElement('col');
+      deleteCol.style.width = '40px';
+      els.colgroup.appendChild(deleteCol);
+
+      // 2. COLUMNAS DE DATOS
+      visible.forEach(col => {
+        const colEl = document.createElement('col');
+        colEl.id = cleanId(col.id); 
+        colEl.style.width = `${state.columnWidths[col.id] || 150}px`;
+        els.colgroup.appendChild(colEl);
+      });
+
+      let rows = state.rows;
+      const t1 = state.search.primary.trim().toLowerCase();
+      const t2 = state.search.secondary.trim().toLowerCase();
+      const t3_raw = state.search.terms;
+      const t3_op = state.search.termsOperator;
+      const sheet = state.search.sheet;
+
+      rows = rows.filter(row => {
+          const matches1 = !t1 || (state.filterCols1.length ? state.filterCols1.some(k => String(row[k]||'').toLowerCase().includes(t1)) : Object.values(row).some(v => String(v).toLowerCase().includes(t1)));
+          const matches2 = !t2 || (state.filterCols2.length ? state.filterCols2.some(k => String(row[k]||'').toLowerCase().includes(t2)) : true);
+          let matches3 = true;
+          if (t3_raw) {
+              const termCol = state.filterCols3[0];
+              if (termCol) {
+                  const cellVal = parseFloat(row[termCol]); const searchVal = parseFloat(t3_raw);
+                  if (isNaN(cellVal)) matches3 = false;
+                  else if (!isNaN(searchVal)) matches3 = t3_op === '<' ? cellVal < searchVal : cellVal > searchVal;
+              }
+          }
+          let matchesSheet = !sheet || (row['Sheet'] === sheet || row['sheet'] === sheet);
+
+          const menuFilters = Object.entries(state.columnFilters || {});
+          const matchesMenuFilters = menuFilters.every(([colId, value]) => {
+              if (value === undefined || value === null || value === '') return true;
+              const cellVal = row[colId];
+              return String(cellVal ?? '').toLowerCase().includes(String(value).toLowerCase());
+          });
+
+          return matches1 && matches2 && matches3 && matchesSheet && matchesMenuFilters;
+      });
+
+      if (state.sort.column && state.sort.direction !== 'none') {
+        const { column, direction } = state.sort;
+        const normalizeText = (value) => {
+            if (value === null || value === undefined) return '';
+            if (typeof value === 'string') return value.trim().toLowerCase();
+            const asString = String(value);
+            return asString.trim().toLowerCase();
+        };
+        rows = [...rows].sort((a, b) => {
+          const valA = a[column]; const valB = b[column];
+          const bothNumbers = typeof valA === 'number' && typeof valB === 'number';
+          if (bothNumbers) return direction === 'asc' ? valA - valB : valB - valA;
+
+          const textA = normalizeText(valA);
+          const textB = normalizeText(valB);
+          const result = textA.localeCompare(textB, undefined, { sensitivity: 'base', numeric: true });
+          return direction === 'asc' ? result : -result;
+        });
+      }
+
+      const total = rows.length;
+      if (els.filteredTotal) {
+        els.filteredTotal.textContent = total.toLocaleString('en-US');
+      }
+      const { page, pageSize } = state.pagination;
+      const maxPage = Math.max(1, Math.ceil(total / pageSize));
+      state.pagination.page = Math.min(page, maxPage);
+      const startIdx = (state.pagination.page - 1) * pageSize;
+      const pageRows = rows.slice(startIdx, startIdx + pageSize);
+
+      els.thead.innerHTML = '';
+      const headRow = document.createElement('tr');
+      
+      // HEADER DE BORRADO
+      const thDel = document.createElement('th');
+      thDel.className = 'w-[40px] border-b border-slate-700 bg-slate-900';
+      headRow.appendChild(thDel);
+
+      visible.forEach(col => {
+        const th = document.createElement('th');
+        // APLICADO: Clase wrap-2-lines para headers
+        th.className = 'text-left text-[10px] font-bold uppercase tracking-wider text-slate-400 select-none py-2 px-3 border-b border-slate-700 hover:bg-slate-900 transition-colors relative group';
+        th.draggable = true;
+        th.addEventListener('dragstart', (e) => handleDragStart(e, col.id));
+        th.addEventListener('dragover', handleDragOver);
+        th.addEventListener('drop', (e) => handleDrop(e, col.id));
+
+        const content = document.createElement('div');
+        content.className = 'flex items-center gap-2 w-full h-full'; // h-full para alinear
+        
+        // Texto con Wrap de 2 lineas
+        const span = document.createElement('span');
+        span.className = 'wrap-2-lines flex-1 cursor-text';
+        span.textContent = col.label;
+        span.title = 'Doble click para renombrar';
+        span.addEventListener('dblclick', (ev) => {
+          ev.stopPropagation();
+          renameColumn(col.id);
+        });
+        content.appendChild(span);
+        
+        if (state.columnFilters[col.id]) {
+            const badge = document.createElement('span');
+            badge.className = 'text-[9px] font-semibold uppercase tracking-wide text-emerald-200 bg-emerald-900/40 border border-emerald-800 px-2 py-0.5 rounded-full';
+            badge.textContent = `Filter: ${state.columnFilters[col.id]}`;
+            content.appendChild(badge);
+        }
+
+        const menuWrapper = document.createElement('div');
+        menuWrapper.className = 'relative shrink-0';
+        const menuTrigger = document.createElement('button');
+        const isSorted = state.sort.column === col.id && state.sort.direction !== 'none';
+        const hasFilter = !!state.columnFilters[col.id];
+        menuTrigger.className = 'p-1 hover:bg-slate-700 rounded transition-colors shrink-0';
+        const triggerIcon = document.createElement('i');
+        triggerIcon.setAttribute('data-lucide', 'list-filter');
+        triggerIcon.className = `h-3 w-3 ${isSorted || hasFilter ? 'text-blue-400' : 'text-slate-600'}`;
+        menuTrigger.appendChild(triggerIcon);
+        menuTrigger.dataset.columnMenuTrigger = 'true';
+
+        const menu = document.createElement('div');
+        menu.className = 'absolute right-0 top-full mt-1 min-w-[200px] rounded-lg border border-slate-800 bg-slate-900 shadow-xl hidden z-50';
+        
+        const filterSection = document.createElement('div');
+        filterSection.className = 'px-3 py-2 border-b border-slate-800/80 space-y-2';
+        
+        const filterTitle = document.createElement('p');
+        filterTitle.className = 'text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500';
+        filterTitle.textContent = 'Filter this column';
+        filterSection.appendChild(filterTitle);
+
+        const filterField = document.createElement('div');
+        filterField.className = 'relative';
+        const filterIcon = document.createElement('i');
+        filterIcon.setAttribute('data-lucide', 'search');
+        filterIcon.className = 'absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-500';
+        const filterInput = document.createElement('input');
+        filterInput.type = 'search';
+        filterInput.placeholder = `Search ${col.label}`;
+        filterInput.value = state.columnFilters[col.id] || '';
+        filterInput.className = 'w-full bg-slate-800 border border-slate-700 rounded-md py-1.5 pl-8 pr-2 text-[11px] text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none';
+        filterField.appendChild(filterIcon);
+        filterField.appendChild(filterInput);
+        filterSection.appendChild(filterField);
+
+        const filterActions = document.createElement('div');
+        filterActions.className = 'flex items-center justify-end gap-2';
+        const clearFilterBtn = document.createElement('button');
+        clearFilterBtn.dataset.action = 'clear-filter';
+        clearFilterBtn.className = `text-[10px] font-semibold px-2 py-1 rounded-md border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white ${hasFilter ? '' : 'opacity-50 cursor-not-allowed'}`;
+        clearFilterBtn.textContent = 'Clear';
+        const applyFilterBtn = document.createElement('button');
+        applyFilterBtn.dataset.action = 'apply-filter';
+        applyFilterBtn.className = 'text-[10px] font-semibold px-3 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-500';
+        applyFilterBtn.textContent = 'Apply';
+        filterActions.appendChild(clearFilterBtn);
+        filterActions.appendChild(applyFilterBtn);
+        filterSection.appendChild(filterActions);
+
+        const sortSection = document.createElement('div');
+        sortSection.className = 'py-1';
+        sortSection.innerHTML = `
+          <button class="w-full text-left text-xs text-slate-200 px-3 py-2 hover:bg-slate-800 flex items-center gap-2" data-action="sort-asc">
+            <i data-lucide="chevron-up" class="h-3.5 w-3.5"></i> Sort A → Z
+          </button>
+          <button class="w-full text-left text-xs text-slate-200 px-3 py-2 hover:bg-slate-800 flex items-center gap-2" data-action="sort-desc">
+            <i data-lucide="chevron-down" class="h-3.5 w-3.5"></i> Sort Z → A
+          </button>
+          <button class="w-full text-left text-xs text-slate-200 px-3 py-2 hover:bg-slate-800 flex items-center gap-2" data-action="clear-sort">
+            <i data-lucide="x" class="h-3.5 w-3.5"></i> Clear sort
+          </button>
+        `;
+
+        const replaceSection = document.createElement('div');
+        replaceSection.className = 'py-1 border-t border-slate-800/70';
+        replaceSection.innerHTML = `
+          <button class="w-full text-left text-xs text-amber-200 px-3 py-2 hover:bg-slate-800 flex items-center gap-2" data-action="replace-values">
+            <i data-lucide="replace" class="h-3.5 w-3.5"></i> Replace values
+          </button>
+        `;
+
+        menu.appendChild(filterSection);
+        menu.appendChild(sortSection);
+        menu.appendChild(replaceSection);
+
+        const applyFilter = (keepOpen = false) => {
+            const trimmed = filterInput.value.trim();
+            if (!trimmed) {
+                delete state.columnFilters[col.id];
+            } else {
+                state.columnFilters[col.id] = trimmed;
+            }
+            state.pagination.page = 1;
+            savePrefs(); renderTable(keepOpen ? { keepFilterOpen: col.id } : {});
+        };
+
+        const clearFilter = (keepOpen = false) => {
+            delete state.columnFilters[col.id];
+            filterInput.value = '';
+            state.pagination.page = 1;
+            savePrefs(); renderTable(keepOpen ? { keepFilterOpen: col.id } : {});
+        };
+
+        const replaceColumnValues = async () => {
+            const target = prompt(`Valor a reemplazar en "${col.label}". Deja vacío para reemplazar todos los valores.`);
+            if (target === null) return;
+            const replacement = prompt(`Nuevo valor para "${col.label}". Deja vacío para convertir en null.`);
+            if (replacement === null) return;
+
+            const targetTrimmed = String(target).trim();
+            const replacementTrimmed = String(replacement).trim();
+            const newValue = sanitizeForColumn(col.id, replacementTrimmed);
+            const payloadValue = newValue === '' ? null : newValue;
+
+            const matchingIds = [];
+            let primaryKeyField = null;
+            state.rows = state.rows.map(row => {
+                const identity = resolvePrimaryKey(row);
+                if (!primaryKeyField && identity.key) primaryKeyField = identity.key;
+                const cellVal = row[col.id];
+                const cellStr = String(cellVal ?? '').trim();
+                const isMatch = targetTrimmed === '' ? true : cellStr === targetTrimmed;
+                if (isMatch && identity.value !== undefined && identity.value !== null) {
+                    matchingIds.push(identity.value);
+                    return { ...row, [col.id]: payloadValue };
+                }
+                return row;
+            });
+
+            if (!matchingIds.length) { showToast('No rows matched for replacement', 'info'); renderTable(); return; }
+            const idColumn = primaryKeyField || PRIMARY_KEY;
+
+            if (supabaseClient) {
+                try {
+                    const { error } = await supabaseClient
+                        .from(READ_TABLE)
+                        .update({ [col.id]: payloadValue })
+                        .in(idColumn, matchingIds);
+                    if (error) throw error;
+                } catch (err) {
+                    console.error(err);
+                    showToast('Error applying replacements', 'error');
+                    await loadData();
+                    return;
+                }
+            }
+
+            showToast(`Replaced ${matchingIds.length} rows`, 'info');
+            renderTable({ keepFilterOpen: col.id });
+        };
+
+        let filterDebounce;
+        const handleMenuAction = (action) => {
+            if (action === 'sort-asc') {
+                state.sort = { column: col.id, direction: 'asc' };
+                savePrefs(); renderTable();
+            }
+            else if (action === 'sort-desc') {
+                state.sort = { column: col.id, direction: 'desc' };
+                savePrefs(); renderTable();
+            }
+            else if (action === 'clear-sort') { state.sort = { column: null, direction: 'none' }; savePrefs(); renderTable(); }
+            else if (action === 'apply-filter') { applyFilter(true); }
+            else if (action === 'clear-filter') { clearFilter(true); }
+            else if (action === 'replace-values') { replaceColumnValues(); }
+        };
+
+        filterInput.addEventListener('input', () => {
+            clearTimeout(filterDebounce);
+            filterDebounce = setTimeout(() => applyFilter(true), 200);
+        });
+        filterInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { applyFilter(true); closeColumnMenus(); }
+            if (e.key === 'Escape') { closeColumnMenus(); }
+        });
+
+        menu.addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-action]');
+            if (!btn) return;
+            e.stopPropagation();
+            handleMenuAction(btn.dataset.action);
+            closeColumnMenus();
+        });
+
+        menuWrapper.appendChild(menuTrigger);
+        menuWrapper.appendChild(menu);
+        content.appendChild(menuWrapper);
+        columnMenus.push(menu);
+
+        menuTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeColumnMenus(menu);
+            menu.classList.toggle('hidden');
+        });
+
+        if (keepFilterOpen === col.id) {
+            menu.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                filterInput?.focus({ preventScroll: true });
+                const len = filterInput?.value.length || 0;
+                if (len > -1 && filterInput.setSelectionRange) filterInput.setSelectionRange(len, len);
+            });
+        }
+        th.appendChild(content);
+
+        const resizer = document.createElement('div');
+        resizer.className = 'resizer';
+        resizer.addEventListener('mousedown', (e) => initResize(e, col.id));
+        th.appendChild(resizer);
+        headRow.appendChild(th);
+      });
+      els.thead.appendChild(headRow);
+
+      els.tbody.innerHTML = '';
+      if (pageRows.length === 0) {
+          els.emptyState.classList.remove('hidden');
+      } else {
+          els.emptyState.classList.add('hidden');
+          pageRows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-blue-900/10 group transition-colors';
+            
+            // CELDA DE BORRADO
+            const tdDel = document.createElement('td');
+            tdDel.className = 'border-r border-slate-800/50 border-b border-slate-800/50 text-center align-middle';
+            const delBtn = document.createElement('button');
+            delBtn.className = 'text-slate-600 hover:text-red-500 transition-colors p-1';
+            delBtn.innerHTML = '<i data-lucide="trash-2" class="h-3.5 w-3.5"></i>';
+            delBtn.onclick = () => deleteRow(row, delBtn);
+            tdDel.appendChild(delBtn);
+            tr.appendChild(tdDel);
+
+            visible.forEach(col => {
+                const td = document.createElement('td');
+                td.className = 'text-xs text-slate-300 border-r border-slate-800/50 border-b border-slate-800/50 py-1 px-2 h-10 align-middle relative'; // h-10 fija altura mínima
+                let val = row[col.id];
+                val = sanitizeForColumn(col.id, val);
+                
+                renderCellContent(td, val);
+                td.addEventListener('dblclick', () => {
+                    if (col.id === 'created_at' || col.id === 'updated_at' || col.id === PRIMARY_KEY) { showToast('Read-only', 'info'); return; }
+                    editCell(td, row, col.id);
+                });
+                tr.appendChild(td);
+            });
+            els.tbody.appendChild(tr);
+          });
+      }
+
+      const start = total === 0 ? 0 : startIdx + 1;
+      const end = Math.min(startIdx + pageRows.length, total);
+      els.paginationSummary.textContent = `${start}-${end} of ${total} records`;
+      els.pageIndicator.textContent = `${state.pagination.page}/${maxPage}`;
+      els.prevPage.disabled = state.pagination.page <= 1;
+      els.nextPage.disabled = state.pagination.page >= maxPage;
+
+      updateScrollWidths();
+      if (window.lucide) lucide.createIcons();
+      renderAnalytics();
+    };
+
+    const updateColumnsList = () => {
+      els.columnsList.innerHTML = '';
+      state.columns.forEach(col => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center justify-between gap-2 px-2 py-1.5 hover:bg-slate-900 rounded cursor-pointer';
+        label.innerHTML = `<span class="text-xs text-slate-300 truncate">${col.label}</span>`;
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.className = 'h-3.5 w-3.5 accent-blue-600 rounded bg-slate-800 border-slate-600';
+        input.checked = state.columnVisibility[col.id] !== false;
+        input.addEventListener('change', () => {
+          state.columnVisibility[col.id] = input.checked;
+          savePrefs(); renderTable();
+        });
+        label.appendChild(input);
+        els.columnsList.appendChild(label);
+      });
+    };
+
+    const prepareExport = () => {
+      const visible = getVisibleColumns();
+      const headers = visible.map(col => col.label);
+      const rows = getFilteredSortedRows().map(row =>
+        visible.map(col => {
+          const val = sanitizeForColumn(col.id, row[col.id]);
+          if (val === null || val === undefined) return '';
+          return String(val);
+        })
+      );
+      return { headers, rows };
+    };
+
+    const downloadData = (format = 'csv') => {
+      const { headers, rows } = prepareExport();
+      const allRows = [headers, ...rows];
+      const csvContent = allRows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const mime = format === 'xlsx' ? 'application/vnd.ms-excel' : 'text/csv';
+      const extension = format === 'xlsx' ? 'xlsx' : 'csv';
+      const blob = new Blob([csvContent], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `titles-export.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      els.downloadMenu?.classList.add('hidden');
+    };
+
+    const prepareAnalyticsExport = () => {
+      const data = state.analyticsExportData;
+      if (!data || !data.rows?.length) return null;
+      return data;
+    };
+
+    const downloadAnalyticsData = (format = 'csv') => {
+      const payload = prepareAnalyticsExport();
+      if (!payload) { showToast('No analytics data to download', 'error'); return; }
+      const { headers, rows } = payload;
+      const allRows = [headers, ...rows];
+      const csvContent = allRows.map(r => r.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+      const mime = format === 'xlsx' ? 'application/vnd.ms-excel' : 'text/csv';
+      const extension = format === 'xlsx' ? 'xlsx' : 'csv';
+      const blob = new Blob([csvContent], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `titles-analytics.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      els.analyticsDownloadMenu?.classList.add('hidden');
+    };
+
+    const updateAnalyticsLocationLabel = (totalLocations = 0) => {
+      const selection = state.analyticsLocations;
+      if (!els.analyticsLocationLabel) return;
+      if (selection === null || selection === undefined) {
+        els.analyticsLocationLabel.textContent = 'All locations';
+        return;
+      }
+      if (!selection.length) {
+        els.analyticsLocationLabel.textContent = 'No locations';
+        return;
+      }
+      const showingAll = selection.length === totalLocations;
+      els.analyticsLocationLabel.textContent = showingAll ? 'All locations' : `${selection.length} selected`;
+    };
+
+    const renderAnalyticsLocationMenu = (locations = []) => {
+      if (!els.analyticsLocationList) return;
+      const selection = state.analyticsLocations;
+      const workingSet = selection === null || selection === undefined ? new Set(locations) : new Set(selection);
+      const showAllByDefault = selection === null || selection === undefined;
+
+      els.analyticsLocationList.innerHTML = '';
+      locations.forEach(loc => {
+        const id = `analytics-loc-${loc.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+        const label = document.createElement('label');
+        label.className = 'flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-slate-900 text-xs text-slate-200';
+        label.setAttribute('for', id);
+        label.innerHTML = `<span class="truncate">${loc}</span>`;
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = id;
+        input.className = 'h-3.5 w-3.5 accent-blue-600 rounded bg-slate-800 border-slate-600';
+        input.checked = showAllByDefault ? true : workingSet.has(loc);
+        input.addEventListener('change', () => {
+          const next = showAllByDefault ? new Set(locations) : new Set(state.analyticsLocations || []);
+          if (input.checked) next.add(loc); else next.delete(loc);
+          state.analyticsLocations = next.size === locations.length ? null : Array.from(next);
+          savePrefs();
+          renderAnalytics();
+        });
+
+        label.appendChild(input);
+        els.analyticsLocationList.appendChild(label);
+      });
+
+      updateAnalyticsLocationLabel(locations.length);
+    };
+
+    const updateAnalyticsUnitLabel = (totalUnits = 0) => {
+      if (!els.analyticsUnitLabel) return;
+      const selection = state.analyticsUnits;
+      if (selection === null || selection === undefined) {
+        els.analyticsUnitLabel.textContent = 'All unit types';
+        return;
+      }
+      if (!selection.length) {
+        els.analyticsUnitLabel.textContent = 'No unit types';
+        return;
+      }
+      const showingAll = selection.length === totalUnits;
+      els.analyticsUnitLabel.textContent = showingAll ? 'All unit types' : `${selection.length} unit types`;
+    };
+
+    const renderAnalyticsUnitMenu = (units = []) => {
+      if (!els.analyticsUnitList) return;
+      const selection = state.analyticsUnits;
+      const workingSet = selection === null || selection === undefined ? new Set(units) : new Set(selection);
+      const showAllByDefault = selection === null || selection === undefined;
+
+      els.analyticsUnitList.innerHTML = '';
+      units.forEach(unit => {
+        const id = `analytics-unit-${unit.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+        const label = document.createElement('label');
+        label.className = 'flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-slate-900 text-xs text-slate-200';
+        label.setAttribute('for', id);
+        label.innerHTML = `<span class="truncate">${unit}</span>`;
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = id;
+        input.className = 'h-3.5 w-3.5 accent-blue-600 rounded bg-slate-800 border-slate-600';
+        input.checked = showAllByDefault ? true : workingSet.has(unit);
+        input.addEventListener('change', () => {
+          const next = showAllByDefault ? new Set(units) : new Set(state.analyticsUnits || []);
+          if (input.checked) next.add(unit); else next.delete(unit);
+          state.analyticsUnits = next.size === units.length ? null : Array.from(next);
+          savePrefs();
+          renderAnalytics();
+        });
+
+        label.appendChild(input);
+        els.analyticsUnitList.appendChild(label);
+      });
+
+      updateAnalyticsUnitLabel(units.length);
+    };
+
+    const updateAnalyticsLienLabel = (totalLiens = 0) => {
+      if (!els.analyticsLienLabel) return;
+      const selection = state.analyticsLiens;
+      if (selection === null || selection === undefined) {
+        els.analyticsLienLabel.textContent = 'All lien status';
+        return;
+      }
+      if (!selection.length) {
+        els.analyticsLienLabel.textContent = 'No lien status';
+        return;
+      }
+      const showingAll = selection.length === totalLiens;
+      els.analyticsLienLabel.textContent = showingAll ? 'All lien status' : `${selection.length} selected`;
+    };
+
+    const renderAnalyticsLienMenu = (liens = []) => {
+      if (!els.analyticsLienList) return;
+      const selection = state.analyticsLiens;
+      const workingSet = selection === null || selection === undefined ? new Set(liens) : new Set(selection);
+      const showAllByDefault = selection === null || selection === undefined;
+
+      els.analyticsLienList.innerHTML = '';
+      liens.forEach(lien => {
+        const id = `analytics-lien-${lien.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+        const label = document.createElement('label');
+        label.className = 'flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-slate-900 text-xs text-slate-200';
+        label.setAttribute('for', id);
+        label.innerHTML = `<span class="truncate">${lien}</span>`;
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = id;
+        input.className = 'h-3.5 w-3.5 accent-blue-600 rounded bg-slate-800 border-slate-600';
+        input.checked = showAllByDefault ? true : workingSet.has(lien);
+        input.addEventListener('change', () => {
+          const next = showAllByDefault ? new Set(liens) : new Set(state.analyticsLiens || []);
+          if (input.checked) next.add(lien); else next.delete(lien);
+          state.analyticsLiens = next.size === liens.length ? null : Array.from(next);
+          savePrefs();
+          renderAnalytics();
+        });
+
+        label.appendChild(input);
+        els.analyticsLienList.appendChild(label);
+      });
+
+      updateAnalyticsLienLabel(liens.length);
+    };
+
+    const unitTypePriority = (type = '') => {
+      const t = String(type || '').toLowerCase();
+      if (t.includes('truck')) return 0;
+      if (t.includes('trailer')) return 1;
+      return 2;
+    };
+
+    const sanitizeAnalyticsId = (label = '') => label.toString().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'col';
+
+    const setupAnalyticsResizers = () => {
+      const table = els.analyticsTableContainer?.querySelector('table.analytics-table');
+      if (!table) return;
+      const colEls = Array.from(table.querySelectorAll('col[data-col-id]'));
+      if (!colEls.length) return;
+
+      const colMap = Object.fromEntries(colEls.map(col => [col.dataset.colId, col]));
+      let active = null;
+
+      const stopResize = () => {
+        if (!active) return;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', stopResize);
+        document.body.classList.remove('analytics-resizing');
+        savePrefs();
+        active = null;
+      };
+
+      const onMouseMove = (e) => {
+        if (!active) return;
+        const delta = e.clientX - active.startX;
+        const newWidth = Math.max(80, active.startWidth + delta);
+        const colEl = colMap[active.colId];
+        if (colEl) {
+          colEl.style.width = `${newWidth}px`;
+          colEl.style.minWidth = `${newWidth}px`;
+        }
+        active.header.style.width = `${newWidth}px`;
+        state.analyticsColumnWidths[active.colId] = newWidth;
+      };
+
+      const startResize = (header, colId) => (e) => {
+        e.preventDefault();
+        active = {
+          colId,
+          startX: e.clientX,
+          startWidth: header.getBoundingClientRect().width,
+          header
+        };
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', stopResize);
+        document.body.classList.add('analytics-resizing');
+      };
+
+      table.querySelectorAll('th[data-col-id]').forEach(th => {
+        const colId = th.dataset.colId;
+        const handle = th.querySelector('.analytics-resizer');
+        if (handle) {
+          handle.addEventListener('mousedown', startResize(th, colId));
+        }
+      });
+    };
+
+    const getNormalizedChartWidths = () => {
+      const fallback = [380, 260, 260];
+      const current = Array.isArray(state.analyticsChartWidths) ? state.analyticsChartWidths.slice(0, 3) : [];
+      while (current.length < 3) current.push(fallback[current.length]);
+      const safe = current.map((w, idx) => {
+        const parsed = Number(w);
+        return Number.isFinite(parsed) ? parsed : fallback[idx];
+      });
+      state.analyticsChartWidths = safe;
+      return safe;
+    };
+
+    const getNormalizedChartHeights = () => {
+      const fallback = [360, 260, 260];
+      const current = Array.isArray(state.analyticsChartHeights) ? state.analyticsChartHeights.slice(0, 3) : [];
+      while (current.length < 3) current.push(fallback[current.length]);
+      const safe = current.map((h, idx) => {
+        const parsed = Number(h);
+        return Number.isFinite(parsed) ? parsed : fallback[idx];
+      });
+      state.analyticsChartHeights = safe;
+      return safe;
+    };
+
+    const ensureAnalyticsChartsShell = () => {
+      if (!els.analyticsCharts) return;
+      Object.values(state.analyticsCharts || {}).forEach(ch => { try { ch?.destroy(); } catch (e) {} });
+      state.analyticsCharts = {};
+      const widths = getNormalizedChartWidths();
+      els.analyticsCharts.innerHTML = `
+        <div id="charts-row">
+          <div id="chart-primary-row">
+            <div class="chart-card p-3 relative" data-chart-key="unitType">
+              <div class="chart-resizer" data-chart-resizer data-row="primary" data-type="end" style="right:-6px;"></div>
+              <div class="chart-vresizer" data-chart-vresizer data-chart-key="unitType"></div>
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <p class="text-[10px] uppercase tracking-[0.18em] text-blue-200 font-semibold" id="chart-unitType-title"></p>
+                  <p class="text-[11px] text-slate-200" id="chart-unitType-subtitle"></p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <select id="chart-unitType-select" class="bg-slate-900 border border-slate-700 text-[11px] text-slate-100 rounded px-2 py-1 focus:outline-none"></select>
+                  <span id="chart-unitType-count" class="text-[10px] text-slate-400 font-semibold"></span>
+                </div>
+              </div>
+                <div class="relative" id="chart-unitType-container">
+                  <canvas id="chart-unitType"></canvas>
+                  <p id="chart-unitType-empty" class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No data</p>
+                </div>
+              </div>
+            </div>
+          <div id="chart-secondary-row">
+            ${['dealStatus','dealType'].map((key, idx) => `
+              <div class="chart-card p-3 relative" data-chart-key="${key}">
+                ${idx === 1 ? `<div class="chart-resizer" data-chart-resizer data-row="secondary" data-type="end" style="right:-6px;"></div>` : `<div class="chart-resizer" data-chart-resizer data-row="secondary" data-type="split" style="right:-6px;"></div>`}
+                <div class="chart-vresizer" data-chart-vresizer data-chart-key="${key}"></div>
+                <div class="flex items-center justify-between mb-2">
+                  <div>
+                    <p class="text-[10px] uppercase tracking-[0.18em] text-blue-200 font-semibold" id="chart-${key}-title"></p>
+                    <p class="text-[11px] text-slate-200" id="chart-${key}-subtitle"></p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <select id="chart-${key}-select" class="bg-slate-900 border border-slate-700 text-[11px] text-slate-100 rounded px-2 py-1 focus:outline-none"></select>
+                    <span id="chart-${key}-count" class="text-[10px] text-slate-400 font-semibold"></span>
+                  </div>
+                </div>
+                <div class="relative" id="chart-${key}-container">
+                  <canvas id="chart-${key}"></canvas>
+                  <p id="chart-${key}-empty" class="absolute inset-0 flex items-center justify-center text-xs text-slate-400">No data</p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    const applyChartWidths = () => {
+      const containerWidth = els.analyticsCharts?.clientWidth || 0;
+      const widths = getNormalizedChartWidths();
+      const safe = widths.map(w => Math.max(220, w));
+      const clampWidth = (desired, min = 220) => {
+        const minWidth = Math.max(min, desired);
+        if (!containerWidth) return minWidth;
+        const maxAllowed = Math.max(min, containerWidth - 24);
+        return Math.min(minWidth, maxAllowed);
+      };
+      const primaryRow = document.getElementById('chart-primary-row');
+      if (primaryRow) {
+        const primaryWidth = clampWidth(safe[0], 280);
+        primaryRow.style.gridTemplateColumns = `${primaryWidth}px`;
+        primaryRow.style.width = containerWidth ? `${containerWidth - 8}px` : `${primaryWidth}px`;
+      }
+      const secondaryRow = document.getElementById('chart-secondary-row');
+      if (secondaryRow) {
+        const left = clampWidth(safe[1]);
+        const right = clampWidth(safe[2]);
+        const total = left + right;
+        secondaryRow.style.gridTemplateColumns = `${left}px ${right}px`;
+        secondaryRow.style.width = containerWidth ? `${Math.max(total, containerWidth - 8)}px` : `${total}px`;
+      }
+    };
+
+    const applyChartHeights = () => {
+      const heights = getNormalizedChartHeights();
+      const safe = heights.map(h => Math.max(200, h));
+      const setHeight = (key, value) => {
+        const container = document.getElementById(`chart-${key}-container`);
+        if (container) container.style.height = `${value}px`;
+      };
+      setHeight('unitType', safe[0]);
+      setHeight('dealStatus', safe[1]);
+      setHeight('dealType', safe[2]);
+    };
+
+    const bindChartResizers = () => {
+      const resizers = els.analyticsCharts?.querySelectorAll('[data-chart-resizer]');
+      if (!resizers) return;
+      getNormalizedChartWidths();
+      let active = null;
+      const onMove = (e) => {
+        if (!active) return;
+        const widths = state.analyticsChartWidths.slice();
+        const dx = e.clientX - active.startX;
+        if (active.row === 'primary') {
+          widths[0] = Math.max(220, active.startWidths[0] + dx);
+        } else if (active.row === 'secondary') {
+          if (active.type === 'split') {
+            const left = Math.max(220, active.startWidths[1] + dx);
+            const right = Math.max(220, active.startWidths[2] - dx);
+            widths[1] = left;
+            widths[2] = right;
+          } else if (active.type === 'end') {
+            widths[2] = Math.max(220, active.startWidths[2] + dx);
+          }
+        }
+        state.analyticsChartWidths = widths;
+        applyChartWidths();
+      };
+      const stop = () => {
+        if (!active) return;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', stop);
+        active = null;
+        savePrefs();
+      };
+      resizers.forEach(resizer => {
+        resizer.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const type = resizer.dataset.type;
+          const row = resizer.dataset.row;
+          active = {
+            row,
+            type,
+            startX: e.clientX,
+            startWidths: state.analyticsChartWidths.slice()
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', stop);
+        });
+      });
+    };
+
+    const bindChartHeightResizers = () => {
+      const resizers = els.analyticsCharts?.querySelectorAll('[data-chart-vresizer]');
+      if (!resizers) return;
+      getNormalizedChartHeights();
+      let active = null;
+      const onMove = (e) => {
+        if (!active) return;
+        const heights = state.analyticsChartHeights.slice();
+        const dy = e.clientY - active.startY;
+        const idx = active.index;
+        const next = Math.max(200, active.startHeights[idx] + dy);
+        heights[idx] = next;
+        state.analyticsChartHeights = heights;
+        applyChartHeights();
+      };
+      const stop = () => {
+        if (!active) return;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', stop);
+        active = null;
+        savePrefs();
+      };
+      const keyOrder = ['unitType', 'dealStatus', 'dealType'];
+      resizers.forEach(resizer => {
+        resizer.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          const key = resizer.dataset.chartKey;
+          const idx = keyOrder.indexOf(key);
+          if (idx === -1) return;
+          active = {
+            index: idx,
+            startY: e.clientY,
+            startHeights: getNormalizedChartHeights().slice()
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', stop);
+        });
+      });
+    };
+
+    const pieDataLabelPlugin = {
+      id: 'pieDataLabelPlugin',
+      afterDatasetsDraw(chart, args, pluginOptions = {}) {
+        const { ctx } = chart;
+        const color = pluginOptions.color || '#f8fafc';
+        const fontSize = pluginOptions.fontSize || 11;
+        ctx.save();
+        chart.data.datasets.forEach((dataset, datasetIndex) => {
+          const meta = chart.getDatasetMeta(datasetIndex);
+          meta.data.forEach((arc, idx) => {
+            const value = dataset.data[idx];
+            if (value === undefined || value === null || value === 0) return;
+            const { x, y } = arc.tooltipPosition();
+            ctx.fillStyle = color;
+            ctx.font = `700 ${fontSize}px Inter, system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(15, 23, 42, 0.6)';
+            ctx.shadowBlur = 4;
+            ctx.fillText(value, x, y);
+          });
+        });
+        ctx.restore();
+      }
+    };
+
+    const updatePieChart = (key, canvasId, emptyId, countId, counts) => {
+      const canvas = document.getElementById(canvasId);
+      const empty = document.getElementById(emptyId);
+      const countLabel = document.getElementById(countId);
+      if (!canvas || !empty || !countLabel) return;
+      const labels = Array.from(counts.keys());
+      const data = Array.from(counts.values());
+      const total = data.reduce((acc, val) => acc + val, 0);
+      countLabel.textContent = total ? `${total} rows` : 'No data';
+      if (!total) {
+        canvas.classList.add('hidden');
+        empty.classList.remove('hidden');
+        if (state.analyticsCharts[key]) {
+          state.analyticsCharts[key].destroy();
+          state.analyticsCharts[key] = null;
+        }
+        return;
+      }
+      canvas.classList.remove('hidden');
+      empty.classList.add('hidden');
+
+      const palette = [
+        'rgba(59,130,246,0.65)', 'rgba(124,58,237,0.65)', 'rgba(6,182,212,0.65)',
+        'rgba(16,185,129,0.65)', 'rgba(56,189,248,0.65)', 'rgba(99,102,241,0.65)',
+        'rgba(168,85,247,0.65)', 'rgba(20,184,166,0.65)', 'rgba(34,211,238,0.65)',
+        'rgba(96,165,250,0.65)'
+      ];
+      const backgroundColor = labels.map((_, idx) => palette[idx % palette.length]);
+      const ctx = canvas.getContext('2d');
+      const existing = state.analyticsCharts[key];
+      const chartData = {
+        labels,
+        datasets: [{ data, backgroundColor, borderColor: '#0f172a', borderWidth: 2 }]
+      };
+      const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {
+          duration: 650,
+          easing: 'easeOutQuart'
+        },
+        plugins: {
+          legend: { display: true, position: 'bottom', labels: { color: '#e2e8f0', boxWidth: 10 } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${ctx.raw}` } },
+          pieDataLabelPlugin: { color: '#f8fafc', fontSize: 11 }
+        }
+      };
+      if (existing) {
+        existing.data = chartData;
+        existing.options = options;
+        existing.update();
+      } else {
+        state.analyticsCharts[key] = new Chart(ctx, { type: 'pie', data: chartData, options, plugins: [pieDataLabelPlugin] });
+      }
+    };
+
+    const renderAnalyticsCharts = () => {
+      ensureAnalyticsChartsShell();
+      applyChartWidths();
+      applyChartHeights();
+      bindChartResizers();
+      bindChartHeightResizers();
+      if (!els.analyticsCharts) return;
+      const rows = getFilteredSortedRows();
+
+      const selectableColumns = state.columns.map(c => c.id);
+      const labelsFor = (id) => state.columns.find(c => c.id === id)?.label || labelize(id);
+
+      const layoutSplit = Math.min(70, Math.max(30, state.analyticsLayoutSplit || 45));
+      const layout = document.getElementById('analytics-layout');
+      if (layout) layout.style.gridTemplateColumns = `${layoutSplit}% ${100 - layoutSplit}%`;
+
+      const setupSelect = (key, fallbackLabels) => {
+        const select = document.getElementById(`chart-${key}-select`);
+        if (!select) return null;
+        select.innerHTML = '';
+        const defaults = fallbackLabels.map(id => ({ id, label: labelsFor(id) }));
+        const options = selectableColumns.map(id => ({ id, label: labelsFor(id) }));
+        const seen = new Set();
+        [...defaults, ...options].forEach(opt => {
+          if (!opt.id || seen.has(opt.id)) return;
+          seen.add(opt.id);
+          const option = document.createElement('option');
+          option.value = opt.id;
+          option.textContent = opt.label;
+          select.appendChild(option);
+        });
+        const preferred = state.analyticsChartColumns[key] || defaults.find(d => selectableColumns.includes(d.id))?.id || select.options[0]?.value;
+        if (preferred) select.value = preferred;
+        state.analyticsChartColumns[key] = select.value;
+        select.onchange = () => {
+          state.analyticsChartColumns[key] = select.value;
+          savePrefs();
+          renderAnalyticsCharts();
+        };
+        return select.value;
+      };
+
+      const unitCol = setupSelect('unitType', ['unit type','unit_type','unittype','unit']);
+      const dealStatusCol = setupSelect('dealStatus', ['deal status','deal_status','dealstatus']);
+      const dealTypeCol = setupSelect('dealType', ['deal type','deal_type','dealtype']);
+
+      const buildCounts = (colId, fallback = 'Unspecified') => {
+        const map = new Map();
+        if (!colId) return map;
+        rows.forEach(row => {
+          const raw = sanitizeForColumn(colId, row[colId]);
+          const key = (raw === null || raw === undefined || String(raw).trim() === '') ? fallback : String(raw);
+          map.set(key, (map.get(key) || 0) + 1);
+        });
+        return map;
+      };
+
+      const unitCounts = buildCounts(unitCol, 'Unspecified');
+      const statusCounts = buildCounts(dealStatusCol, 'Unspecified');
+      const typeCounts = buildCounts(dealTypeCol, 'Unspecified');
+
+      document.getElementById('chart-unitType-title')?.replaceChildren(document.createTextNode(labelsFor(unitCol || 'Unit Type')));
+      document.getElementById('chart-unitType-subtitle')?.replaceChildren(document.createTextNode('Distribution by unit'));
+      document.getElementById('chart-dealStatus-title')?.replaceChildren(document.createTextNode(labelsFor(dealStatusCol || 'Deal Status')));
+      document.getElementById('chart-dealStatus-subtitle')?.replaceChildren(document.createTextNode('Deal status mix'));
+      document.getElementById('chart-dealType-title')?.replaceChildren(document.createTextNode(labelsFor(dealTypeCol || 'Deal Type')));
+      document.getElementById('chart-dealType-subtitle')?.replaceChildren(document.createTextNode('Deal type mix'));
+
+      updatePieChart('unitType', 'chart-unitType', 'chart-unitType-empty', 'chart-unitType-count', unitCounts);
+      updatePieChart('dealStatus', 'chart-dealStatus', 'chart-dealStatus-empty', 'chart-dealStatus-count', statusCounts);
+      updatePieChart('dealType', 'chart-dealType', 'chart-dealType-empty', 'chart-dealType-count', typeCounts);
+    };
+
+    const bindLayoutResizer = () => {
+      const layout = document.getElementById('analytics-layout');
+      const resizer = document.getElementById('analytics-layout-resizer');
+      if (!layout || !resizer) return;
+      let active = null;
+      const onMove = (e) => {
+        if (!active) return;
+        const rect = layout.getBoundingClientRect();
+        const percent = ((e.clientX - rect.left) / rect.width) * 100;
+        const clamped = Math.min(70, Math.max(30, percent));
+        state.analyticsLayoutSplit = clamped;
+        layout.style.gridTemplateColumns = `${clamped}% ${100 - clamped}%`;
+      };
+      const stop = () => {
+        if (!active) return;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', stop);
+        active = null;
+        savePrefs();
+      };
+      resizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        active = true;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', stop);
+      });
+    };
+
+    const renderAnalytics = () => {
+      if (!els.analyticsTableContainer) { renderAnalyticsCharts(); return; }
+      renderAnalyticsCharts();
+      bindLayoutResizer();
+      const locationCol = findColumnId(['location']);
+      const lienCol = findColumnId(['lien status', 'lien_status', 'lienstatus', 'status']);
+      const unitTypeCol = findColumnId(['unit type', 'unit_type', 'unittype', 'unit']);
+      if (!locationCol || !lienCol || !unitTypeCol) {
+        els.analyticsTableContainer.innerHTML = '<p class="text-xs text-slate-400 p-3">Location, Lien status, or Unit type columns not found.</p>';
+        updateAnalyticsLocationLabel(0);
+        renderAnalyticsCharts();
+        return;
+      }
+
+      const rows = state.rows;
+      const locationSet = new Set();
+      const lienSet = new Set();
+      const unitTypeSet = new Set();
+      const pivot = new Map();
+
+      rows.forEach(row => {
+        const rawLocation = row[locationCol];
+        const rawLien = row[lienCol];
+        const rawUnit = row[unitTypeCol];
+        const locationVal = sanitizeForColumn(locationCol, rawLocation) || 'Unknown';
+        const lienVal = (rawLien === null || rawLien === undefined || rawLien === '') ? 'Unspecified' : String(rawLien);
+        const unitVal = rawUnit ? String(rawUnit) : 'Unspecified';
+        locationSet.add(locationVal);
+        lienSet.add(lienVal);
+        unitTypeSet.add(unitVal);
+        const key = `${unitVal}|||${locationVal}|||${lienVal}`;
+        pivot.set(key, (pivot.get(key) || 0) + 1);
+      });
+
+      const locations = Array.from(locationSet).sort((a, b) => a.localeCompare(b));
+      renderAnalyticsLocationMenu(locations);
+      const selectedLocations = state.analyticsLocations === null || state.analyticsLocations === undefined
+        ? null
+        : new Set(state.analyticsLocations);
+      const filteredLocations = (selectedLocations && selectedLocations.size === 0)
+        ? []
+        : locations.filter(loc => !selectedLocations || selectedLocations.has(loc));
+
+      let liens = Array.from(lienSet).sort((a, b) => a.localeCompare(b));
+      renderAnalyticsLienMenu(liens);
+      const selectedLiens = state.analyticsLiens === null || state.analyticsLiens === undefined ? null : new Set(state.analyticsLiens);
+      if (selectedLiens && selectedLiens.size === 0) liens = [];
+      else if (selectedLiens) liens = liens.filter(l => selectedLiens.has(l));
+
+      let units = Array.from(unitTypeSet).sort((a, b) => {
+        const pa = unitTypePriority(a);
+        const pb = unitTypePriority(b);
+        if (pa !== pb) return pa - pb;
+        return String(a).localeCompare(String(b));
+      });
+      renderAnalyticsUnitMenu(units);
+      const selectedUnits = state.analyticsUnits === null || state.analyticsUnits === undefined ? null : new Set(state.analyticsUnits);
+      if (selectedUnits && selectedUnits.size === 0) units = [];
+      else if (selectedUnits) units = units.filter(u => selectedUnits.has(u));
+
+      if (!filteredLocations.length || liens.length === 0 || units.length === 0) {
+        const message = liens.length === 0
+          ? 'No lien status data available.'
+          : (!filteredLocations.length ? 'No data available for the selected locations.' : 'No data available for the selected unit types.');
+        els.analyticsTableContainer.innerHTML = `<p class="text-xs text-slate-400 p-3">${message}</p>`;
+        updateAnalyticsLocationLabel(locations.length);
+        updateAnalyticsUnitLabel(units.length);
+        updateAnalyticsLienLabel(liens.length);
+        renderAnalyticsCharts();
+        return;
+      }
+
+      const globalTotals = Object.fromEntries(liens.map(l => [l, 0]));
+      let globalGrand = 0;
+
+      const columns = [
+        { id: 'location', label: 'Location', sticky: true },
+        ...liens.map(lien => ({ id: `lien-${sanitizeAnalyticsId(lien)}`, label: lien })),
+        { id: 'total', label: 'Total', total: true }
+      ];
+
+      const colgroup = columns.map(col => {
+        const width = state.analyticsColumnWidths[col.id];
+        const widthAttr = width ? ` style="width:${width}px; min-width:${width}px;"` : '';
+        return `<col data-col-id="${col.id}"${widthAttr}>`;
+      }).join('');
+
+      const liensHeaders = liens.map(lien => {
+        const colId = `lien-${sanitizeAnalyticsId(lien)}`;
+        return `<th data-col-id="${colId}" class="px-3 py-2 border-b border-slate-800 text-left analytics-header">${lien}<span class="analytics-resizer" data-resizer></span></th>`;
+      }).join('');
+
+      let html = `<table class="analytics-table text-xs text-slate-200"><colgroup>${colgroup}</colgroup><thead><tr>`;
+      html += '<th data-col-id="location" class="px-3 py-2 border-b border-slate-800 text-left sticky left-0 bg-slate-950 z-10 analytics-header">Location<span class="analytics-resizer" data-resizer></span></th>';
+      html += liensHeaders;
+      html += '<th data-col-id="total" class="px-3 py-2 border-b border-slate-800 text-right analytics-header analytics-total-col">Total<span class="analytics-resizer" data-resizer></span></th>';
+      html += '</tr></thead><tbody>';
+
+      let hasData = false;
+      const exportHeaders = ['Unit Type', 'Location', ...liens, 'Total'];
+      const exportRows = [];
+      units.forEach(unit => {
+        let unitTotal = 0;
+        const unitTotals = Object.fromEntries(liens.map(l => [l, 0]));
+        filteredLocations.forEach(loc => {
+          liens.forEach(lien => {
+            const key = `${unit}|||${loc}|||${lien}`;
+            const count = pivot.get(key) || 0;
+            unitTotals[lien] += count;
+            unitTotal += count;
+            globalTotals[lien] += count;
+            globalGrand += count;
+          });
+        });
+        if (unitTotal === 0) return;
+
+        hasData = true;
+        html += `<tr class="bg-slate-900/70"><th colspan="${liens.length + 2}" class="px-3 py-2 border-b border-slate-800 text-left text-[11px] font-semibold uppercase tracking-wide text-blue-200">Unit type: ${unit}</th></tr>`;
+        filteredLocations.forEach(loc => {
+          let rowTotal = 0;
+          let rowHtml = `<tr><th class="px-3 py-2 border-b border-slate-900 text-left sticky left-0 bg-slate-950">${loc}</th>`;
+          liens.forEach(lien => {
+            const key = `${unit}|||${loc}|||${lien}`;
+            const count = pivot.get(key) || 0;
+            rowTotal += count;
+            rowHtml += `<td class="px-3 py-2 border-b border-slate-900 text-right text-slate-300">${count}</td>`;
+          });
+          if (rowTotal === 0) return;
+          rowHtml += `<td class="px-3 py-2 border-b border-slate-900 text-right font-semibold text-slate-100 analytics-total-col">${rowTotal}</td></tr>`;
+          html += rowHtml;
+          exportRows.push([unit, loc, ...liens.map(lien => pivot.get(`${unit}|||${loc}|||${lien}`) || 0), rowTotal]);
+        });
+        html += `<tr class="analytics-total-row"><th class="px-3 py-2 border-b border-slate-800 text-left sticky left-0 bg-slate-950">Total ${unit}</th>`;
+        liens.forEach(lien => {
+          html += `<td class="px-3 py-2 border-b border-slate-800 text-right">${unitTotals[lien]}</td>`;
+        });
+        html += `<td class="px-3 py-2 border-b border-slate-800 text-right analytics-total-col">${unitTotal}</td></tr>`;
+        exportRows.push([unit, 'Subtotal', ...liens.map(lien => unitTotals[lien]), unitTotal]);
+      });
+
+      if (!hasData) {
+        els.analyticsTableContainer.innerHTML = '<p class="text-xs text-slate-400 p-3">No data available for the selected locations and unit types.</p>';
+        state.analyticsExportData = null;
+        updateAnalyticsLocationLabel(locations.length);
+        renderAnalyticsCharts();
+        return;
+      }
+
+      html += `<tr class="analytics-grand-row"><th class="px-3 py-3 border-t border-slate-800 text-left sticky left-0 bg-slate-950">Global total</th>`;
+      liens.forEach(lien => {
+        html += `<td class="px-3 py-3 border-t border-slate-800 text-right">${globalTotals[lien]}</td>`;
+      });
+      html += `<td class="px-3 py-3 border-t border-slate-800 text-right analytics-total-col">${globalGrand}</td></tr>`;
+      html += '</tbody></table>';
+      exportRows.push(['Global total', '', ...liens.map(lien => globalTotals[lien]), globalGrand]);
+      state.analyticsExportData = { headers: exportHeaders, rows: exportRows };
+      els.analyticsTableContainer.innerHTML = html;
+      setupAnalyticsResizers();
+      updateAnalyticsLocationLabel(locations.length);
+      updateAnalyticsUnitLabel(units.length);
+      updateAnalyticsLienLabel(liens.length);
+      renderAnalyticsCharts();
+    };
+
+    const loadData = async () => {
+      if (!supabaseClient) {
+        if (els.status) els.status.textContent = 'Offline';
+        return;
+      }
+      if (els.status) els.status.textContent = 'Syncing...';
+      const { data, error } = await supabaseClient.from(READ_TABLE).select('*');
+      if (error) {
+        console.error(error);
+        if (els.status) els.status.textContent = 'Error';
+        return;
+      }
+      state.rows = data || [];
+      if (els.status) els.status.textContent = 'Connected';
+      populateSheetFilter(state.rows); 
+      inferColumns(state.rows);
+      updateColumnsList();
+      renderTable();
+    };
+
+    const attachEvents = () => {
+      els.searchPrimary?.addEventListener('input', (e) => { state.search.primary = e.target.value; state.pagination.page = 1; renderTable(); });
+      els.searchSecondary?.addEventListener('input', (e) => { state.search.secondary = e.target.value; state.pagination.page = 1; renderTable(); });
+      els.searchTerms?.addEventListener('input', (e) => { state.search.terms = e.target.value; state.pagination.page = 1; renderTable(); });
+      els.termsOperator?.addEventListener('change', (e) => { state.search.termsOperator = e.target.value; state.pagination.page = 1; renderTable(); });
+      
+      els.addRowBtn?.addEventListener('click', addNewRow);
+      els.prevPage?.addEventListener('click', () => { state.pagination.page--; renderTable(); });
+      els.nextPage?.addEventListener('click', () => { state.pagination.page++; renderTable(); });
+      els.refresh?.addEventListener('click', loadData);
+        els.downloadBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          els.downloadMenu?.classList.toggle('hidden');
+        });
+        els.downloadCsv?.addEventListener('click', () => downloadData('csv'));
+        els.downloadXlsx?.addEventListener('click', () => downloadData('xlsx'));
+        els.analyticsDownloadBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          els.analyticsDownloadMenu?.classList.toggle('hidden');
+        });
+        els.analyticsDownloadCsv?.addEventListener('click', () => downloadAnalyticsData('csv'));
+        els.analyticsDownloadXlsx?.addEventListener('click', () => downloadAnalyticsData('xlsx'));
+      els.analyticsLocationBtn?.addEventListener('click', (e) => { e.stopPropagation(); els.analyticsLocationMenu?.classList.toggle('hidden'); });
+      els.analyticsLocationsAll?.addEventListener('click', () => { state.analyticsLocations = null; savePrefs(); renderAnalytics(); });
+      els.analyticsLocationsNone?.addEventListener('click', () => { state.analyticsLocations = []; savePrefs(); renderAnalytics(); });
+      els.analyticsUnitBtn?.addEventListener('click', (e) => { e.stopPropagation(); els.analyticsUnitMenu?.classList.toggle('hidden'); });
+      els.analyticsUnitAll?.addEventListener('click', () => { state.analyticsUnits = null; savePrefs(); renderAnalytics(); });
+      els.analyticsUnitNone?.addEventListener('click', () => { state.analyticsUnits = []; savePrefs(); renderAnalytics(); });
+      els.analyticsLienBtn?.addEventListener('click', (e) => { e.stopPropagation(); els.analyticsLienMenu?.classList.toggle('hidden'); });
+      els.analyticsLienAll?.addEventListener('click', () => { state.analyticsLiens = null; savePrefs(); renderAnalytics(); });
+      els.analyticsLienNone?.addEventListener('click', () => { state.analyticsLiens = []; savePrefs(); renderAnalytics(); });
+      
+      els.columnsBtn?.addEventListener('click', (e) => { e.stopPropagation(); els.columnsPopover.classList.toggle('hidden'); });
+      els.colsAll?.addEventListener('click', () => { state.columns.forEach(c => state.columnVisibility[c.id] = true); savePrefs(); renderTable(); updateColumnsList(); });
+      els.colsNone?.addEventListener('click', () => { state.columns.forEach(c => state.columnVisibility[c.id] = false); savePrefs(); renderTable(); updateColumnsList(); });
+      document.addEventListener('click', (e) => {
+        if (els.columnsPopover && !els.columnsPopover.contains(e.target) && e.target !== els.columnsBtn) els.columnsPopover.classList.add('hidden');
+        const clickedMenu = columnMenus.find(m => m.contains(e.target));
+        const isTrigger = e.target.closest('[data-column-menu-trigger]');
+        if (!clickedMenu && !isTrigger) closeColumnMenus();
+        if (els.downloadMenu && !els.downloadMenu.contains(e.target) && e.target !== els.downloadBtn) els.downloadMenu.classList.add('hidden');
+        if (els.analyticsLocationMenu && !els.analyticsLocationMenu.contains(e.target) && !els.analyticsLocationBtn?.contains(e.target)) els.analyticsLocationMenu.classList.add('hidden');
+        if (els.analyticsUnitMenu && !els.analyticsUnitMenu.contains(e.target) && !els.analyticsUnitBtn?.contains(e.target)) els.analyticsUnitMenu.classList.add('hidden');
+        if (els.analyticsLienMenu && !els.analyticsLienMenu.contains(e.target) && !els.analyticsLienBtn?.contains(e.target)) els.analyticsLienMenu.classList.add('hidden');
+      });
+      syncScrollbars(); 
+    };
+
+    const initBackground = async () => {
+      const initialMode = await loadPreferredBackgroundMode();
+      setupBackgroundManager({
+        canvasId: 'constellation-canvas',
+        initialMode,
+        onModeChange: persistBackgroundMode,
+      });
+    };
+
+    const init = async () => {
+      try {
+        await initBackground();
+
+        // Carga de preferencias con autenticación
+        await loadPrefs();
+        
+        attachEvents();
+        await loadData();
+      } catch (err) { console.error(err); }
+    };
+
+    init();
+</script>
+  <script type="module">
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    const redirectToLogin = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        window.location.href = '../login.html';
+      }
+    };
+
+    redirectToLogin();
+  </script>
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+</body>
+</html>

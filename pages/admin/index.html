@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="Admin Dashboard" data-active-nav="dashboard">
+  <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
+    <div class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/60">
+      <span class="h-3 w-3 animate-pulse rounded-full bg-blue-400"></span>
+      <p class="text-sm font-semibold text-slate-200">Validating secure session…</p>
+    </div>
+  </div>
+
+  <div data-auth-protected class="hidden">
+<div class="sticky top-0 z-50 space-y-px">
+  <div data-shared-header></div>
+  <div data-admin-nav data-admin-nav="dashboard"></div>
+</div>
+
+    <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10"></canvas>
+
+    <main class="mx-auto w-full max-w-7xl px-6 py-8 lg:px-10 space-y-8">
+        <section class="space-y-6 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div class="space-y-3">
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Dashboard</p>
+              <h1 class="text-3xl font-black text-white">Command center for field operations</h1>
+              <p class="text-sm leading-relaxed text-slate-300">Monitor providers, fleet assets, and live data from a compact console. Quickly access key modules or review table health before loading new sources.</p>
+              <div class="flex flex-wrap items-center gap-3">
+                <div class="relative">
+                  <button
+                    type="button"
+                    data-bg-control
+                    class="inline-flex items-center gap-2 rounded-full border border-blue-700/60 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100 shadow-inner shadow-blue-900/40 transition hover:-translate-y-0.5 hover:border-blue-400 hover:text-white"
+                  >
+                    <i data-lucide="cloud-sun" data-bg-icon class="h-4 w-4 text-blue-300"></i>
+                    <span data-bg-label>Background: Auto</span>
+                  </button>
+                  <div
+                    data-bg-menu
+                    class="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/95 shadow-xl shadow-slate-900/60 backdrop-blur hidden"
+                  >
+                    <button type="button" data-bg-option="auto" class="flex w-full items-start gap-3 px-4 py-3 text-sm text-slate-200 transition hover:bg-slate-800">
+                      <i data-lucide="cloud-sun" class="h-4 w-4 mt-0.5 text-blue-300"></i>
+                      <div class="text-left">
+                        <p class="font-semibold text-white">Automatic</p>
+                        <p class="text-xs text-slate-400">Use local weather to pick a background. Click again to cycle backgrounds.</p>
+                      </div>
+                    </button>
+                    <button type="button" data-bg-option="constellation" class="flex w-full items-start gap-3 px-4 py-3 text-sm text-slate-200 transition hover:bg-slate-800">
+                      <i data-lucide="sparkles" class="h-4 w-4 mt-0.5 text-indigo-300"></i>
+                      <div class="text-left">
+                        <p class="font-semibold text-white">Constellations</p>
+                        <p class="text-xs text-slate-400">Keep the nodes and lines on screen.</p>
+                      </div>
+                    </button>
+                    <button type="button" data-bg-option="rain" class="flex w-full items-start gap-3 px-4 py-3 text-sm text-slate-200 transition hover:bg-slate-800">
+                      <i data-lucide="cloud-rain" class="h-4 w-4 mt-0.5 text-cyan-200"></i>
+                      <div class="text-left">
+                        <p class="font-semibold text-white">Rain</p>
+                        <p class="text-xs text-slate-400">Show a soft rainfall animation.</p>
+                      </div>
+                    </button>
+                    <button type="button" data-bg-option="snow" class="flex w-full items-start gap-3 px-4 py-3 text-sm text-slate-200 transition hover:bg-slate-800">
+                      <i data-lucide="snowflake" class="h-4 w-4 mt-0.5 text-cyan-200"></i>
+                      <div class="text-left">
+                        <p class="font-semibold text-white">Snow</p>
+                        <p class="text-xs text-slate-400">Show soft falling snow in the background.</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400" data-bg-status>Checking local weather for background…</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <a href="services.html" class="inline-flex items-center gap-2 rounded-full border border-emerald-600 bg-emerald-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 transition hover:-translate-y-0.5 hover:border-emerald-400">
+                  <i data-lucide="wrench" class="h-4 w-4"></i>
+                  Open services
+                </a>
+                <a href="vehicles.html" class="inline-flex items-center gap-2 rounded-full border border-blue-600 bg-blue-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100 transition hover:-translate-y-0.5 hover:border-blue-400">
+                  <i data-lucide="car" class="h-4 w-4"></i>
+                  View vehicles
+                </a>
+                <a href="analytics.html" class="inline-flex items-center gap-2 rounded-full border border-amber-600 bg-amber-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-400">
+                  <i data-lucide="activity" class="h-4 w-4"></i>
+                  Analytics panel
+                </a>
+              </div>
+            </div>
+            <div class="grid w-full max-w-md grid-cols-3 gap-3 rounded-2xl border border-blue-900/60 bg-blue-950/40 p-4 shadow-inner shadow-blue-900/40">
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <p id="dataset-count" class="text-2xl font-black text-white">-</p>
+                <p class="text-[11px] uppercase tracking-wide text-slate-400">Tables</p>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <p id="records-count" class="text-2xl font-black text-amber-300">-</p>
+                <p class="text-[11px] uppercase tracking-wide text-slate-400">Live rows</p>
+              </div>
+              <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                  <p id="uploaded-count" class="text-2xl font-black text-emerald-300">Active</p>
+                <p class="text-[11px] uppercase tracking-wide text-slate-400">Status</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-[2fr_1fr]">
+            <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Progress</p>
+                  <h3 class="text-lg font-bold text-white">Operational tracking</h3>
+                </div>
+                <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Live data</span>
+              </div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                  <p class="text-sm font-semibold text-slate-200">Active providers</p>
+                  <p class="text-xs text-slate-400">Synced directly from Supabase Services.</p>
+                </div>
+                <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                  <p class="text-sm font-semibold text-slate-200">Monitored fleet</p>
+                  <p class="text-xs text-slate-400">Real-time metrics for vehicles.</p>
+                </div>
+                <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                  <p class="text-sm font-semibold text-slate-200">Data integrity</p>
+                  <p class="text-xs text-slate-400">Analytics connected to tables and RPCs.</p>
+                </div>
+              </div>
+            </div>
+            <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div class="flex items-center justify-between">
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Activity</p>
+                <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span class="flex h-2 w-2 rounded-full bg-emerald-400"></span>
+                  Live
+                </div>
+              </div>
+              <ul id="activity-log" class="space-y-2" aria-live="polite">
+                <li class="text-slate-500 italic text-xs">Scanning tables...</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section class="space-y-4 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/60">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Data room</p>
+              <h3 class="text-xl font-bold text-white">Supabase live tables</h3>
+              <p class="text-sm text-slate-400">Updated statistics for every connected dataset.</p>
+            </div>
+            <div class="text-sm font-semibold text-slate-300">Real-time database statistics</div>
+          </div>
+          <div id="datasets" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3"></div>
+        </section>
+
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+
+            <section class="flex flex-col space-y-4 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/60">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
+                  <h3 class="text-lg font-bold text-white">Import Deals CSV</h3>
+                  <p class="text-sm text-slate-400">Upsert into DealsJP1 (Finance Only).</p>
+                </div>
+                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Filter: Finance</span>
+              </div>
+
+              <div class="mt-auto space-y-4">
+                <form id="deals-upload-form" class="grid gap-3">
+                    <div class="space-y-2">
+                    <label for="deals-file" class="text-xs font-semibold uppercase tracking-wide text-slate-400">CSV file</label>
+                    <input id="deals-file" name="deals-file" type="file" accept=".csv" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:border-emerald-500 focus:outline-none" />
+                    </div>
+                    <button id="deals-upload-button" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60">
+                    <i data-lucide="upload-cloud" class="h-4 w-4"></i>
+                    <span>Upload</span>
+                    </button>
+                </form>
+                <div id="deals-progress" class="hidden space-y-2">
+                  <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                    <span id="deals-progress-label">Initializing…</span>
+                    <span id="deals-progress-count">0%</span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="deals-progress-bar" class="h-2 w-0 bg-emerald-500 transition-all duration-200"></div>
+                  </div>
+                </div>
+                <p class="text-xs leading-relaxed text-slate-400">Requires: VIN, Current Stock No. & Sales Channel containing 'Finance'.</p>
+              </div>
+            </section>
+
+            <section class="flex flex-col space-y-4 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/60">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
+                  <h3 class="text-lg font-bold text-white">Import NS Invoices &amp; Payments CSV</h3>
+                  <p class="text-sm text-slate-400">Upsert into NS-Invoices&amp;pays (Document Number key).</p>
+                </div>
+                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Document #</span>
+              </div>
+
+              <div class="mt-auto space-y-4">
+                <form id="ns-invoices-upload-form" class="grid gap-3">
+                  <div class="space-y-2">
+                    <label for="ns-invoices-file" class="text-xs font-semibold uppercase tracking-wide text-slate-400">CSV file</label>
+                    <input id="ns-invoices-file" name="ns-invoices-file" type="file" accept=".csv" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded-md file:border-0 file:bg-amber-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:border-amber-500 focus:outline-none" />
+                  </div>
+                  <button id="ns-invoices-upload-button" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60">
+                    <i data-lucide="upload-cloud" class="h-4 w-4"></i>
+                    <span>Upload</span>
+                  </button>
+                </form>
+                <div id="ns-invoices-progress" class="hidden space-y-2">
+                  <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                    <span id="ns-invoices-progress-label">Initializing…</span>
+                    <span id="ns-invoices-progress-count">0%</span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="ns-invoices-progress-bar" class="h-2 w-0 bg-amber-500 transition-all duration-200"></div>
+                  </div>
+                </div>
+                <p class="text-xs leading-relaxed text-slate-400">Requires: Document Number column. Amount fields are normalized to numbers when possible.</p>
+              </div>
+            </section>
+
+            <section class="flex flex-col space-y-4 rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/60">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
+                  <h3 class="text-lg font-bold text-white">Import PT Last Ping</h3>
+                  <p class="text-sm text-slate-400">Upload PT-LastPing data to Supabase (Serial required).</p>
+                </div>
+                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Serial required</span>
+              </div>
+
+              <div class="mt-auto space-y-3">
+                <form id="pt-ping-upload-form" class="grid gap-3">
+                  <div class="space-y-2">
+                    <label for="pt-ping-file" class="text-xs font-semibold uppercase tracking-wide text-slate-400">CSV file</label>
+                    <input id="pt-ping-file" name="pt-ping-file" type="file" accept=".csv,.xlsx" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-600 file:px-3 file:py-2 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-white hover:border-indigo-500 focus:outline-none" />
+                  </div>
+                  <button id="pt-ping-upload-button" type="button" class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+                    <i data-lucide="upload-cloud" class="h-4 w-4"></i>
+                    <span>Upload</span>
+                  </button>
+                </form>
+                <div id="pt-ping-progress" class="hidden space-y-2">
+                  <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
+                    <span id="pt-ping-progress-label">Initializing…</span>
+                    <span id="pt-ping-progress-count">0%</span>
+                  </div>
+                  <div class="h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div id="pt-ping-progress-bar" class="h-2 w-0 bg-indigo-500 transition-all duration-200"></div>
+                  </div>
+                </div>
+                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to Supabase (no VIN check). Conflicts resolved by VIN + Serial.</p>
+                <details id="pt-error-box" class="hidden overflow-hidden rounded-xl border border-rose-900/60 bg-rose-950/60 text-xs text-rose-100 shadow-inner shadow-rose-950/50">
+                  <summary class="cursor-pointer px-3 py-2 font-semibold text-rose-200">Error details</summary>
+                  <pre id="pt-error-pre" class="max-h-64 overflow-auto whitespace-pre-wrap px-3 pb-3 pt-1 font-mono text-[11px] leading-relaxed text-rose-100"></pre>
+                </details>
+              </div>
+            </section>
+
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <template id="dataset-card-template">
+    <div class="flex h-full flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-inner shadow-slate-900/70 hover:border-slate-700 transition-colors">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-blue-200" data-dataset-scope></p>
+          <p class="text-lg font-bold text-white" data-dataset-title></p>
+          <p class="text-xs text-slate-400" data-dataset-description></p>
+        </div>
+        <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300" data-dataset-status>Table</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3 text-sm text-slate-200">
+        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+          <p class="text-lg font-black" data-dataset-rows>--</p>
+          <p class="text-[11px] uppercase tracking-wide text-slate-500">Live Rows</p>
+        </div>
+        <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+          <p class="text-lg font-black text-emerald-200" data-dataset-columns>--</p>
+          <p class="text-[11px] uppercase tracking-wide text-slate-500">Columns</p>
+        </div>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
+        <p class="font-semibold text-white">Database Signal</p>
+        <p class="mt-1 leading-relaxed" data-dataset-signal>Fetching live stats...</p>
+      </div>
+    </div>
+  </template>
+   
+  <script type="module">
+    import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
+    import {
+      loadPreferredBackgroundMode,
+      persistBackgroundMode,
+    } from '../../assets/scripts/backgroundPreference.js';
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    function cleanHeaderKey(key) {
+      return (key || '')
+        .toString()
+        .replace(/^\uFEFF/, '')
+        .replace(/\u00A0/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase()
+        .replace(/\.$/, '');
+    }
+
+    const DEALS_TABLE = 'DealsJP1';
+    const NS_INVOICES_TABLE = 'NS-Invoices&pays';
+    const NS_INVOICES_COLUMNS = [
+      'Date',
+      'Due Date/Receive By',
+      'Type',
+      'Document Number',
+      'Amount',
+      'Amount Remaining',
+      'Stock No',
+      'Payment Through',
+      'Invoice Type',
+      'Status',
+      'Name',
+      'Subsidiary',
+      'TAM Legacy Stock #',
+      'Payment Method'
+    ];
+    const PT_PING_COLUMNS = [
+      'Serial',
+      'Year',
+      'Make',
+      'Model',
+      'Color',
+      'Customer',
+      'Vehicle Status',
+      'VIN',
+      'Date',
+      'address',
+      'Lat',
+      'Long',
+    ];
+    const PT_PING_BATCH_SIZE = 10;
+    const PT_PING_BATCH_DELAY_MS = 150;
+    const PT_PING_HEADER_MAP = (() => {
+      const map = new Map();
+      PT_PING_COLUMNS.forEach((col) => {
+        map.set(cleanHeaderKey(col), col);
+      });
+      map.set('serial #', 'Serial');
+      map.set('serial#', 'Serial');
+      return map;
+    })();
+    
+    // --- LISTA MAESTRA (Validación Local) ---
+    const KNOWN_DEALS_COLUMNS = [
+      'Deal Status', 'Deal Date', 'HOLD', 'Current Stock No', 'Customer', 'Brand', 'Model',
+      'Model Year', 'VIN', 'Corrected VIN', 'Vehicle Status', 'Mileage', 'Driver License #',
+      'Inventory Preparation Status', 'Inventory Preparation Status Changed On', 'Inventory Preparation Status Changed By',
+      'Physical Location', 'Physical Location Last Changed on', 'ENTITY', 'Retail Price On Contract',
+      'Cash Down', 'Total due on Deal', 'Amount', 'Reg. Contract Payment', 'Payment Schedule',
+      'Total Payments in Months', 'Number OF Schedule Remaining', 'Lead Source', 'Date of Birth',
+      'TAM Legacy Created Date', 'Payment Schedule Start', 'Last Payment Date', 'TAM Legacy Stock #',
+      'Trade In VIN', 'Trade In Amount', 'Sales Person', 'Subsidiary', 'Location', 'Lease End Date',
+      'Bucket', 'Bucket Sub Type', 'Payment Schedule_1', 'Lease Term', 'Regular Amount', 'Total Contract Scheduled Amount',
+      'Inventory Valuation Value', 'Sales Channel', 'Partner Name', 'Remaining Scheduled Payments To Invoice',
+      'Deposit', 'PassTime Serial No', 'PassTime Vehicle Status', 'EFT Available', 'Primary Payment Mode',
+      'Secondary Payment Mode', 'Plate Number', 'Number OF Schedule Remaining_1', 'Mobile Phone', 
+      'Encore Serial Number', 'Encore Serial #2', 'GPS Serial No', 'Plate Number_1', 'Current Title Number', 
+      'Current Title Subsidiary', 'Current Title Physical Location', 'Title In Date', 'Title Out Date', 
+      'Financing Company', 'Broker', 'Return Type', 'Actual System Return Date', 'Returned By'
+    ];
+
+    const DATASETS = [
+      {
+        table: 'Services',
+        scope: 'Partners',
+        title: 'Service Providers',
+        description: 'Unified services directory filtered by category values.',
+        displayName: 'Services'
+      },
+      {
+        table: 'vehicles',
+        scope: 'Fleet',
+        title: 'Vehicles',
+        description: 'Live vehicle and asset records.',
+        displayName: 'Vehicles'
+      },
+      {
+        table: DEALS_TABLE,
+        scope: 'Sales',
+        title: 'Active Deals',
+        description: 'Imported deals data (VIN + Stock No).',
+        displayName: 'Deals'
+      },
+      {
+        table: 'Titles',
+        scope: 'Compliance',
+        title: 'Titles table',
+        description: 'Lifecycle tracking for vehicle titles.',
+        displayName: 'Titles'
+      },
+      {
+        table: NS_INVOICES_TABLE,
+        scope: 'Finance',
+        title: 'NS Invoices & Payments',
+        description: 'NetSuite feed mapped by Document Number.',
+        displayName: 'NS Invoices'
+      },
+      {
+        table: 'PT-LastPing',
+        scope: 'Telematics',
+        title: 'Import Last Ping',
+        description: 'Latest PassTime ping uploads (Serial required).',
+        displayName: 'PT Last Ping'
+      }
+    ];
+
+    const ADMIN_ROLE = 'administrator';
+    const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
+
+    const toNumber = (value) => {
+      if (value === undefined || value === null) return null;
+      const cleaned = typeof value === 'string' ? value.replace(/,/g, '').trim() : value;
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : null;
+    };
+
+    const normalizeStockNumber = (value) => {
+      if (value === undefined || value === null) return null;
+      const normalized = String(value).trim().toUpperCase();
+      return normalized === '' ? null : normalized;
+    };
+
+    const normalizeRow = (row = {}) =>
+      Object.entries(row).reduce((acc, [key, val]) => {
+        const normalizedKey = cleanHeaderKey(key);
+        if (!normalizedKey) return acc;
+        acc[normalizedKey] = typeof val === 'string' ? val.trim() : val;
+        return acc;
+      }, {});
+
+    const cleanValue = (value) => {
+      if (value == null) return null;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed === '' ? null : trimmed;
+      }
+      return value;
+    };
+
+    const formatSupabaseError = (err) => {
+      if (!err) return 'Unknown error';
+      const parts = [err.message, err.code, err.details, err.hint].filter(Boolean).join(' | ');
+      const serialized = (() => {
+        try {
+          return JSON.stringify(err, null, 2);
+        } catch {
+          return '';
+        }
+      })();
+      return [parts, serialized].filter(Boolean).join('\n\n');
+    };
+
+    const showPtError = (err, contextText = '') => {
+      const box = document.getElementById('pt-error-box');
+      const pre = document.getElementById('pt-error-pre');
+      if (!box || !pre) return;
+      const timestamp = new Date().toLocaleString();
+      const context = contextText ? `Context: ${contextText}\n` : '';
+      const formatted = formatSupabaseError(err);
+      pre.textContent = `${context}Timestamp: ${timestamp}\n\n${formatted}`;
+      box.classList.remove('hidden');
+    };
+
+    const buildSlimPtPayload = (row = {}) => {
+      const clean = (value) => cleanValue(value);
+      const numericOrValue = (value) => {
+        const numeric = toNumber(value);
+        return numeric !== null ? numeric : clean(value);
+      };
+
+      const slim = {
+        Serial: clean(row?.['Serial']),
+        Year: numericOrValue(row?.['Year']),
+        Make: clean(row?.['Make']),
+        Model: clean(row?.['Model']),
+        Color: clean(row?.['Color']),
+        Customer: clean(row?.['Customer']),
+        'Vehicle Status': clean(row?.['Vehicle Status']),
+        VIN: clean(row?.['VIN']),
+        Date: clean(row?.['Date']),
+        address: clean(row?.['address']),
+        Lat: numericOrValue(row?.['Lat']),
+        Long: numericOrValue(row?.['Long']),
+      };
+
+      return Object.entries(slim).reduce((acc, [key, value]) => {
+        if (value === undefined || value === null) return acc;
+        if (typeof value === 'string' && value === '') return acc;
+        acc[key] = value;
+        return acc;
+      }, {});
+    };
+
+    const normalizePtHeaders = (headers = []) => {
+      const normalized = new Set();
+      headers.forEach((header) => {
+        const canonical = PT_PING_HEADER_MAP.get(cleanHeaderKey(header)) || header;
+        normalized.add(canonical);
+      });
+      return normalized;
+    };
+
+    const normalizePtPingRow = (row = {}) => {
+      const normalized = {};
+      Object.entries(row || {}).forEach(([key, value]) => {
+        const canonical = PT_PING_HEADER_MAP.get(cleanHeaderKey(key)) || key;
+        normalized[canonical] = value;
+      });
+      return normalized;
+    };
+
+    const buildColumnMap = (columns = []) => {
+      const map = new Map();
+      columns.forEach((col) => {
+        const clean = cleanHeaderKey(col);
+        map.set(clean, col);
+      });
+      return map;
+    };
+
+    const tableColumnCache = new Map();
+
+    const fetchTableColumns = async (tableName) => {
+      if (tableColumnCache.has(tableName)) return tableColumnCache.get(tableName);
+      const emptySet = new Set();
+      if (!supabaseClient) return emptySet;
+      let columns = [];
+      try {
+        const { data, error } = await supabaseClient
+          .from('information_schema.columns')
+          .select('column_name')
+          .eq('table_schema', 'public')
+          .eq('table_name', tableName);
+        if (!error && data?.length) {
+          columns = data.map((row) => row.column_name).filter(Boolean);
+        }
+      } catch (err) {
+        console.warn('Unable to query information_schema.columns:', err);
+      }
+      if (!columns.length) {
+        try {
+          const { data, error } = await supabaseClient
+            .from(tableName)
+            .select('*')
+            .limit(1);
+          if (!error && data?.length) columns = Object.keys(data[0]);
+        } catch (err) {
+          console.warn('Unable to infer columns from sample row:', err);
+        }
+      }
+      const columnSet = new Set(columns);
+      tableColumnCache.set(tableName, columnSet);
+      return columnSet;
+    };
+
+    const filterColumnMapByTable = (columnMap, columnSet) => {
+      const filtered = new Map();
+      columnMap.forEach((columnName, normalizedKey) => {
+        if (columnSet.has(columnName)) filtered.set(normalizedKey, columnName);
+      });
+      return filtered;
+    };
+
+    const mapInvoiceRow = (normalizedRow = {}, columnMap) => {
+      const mapped = {};
+      columnMap.forEach((originalHeader, normalizedKey) => {
+        if (!originalHeader) return;
+        let value = normalizedRow[normalizedKey];
+        if (value === undefined) return;
+        if (normalizedKey === 'amount' || normalizedKey === 'amount remaining') {
+          const numeric = toNumber(value);
+          value = numeric !== null ? numeric : value;
+        }
+        const cleaned = cleanValue(value);
+        if (cleaned === null) return;
+        mapped[originalHeader] = cleaned;
+      });
+      return mapped;
+    };
+
+    const isRlsBlocked = (error) => {
+      const message = (error?.message || '').toLowerCase();
+      return message.includes('row-level') || message.includes('rls') || message.includes('permission');
+    };
+
+    const getTableStats = async (dataset) => {
+      if (!supabaseClient) {
+        return { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: 'Client unavailable' };
+      }
+      try {
+        const { count, error: countError } = await supabaseClient
+          .from(dataset.table)
+          .select('*', { count: 'exact', head: true });
+        if (countError) {
+          return { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: countError.message || 'Restricted' };
+        }
+        const { data, error: dataError } = await supabaseClient
+          .from(dataset.table)
+          .select('*')
+          .limit(1);
+        if (dataError) {
+          return { rows: count || 0, columns: 0, lastUpdated: null, restricted: true, message: dataError.message || 'Restricted' };
+        }
+        let columnCount = 0;
+        let lastUpdated = null;
+        if (data && data.length > 0) {
+          columnCount = Object.keys(data[0]).length;
+          lastUpdated = data[0].created_at || data[0].updated_at || null;
+        }
+        return { rows: count || 0, columns: columnCount, lastUpdated, restricted: false };
+      } catch (err) {
+        return { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: err.message };
+      }
+    };
+
+    const renderActivityLog = (activities) => {
+      const container = document.getElementById('activity-log');
+      if (!container) return;
+      container.innerHTML = '';
+      if (activities.length === 0) {
+        container.innerHTML = '<li class="text-slate-500 italic text-xs">No recent activity detected.</li>';
+        return;
+      }
+      activities.slice(0, 4).forEach((item) => {
+        const row = document.createElement('li');
+        row.className = 'flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2';
+        row.innerHTML = `
+          <div class="flex items-center gap-2">
+             <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+             <span class="font-semibold text-white text-xs">${item.table} verified</span>
+          </div>
+          <span class="text-[10px] uppercase tracking-wide text-slate-400">${item.rows} rows</span>
+        `;
+        container.appendChild(row);
+      });
+    };
+
+    const createDatasetCard = (dataset) => {
+      const template = document.getElementById('dataset-card-template');
+      const clone = template.content.firstElementChild.cloneNode(true);
+      const els = {
+        scope: clone.querySelector('[data-dataset-scope]'),
+        title: clone.querySelector('[data-dataset-title]'),
+        description: clone.querySelector('[data-dataset-description]'),
+        status: clone.querySelector('[data-dataset-status]'),
+        rows: clone.querySelector('[data-dataset-rows]'),
+        columns: clone.querySelector('[data-dataset-columns]'),
+        signal: clone.querySelector('[data-dataset-signal]'),
+      };
+      els.scope.textContent = dataset.scope;
+      els.title.textContent = dataset.title;
+      els.description.textContent = dataset.description;
+      return { card: clone, els };
+    };
+
+    const updateDatasetCardStats = (els, stats) => {
+      els.rows.textContent = stats.rows ? stats.rows.toLocaleString() : '--';
+      els.columns.textContent = stats.columns || '--';
+      if (stats.restricted) {
+        els.status.textContent = 'Restricted';
+        els.status.className = 'rounded-full border border-amber-600 bg-amber-600/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-200';
+        els.signal.textContent = stats.message ? `Access limited: ${stats.message}` : 'Access limited by security policy.';
+      } else if (stats.rows > 0) {
+        els.status.textContent = 'Active';
+        els.status.className = 'rounded-full border border-emerald-600 bg-emerald-600/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-200';
+        els.signal.textContent = `Connected to live table. ${stats.columns} fields mapped.`;
+      } else {
+        els.status.textContent = 'Empty';
+        els.signal.textContent = 'Table exists but contains no records.';
+      }
+    };
+
+    const ensureToastContainer = () => {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'fixed bottom-6 right-6 z-50 flex flex-col gap-3';
+        document.body.appendChild(container);
+      }
+      return container;
+    };
+
+    const showToast = (message, type = 'info') => {
+      const container = ensureToastContainer();
+      const toast = document.createElement('div');
+      const variantClasses =
+        type === 'success'
+          ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-50 shadow-emerald-500/30'
+          : 'border-red-500/60 bg-red-500/10 text-red-50 shadow-red-500/30';
+      toast.className = `flex min-w-[260px] max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${variantClasses}`;
+      const icon = document.createElement('span');
+      icon.className = `mt-0.5 h-2.5 w-2.5 rounded-full ${type === 'success' ? 'bg-emerald-400' : 'bg-red-400'}`;
+      const text = document.createElement('p');
+      text.className = 'whitespace-pre-line font-semibold leading-relaxed';
+      text.textContent = message;
+      toast.appendChild(icon);
+      toast.appendChild(text);
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2', 'transition', 'duration-300');
+        setTimeout(() => toast.remove(), 320);
+      }, 4200);
+    };
+
+    // --- UPLOAD DEALS: AHORA ROBUSTO Y NORMALIZADO (CON FILTRO DE DUPLICADOS) ---
+    const uploadDealsRows = async (rows, parseErrors = 0, rawHeaders = []) => {
+      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!isAdminUser()) throw new Error('Only administrators can upload deals data.');
+
+      const submitBtn = document.getElementById('deals-upload-button');
+      const progressWrap = document.getElementById('deals-progress');
+      const progressBar = document.getElementById('deals-progress-bar');
+      const progressLabel = document.getElementById('deals-progress-label');
+      const progressCount = document.getElementById('deals-progress-count');
+
+      const setProgress = (percent, label) => {
+        if (progressWrap) progressWrap.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        if (progressLabel) progressLabel.textContent = label;
+        if (progressCount) progressCount.textContent = `${Math.round(Math.max(0, Math.min(100, percent)))}%`;
+      };
+      const formatPercent = (processedCount, totalCount) =>
+        totalCount ? Math.round((processedCount / totalCount) * 100) : 0;
+      const formatProgressLabel = (prefix, processedCount, totalCount) => {
+        const percent = formatPercent(processedCount, totalCount);
+        return `${prefix} (${percent}%) - ${processedCount} of ${totalCount} rows`;
+      };
+      
+      const columnMap = buildColumnMap(KNOWN_DEALS_COLUMNS);
+      const tableColumns = await fetchTableColumns(DEALS_TABLE);
+      if (!tableColumns.size) {
+        showToast('No database columns detected for Deals. Upload stopped.', 'error');
+        return;
+      }
+      const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
+      const conflictColumn = allowedColumnMap.get('current stock no');
+      const dealStatusColumn = allowedColumnMap.get('deal status');
+      const vehicleStatusColumn = allowedColumnMap.get('vehicle status');
+      const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
+      const hasStockHeader = normalizedHeaders.has('current stock no');
+      const hasDealStatusHeader = normalizedHeaders.has('deal status');
+      const hasVehicleStatusHeader = normalizedHeaders.has('vehicle status');
+
+      const normalizeFinanceSalesChannel = (value) => {
+        if (typeof value !== 'string') return '';
+        const trimmed = value.trim().toUpperCase();
+        if (trimmed === 'FINANCE-EX' || trimmed === 'FINANCE EXT' || trimmed === 'FINANCE-EXT') {
+          return 'FINANCE-EXT';
+        }
+        return '';
+      };
+
+      if (!conflictColumn || !hasStockHeader) {
+        showToast('Deals table missing required column: Current Stock No.', 'error');
+        return;
+      }
+
+      setProgress(0, 'Preparing & deduplicating rows...');
+      
+      // 1. DEDUPLICACIÓN PARA EVITAR ERROR 'ON CONFLICT'
+      const uniqueDealsMap = new Map();
+      let skippedInvalid = 0;
+      let skippedInvalidSalesChannel = 0;
+      let skippedMissingRequired = 0;
+      let duplicatesRemoved = 0;
+
+      rows.forEach((rawRow) => {
+        const normalizedRow = normalizeRow(rawRow);
+        // Validaciones
+        const salesChannel = normalizedRow['sales channel'];
+        const normalizedSalesChannel = normalizeFinanceSalesChannel(salesChannel);
+
+        if (normalizedSalesChannel !== 'FINANCE-EXT') {
+          skippedInvalid += 1;
+          skippedInvalidSalesChannel += 1;
+          return;
+        }
+
+        if (normalizedSalesChannel) {
+          normalizedRow['sales channel'] = normalizedSalesChannel;
+        }
+
+        const stockNumber = normalizeStockNumber(normalizedRow['current stock no']);
+        const vin = cleanValue(normalizedRow['vin']);
+
+        if (!stockNumber || !vin) {
+          skippedInvalid += 1;
+          skippedMissingRequired += 1;
+          return; 
+        }
+
+        const mapped = {};
+        Object.entries(normalizedRow).forEach(([key, value]) => {
+          const columnName = allowedColumnMap.get(key);
+          const cleanedValue = cleanValue(value);
+          if (!columnName || cleanedValue == null) return;
+          mapped[columnName] = cleanedValue;
+        });
+
+        mapped[conflictColumn] = stockNumber;
+        if (dealStatusColumn && hasDealStatusHeader) {
+          mapped[dealStatusColumn] = cleanValue(normalizedRow['deal status']) ?? null;
+        }
+        if (vehicleStatusColumn && hasVehicleStatusHeader) {
+          mapped[vehicleStatusColumn] = cleanValue(normalizedRow['vehicle status']) ?? null;
+        }
+
+        // LLAVE UNICA: VIN + Current Stock No
+        const uniqueKey = `${vin}_${stockNumber}`;
+
+        if (uniqueDealsMap.has(uniqueKey)) {
+            duplicatesRemoved++;
+        }
+        // Sobrescribimos (se queda el último del CSV)
+        uniqueDealsMap.set(uniqueKey, mapped);
+      });
+
+      const filteredRows = Array.from(uniqueDealsMap.values());
+
+      if (!filteredRows.length) {
+        setProgress(0, 'No finance rows detected.');
+        showToast('No valid FINANCE rows detected.\nCheck "Current Stock No." and "Sales Channel".', 'error');
+        return;
+      }
+
+      const BATCH_SIZE = 500;
+      let totalUpserted = 0;
+      const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
+      let processed = 0;
+
+      for (let i = 0; i < filteredRows.length; i += BATCH_SIZE) {
+        const batch = filteredRows.slice(i, i + BATCH_SIZE);
+        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+
+        const startRow = processed + 1;
+        const endRow = Math.min(processed + batch.length, filteredRows.length);
+        if (submitBtn) {
+          submitBtn.innerHTML =
+            `<span class="animate-pulse">Uploading batch ${currentBatch}/${totalBatches} ` +
+            `(${formatPercent(processed, filteredRows.length)}%)...</span>`;
+        }
+        setProgress(
+          formatPercent(processed, filteredRows.length),
+          formatProgressLabel(`Uploading batch ${currentBatch} of ${totalBatches}`, processed, filteredRows.length),
+        );
+
+        // UPSERT
+        const { data, error } = await supabaseClient
+          .from(DEALS_TABLE)
+          .upsert(batch, { onConflict: 'Current Stock No', ignoreDuplicates: false }) 
+          .select();
+
+        if (error) {
+          console.error('Supabase upsert error:', error);
+          if (isRlsBlocked(error)) {
+            showToast('Upload blocked by security policy (RLS).', 'error');
+            return;
+          }
+          const percent = formatPercent(processed, filteredRows.length);
+          showToast(
+            `Upload stopped at batch ${currentBatch}/${totalBatches} ` +
+              `(rows ${startRow}-${endRow}). ` +
+              `Uploaded ${processed} of ${filteredRows.length} rows (${percent}%).`,
+            'error',
+          );
+          setProgress(
+            percent,
+            `Stopped at batch ${currentBatch}/${totalBatches} (${percent}%) - uploaded ${processed} of ${filteredRows.length} rows.`,
+          );
+          return;
+        }
+        totalUpserted += (data ? data.length : 0);
+        processed += batch.length;
+        setProgress(
+          formatPercent(processed, filteredRows.length),
+          formatProgressLabel('Uploaded', Math.min(processed, filteredRows.length), filteredRows.length),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      setProgress(100, 'Running DealsJP1 vehicle sync...');
+
+      const { data: syncData, error: syncError } = await supabaseClient.rpc('sync_vehicles_from_dealsjp1_lastdeal');
+      if (syncError) {
+        console.error('Supabase DealsJP1 sync error:', syncError);
+        showToast('DealsJP1 vehicle sync failed: ' + formatSupabaseError(syncError), 'error');
+        throw syncError;
+      }
+
+      console.info('DealsJP1 vehicle sync updated rows:', syncData);
+
+      const { error: updatesSyncError } = await supabaseClient.rpc('sync_vehicles_updates_to_vehicles');
+      if (updatesSyncError) {
+        console.error('Supabase vehicle updates sync error:', updatesSyncError);
+        showToast('Vehicle updates sync failed: ' + formatSupabaseError(updatesSyncError), 'error');
+      }
+
+      const summary =
+        'Completed.' +
+        '\nTotal rows processed: ' + rows.length +
+        '\nProcessed (Unique Finance): ' + filteredRows.length +
+        '\nUpserted: ' + totalUpserted +
+        '\nSkipped (Invalid Sales Channel): ' + skippedInvalidSalesChannel +
+        '\nSkipped (Missing Stock No or VIN): ' + skippedMissingRequired +
+        '\nDuplicates Removed: ' + duplicatesRemoved + 
+        '\nErrors: ' + parseErrors;
+      
+      showToast(summary, 'success');
+      setProgress(100, 'Upload complete.');
+    };
+
+    const fetchDealsStockNumberSet = async () => {
+      const stockNumberSet = new Set();
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const to = from + pageSize - 1;
+        const { data, error } = await supabaseClient
+          .from(DEALS_TABLE)
+          .select('"Current Stock No"', { head: false })
+          .range(from, to);
+        if (error) throw error;
+        (data || []).forEach((row) => {
+          const normalized = normalizeStockNumber(row?.['Current Stock No']);
+          if (normalized) stockNumberSet.add(normalized);
+        });
+        if (!data || data.length < pageSize) break;
+        from += pageSize;
+      }
+      return stockNumberSet;
+    };
+
+    const uploadInvoicesRows = async (rows, parseErrors = 0, rawHeaders = []) => {
+      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!isAdminUser()) throw new Error('Only administrators can upload invoice data.');
+
+      const submitBtn = document.getElementById('ns-invoices-upload-button');
+      const progressWrap = document.getElementById('ns-invoices-progress');
+      const progressBar = document.getElementById('ns-invoices-progress-bar');
+      const progressLabel = document.getElementById('ns-invoices-progress-label');
+      const progressCount = document.getElementById('ns-invoices-progress-count');
+
+      const setProgress = (percent, label) => {
+        if (progressWrap) progressWrap.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        if (progressLabel) progressLabel.textContent = label;
+        if (progressCount) progressCount.textContent = `${Math.round(Math.max(0, Math.min(100, percent)))}%`;
+      };
+      const formatPercent = (processedCount, totalCount) =>
+        totalCount ? Math.round((processedCount / totalCount) * 100) : 0;
+      const formatProgressLabel = (prefix, processedCount, totalCount) => {
+        const percent = formatPercent(processedCount, totalCount);
+        return `${prefix} (${percent}%) - ${processedCount} of ${totalCount} rows`;
+      };
+
+      const columnMap = buildColumnMap(NS_INVOICES_COLUMNS);
+      const tableColumns = new Set(NS_INVOICES_COLUMNS);
+      const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
+      const conflictColumn = allowedColumnMap.get('document number');
+      const conflictColumns = 'Stock No,Document Number,Date';
+      const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
+      const hasDocumentNumberHeader = normalizedHeaders.has('document number');
+      const hasStockNoHeader = normalizedHeaders.has('stock no');
+
+      if (!conflictColumn || !hasDocumentNumberHeader) {
+        showToast('Local configuration error: "Document Number" missing from invoice columns.', 'error');
+        return;
+      }
+
+      setProgress(0, 'Loading Deals stock numbers...');
+
+      let dealsStockNumberSet;
+      try {
+        dealsStockNumberSet = await fetchDealsStockNumberSet();
+      } catch (err) {
+        console.error('Supabase fetch error (Deals stock numbers):', err);
+        showToast('Unable to load Deals stock numbers for validation.', 'error');
+        setProgress(0, 'Failed to load Deals stock numbers.');
+        return;
+      }
+
+      if (!dealsStockNumberSet.size) {
+        showToast('No Deals stock numbers found. Upload stopped.', 'error');
+        setProgress(0, 'No Deals stock numbers found.');
+        return;
+      }
+
+      setProgress(5, 'Clearing previous invoice data...');
+
+      const { error: truncateError } = await supabaseClient.rpc('truncate_ns_invoices');
+      if (truncateError) {
+        console.error('Supabase truncate error:', truncateError);
+        showToast('Cannot clear previous NS invoices: ' + truncateError.message, 'error');
+        return;
+      }
+
+      setProgress(5, 'Preparing invoice rows...');
+
+      const uniqueInvoices = new Map();
+      let skippedInvalid = 0;
+      let duplicatesRemoved = 0;
+      let rejectedStockMismatch = 0;
+
+      rows.forEach((rawRow) => {
+        const normalizedRow = normalizeRow(rawRow);
+        const documentNumber = normalizedRow['document number'];
+        const stockNumberRaw =
+          normalizedRow['stock no'] || normalizedRow['stock number'] || normalizedRow['tam legacy stock #'];
+        const normalizedStockNo = normalizeStockNumber(stockNumberRaw);
+
+        if (!documentNumber) {
+          skippedInvalid++;
+          return;
+        }
+
+        if (!normalizedStockNo || !dealsStockNumberSet.has(normalizedStockNo)) {
+          rejectedStockMismatch++;
+          return;
+        }
+
+        const mapped = mapInvoiceRow(normalizedRow, allowedColumnMap);
+        if (!mapped[conflictColumn]) mapped[conflictColumn] = documentNumber;
+        if (allowedColumnMap.has('stock no') && normalizedStockNo && hasStockNoHeader) {
+          mapped[allowedColumnMap.get('stock no')] = normalizedStockNo;
+        }
+
+        const uniqueKey = `${documentNumber}_${normalizedStockNo}`;
+        if (uniqueInvoices.has(uniqueKey)) {
+          duplicatesRemoved++;
+        }
+        uniqueInvoices.set(uniqueKey, mapped);
+      });
+
+      const filteredRows = Array.from(uniqueInvoices.values());
+
+      if (!filteredRows.length) {
+        setProgress(0, 'No valid invoice rows found.');
+        showToast('No valid rows detected. Each row must include a Document Number value.', 'error');
+        return;
+      }
+
+      const BATCH_SIZE = 1000;
+      let totalUpserted = 0;
+      const totalBatches = Math.ceil(filteredRows.length / BATCH_SIZE);
+      let processed = 0;
+
+      for (let i = 0; i < filteredRows.length; i += BATCH_SIZE) {
+        const batch = filteredRows.slice(i, i + BATCH_SIZE);
+        const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+
+        const startRow = processed + 1;
+        const endRow = Math.min(processed + batch.length, filteredRows.length);
+        if (submitBtn) {
+          submitBtn.innerHTML =
+            `<span class="animate-pulse">Uploading batch ${currentBatch}/${totalBatches} ` +
+            `(${formatPercent(processed, filteredRows.length)}%)...</span>`;
+        }
+        setProgress(
+          formatPercent(processed, filteredRows.length),
+          formatProgressLabel(`Uploading batch ${currentBatch} of ${totalBatches}`, processed, filteredRows.length),
+        );
+
+        const { data, error } = await supabaseClient
+          .from(NS_INVOICES_TABLE)
+          .upsert(batch, { onConflict: conflictColumns, ignoreDuplicates: true });
+
+        if (error) {
+          console.error('Supabase upsert error:', error);
+          if (isRlsBlocked(error)) {
+            showToast('Upload blocked by security policy (RLS).', 'error');
+            return;
+          }
+          const percent = formatPercent(processed, filteredRows.length);
+          showToast(
+            `Upload stopped at batch ${currentBatch}/${totalBatches} ` +
+              `(rows ${startRow}-${endRow}). ` +
+              `Uploaded ${processed} of ${filteredRows.length} rows (${percent}%).`,
+            'error',
+          );
+          setProgress(
+            percent,
+            `Stopped at batch ${currentBatch}/${totalBatches} (${percent}%) - uploaded ${processed} of ${filteredRows.length} rows.`,
+          );
+          return;
+        }
+        totalUpserted += (data ? data.length : 0);
+        processed += batch.length;
+        setProgress(
+          formatPercent(processed, filteredRows.length),
+          formatProgressLabel('Uploaded', Math.min(processed, filteredRows.length), filteredRows.length),
+        );
+      }
+
+      setProgress(95, 'Recalculating open balances...');
+      const { error: recalcError } = await supabaseClient.rpc('recalc_open_balance_all_ns_invoices');
+      if (recalcError) {
+        console.error('Supabase open balance recalculation error:', recalcError);
+        showToast('Open balance recalculation failed: ' + recalcError.message, 'error');
+      }
+
+      const summary =
+        'Completed.' +
+        '\nProcessed (Unique): ' + filteredRows.length +
+        '\nUpserted: ' + totalUpserted +
+        '\nSkipped (Missing Document Number): ' + skippedInvalid +
+        '\nRejected (Stock No not in DealsJP1): ' + rejectedStockMismatch +
+        '\nDuplicates Removed: ' + duplicatesRemoved +
+        '\nErrors: ' + parseErrors;
+
+      showToast(summary, 'success');
+      setProgress(100, 'Upload complete.');
+    };
+
+    const wireDealsUpload = () => {
+      const form = document.getElementById('deals-upload-form');
+      const fileInput = document.getElementById('deals-file');
+      const submitBtn = document.getElementById('deals-upload-button');
+      const requireAdmin = () => {
+        const allowed = isAdminUser();
+        if (fileInput) fileInput.disabled = !allowed;
+        if (submitBtn) submitBtn.disabled = !allowed;
+        const titleText = allowed ? '' : 'Administrator access required';
+        if (fileInput) fileInput.title = titleText;
+        if (submitBtn) submitBtn.title = titleText;
+        return allowed;
+      };
+      if (!form || !fileInput || !submitBtn) return;
+      const syncAccess = () => requireAdmin();
+      syncAccess();
+      window.addEventListener('auth:role-updated', syncAccess);
+      
+      submitBtn.addEventListener('click', (event) => {
+        event.preventDefault(); 
+        if (!requireAdmin()) {
+          showToast('Only administrators can upload deals data.', 'error');
+          return;
+        }
+        const file = fileInput.files?.[0];
+        if (!file) {
+          showToast('Please select a CSV file to upload.', 'error');
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-pulse">Reading file…</span>';
+        window.Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (h) => h.trim(),
+          worker: false, 
+          complete: async (results) => {
+            try {
+              const parseErrors = results.errors?.length || 0;
+              submitBtn.innerHTML = '<span class="animate-pulse">Processing…</span>';
+              await uploadDealsRows(results.data || [], parseErrors, results.meta?.fields || []);
+            } catch (err) {
+              console.error('Upload failed:', err);
+              showToast('Upload failed: ' + formatSupabaseError(err), 'error');
+            } finally {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+              lucide.createIcons();
+            }
+          },
+          error: (err) => {
+            showToast('CSV parse error: ' + err.message, 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+            lucide.createIcons();
+          },
+        });
+      });
+    };
+
+    const wireInvoicesUpload = () => {
+      const form = document.getElementById('ns-invoices-upload-form');
+      const fileInput = document.getElementById('ns-invoices-file');
+      const submitBtn = document.getElementById('ns-invoices-upload-button');
+      const requireAdmin = () => {
+        const allowed = isAdminUser();
+        if (fileInput) fileInput.disabled = !allowed;
+        if (submitBtn) submitBtn.disabled = !allowed;
+        const titleText = allowed ? '' : 'Administrator access required';
+        if (fileInput) fileInput.title = titleText;
+        if (submitBtn) submitBtn.title = titleText;
+        return allowed;
+      };
+      if (!form || !fileInput || !submitBtn) return;
+      const syncAccess = () => requireAdmin();
+      syncAccess();
+      window.addEventListener('auth:role-updated', syncAccess);
+
+      submitBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (!requireAdmin()) {
+          showToast('Only administrators can upload invoice data.', 'error');
+          return;
+        }
+        const file = fileInput.files?.[0];
+        if (!file) {
+          showToast('Please select a CSV file to upload.', 'error');
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-pulse">Reading file…</span>';
+        window.Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          transformHeader: (h) => h.trim(),
+          worker: false,
+          complete: async (results) => {
+            try {
+              const parseErrors = results.errors?.length || 0;
+              submitBtn.innerHTML = '<span class="animate-pulse">Processing…</span>';
+              await uploadInvoicesRows(results.data || [], parseErrors, results.meta?.fields || []);
+            } catch (err) {
+              console.error('Upload failed:', err);
+              showToast('Upload failed: ' + formatSupabaseError(err), 'error');
+            } finally {
+              submitBtn.disabled = false;
+              submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+              lucide.createIcons();
+            }
+          },
+          error: (err) => {
+            showToast('CSV parse error: ' + err.message, 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+            lucide.createIcons();
+          },
+        });
+      });
+    };
+
+    const wirePtPingUpload = () => {
+      const form = document.getElementById('pt-ping-upload-form');
+      const fileInput = document.getElementById('pt-ping-file');
+      const submitBtn = document.getElementById('pt-ping-upload-button');
+      const status = document.getElementById('pt-ping-status');
+
+      const setStatus = (text) => {
+        if (status) status.textContent = text;
+      };
+
+      const requireAdmin = () => {
+        const allowed = isAdminUser();
+        if (fileInput) fileInput.disabled = !allowed;
+        if (submitBtn) submitBtn.disabled = !allowed;
+        const titleText = allowed ? '' : 'Administrator access required';
+        if (fileInput) fileInput.title = titleText;
+        if (submitBtn) submitBtn.title = titleText;
+        return allowed;
+      };
+
+      if (!form || !fileInput || !submitBtn) return;
+      const syncAccess = () => requireAdmin();
+      syncAccess();
+      window.addEventListener('auth:role-updated', syncAccess);
+
+      submitBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (!requireAdmin()) {
+          showToast('Only administrators can upload PT ping data.', 'error');
+          return;
+        }
+        const hasSession = await ensurePtSession();
+        if (!hasSession) return;
+        const file = fileInput.files?.[0];
+        if (!file) {
+          showToast('Please select a CSV or XLSX file to upload.', 'error');
+          return;
+        }
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-pulse">Preparing rows…</span>';
+        setStatus('Parsing file...');
+        try {
+          const { rows, headers, errors } = await parsePtPingFile(file);
+          const normalizedHeaders = normalizePtHeaders(headers);
+          console.log('RAW HEADERS:', headers);
+          console.log('NORMALIZED HEADERS:', Array.from(normalizedHeaders));
+          const { valid, missing } = validatePtPingHeaders(normalizedHeaders);
+          if (!valid) {
+            setStatus('Missing headers: ' + missing.join(', '));
+            showToast('Missing required headers: ' + missing.join(', '), 'error');
+            return;
+          }
+          submitBtn.innerHTML = '<span class="animate-pulse">Processing…</span>';
+          await uploadPtPingRows(rows || [], errors?.length || 0);
+        } catch (err) {
+          console.error('PT Last Ping upload failed:', err);
+          showToast('Upload failed: ' + err.message, 'error');
+          setStatus('Upload failed: ' + err.message);
+          showPtError(err, 'PT Last Ping upload failed');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+          lucide.createIcons();
+        }
+      });
+    };
+
+    const mount = async () => {
+      const container = document.getElementById('datasets');
+      const datasetCards = DATASETS.map((dataset) => {
+        const { card, els } = createDatasetCard(dataset);
+        container.appendChild(card);
+        return { dataset, els };
+      });
+      const statsResults = await Promise.all(
+        datasetCards.map(async ({ dataset, els }) => {
+          try {
+            const stats = await getTableStats(dataset);
+            updateDatasetCardStats(els, stats);
+            return { stats, dataset };
+          } catch (err) {
+            const stats = { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: err.message };
+            updateDatasetCardStats(els, stats);
+            return { stats, dataset };
+          }
+        }),
+      );
+      const totalRows = statsResults.reduce((sum, { stats }) => sum + (stats.rows || 0), 0);
+      const activities = statsResults
+        .filter(({ stats }) => (stats.rows || 0) > 0 && !stats.restricted)
+        .map(({ stats, dataset }) => ({ ...stats, table: dataset.displayName }));
+      document.getElementById('dataset-count').textContent = DATASETS.length;
+      document.getElementById('records-count').textContent = totalRows.toLocaleString();
+      renderActivityLog(activities);
+      lucide.createIcons();
+    };
+
+    const ensureXlsxLibrary = () => {
+      if (window.XLSX) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Failed to load XLSX parser.'));
+        document.head.appendChild(script);
+      });
+    };
+
+    const parsePtPingFile = async (file) => {
+      const name = file?.name || '';
+      const lowerName = name.toLowerCase();
+      if (lowerName.endsWith('.csv')) {
+        return new Promise((resolve, reject) => {
+          window.Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (header) =>
+              (header || '')
+                .toString()
+                .replace(/^\uFEFF/, '')
+                .replace(/\u00A0/g, ' ')
+                .trim(),
+            worker: false,
+            complete: (results) => {
+              const headers = results.meta?.fields || [];
+              resolve({ rows: results.data || [], headers, errors: results.errors || [] });
+            },
+            error: (err) => reject(err),
+          });
+        });
+      }
+      if (lowerName.endsWith('.xlsx')) {
+        await ensureXlsxLibrary();
+        const data = await file.arrayBuffer();
+        const workbook = window.XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[firstSheet];
+        const rowsMatrix = window.XLSX.utils.sheet_to_json(sheet, { header: 1, blankrows: false });
+        const headers = (rowsMatrix[0] || []).map((h) =>
+          (h === undefined || h === null ? '' : String(h))
+            .replace(/^\uFEFF/, '')
+            .replace(/\u00A0/g, ' ')
+            .trim()
+        );
+        const rows = rowsMatrix.slice(1).map((row) => {
+          const obj = {};
+          headers.forEach((header, idx) => {
+            obj[header] = row[idx];
+          });
+          return obj;
+        });
+        return { rows, headers, errors: [] };
+      }
+      throw new Error('Unsupported file type. Please upload CSV or XLSX.');
+    };
+
+    const validatePtPingHeaders = (headers = []) => {
+      const normalizedHeaders = headers instanceof Set ? headers : normalizePtHeaders(headers);
+      const missing = [];
+      if (!normalizedHeaders.has('Serial')) missing.push('Serial');
+      if (!normalizedHeaders.has('Date')) missing.push('Date');
+      return { valid: missing.length === 0, missing };
+    };
+
+    const excelSerialToIso = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return null;
+      const date = new Date((num - 25569) * 86400 * 1000);
+      const time = date.getTime();
+      if (Number.isNaN(time)) return null;
+      return date.toISOString();
+    };
+
+    const normalizePtDate = (value) => {
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value.toISOString();
+      }
+      if (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))) {
+        return excelSerialToIso(value);
+      }
+      if (typeof value === 'string') {
+        const parsed = new Date(value.trim());
+        return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+      }
+      return null;
+    };
+
+    const sanitizePtPingRow = (row = {}) => {
+      const normalized = normalizePtPingRow(row);
+      const cleaned = {};
+      PT_PING_COLUMNS.forEach((column) => {
+        let value = normalized[column];
+        if (typeof value === 'string') value = value.trim();
+        if (column === 'Lat' || column === 'Long' || column === 'Year') {
+          const numeric = toNumber(value);
+          value = numeric !== null ? numeric : value;
+        }
+        if (column === 'Date') {
+          const isoDate = normalizePtDate(value);
+          const hasValue = value !== undefined && value !== null && `${value}`.trim() !== '';
+          if (isoDate) {
+            cleaned.Date = isoDate;
+          } else if (hasValue) {
+            cleaned.__invalidDate = true;
+          }
+          return;
+        }
+        if (value === '') value = null;
+        if (value !== undefined && value !== null) cleaned[column] = value;
+      });
+      return cleaned;
+    };
+
+    const ensurePtSession = async () => {
+      try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
+        if (!data?.session) {
+          showToast('You must be signed in to upload PT Last Ping data.', 'error');
+          return false;
+        }
+        return true;
+      } catch (err) {
+        console.error('Session check failed:', err);
+        showToast('Unable to verify session. Please sign in again.', 'error');
+        showPtError(err, 'Session validation failed');
+        return false;
+      }
+    };
+
+    const uploadPtPingRows = async (rows, parseErrors = 0) => {
+      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!isAdminUser()) throw new Error('Only administrators can upload PT ping data.');
+
+      const normalizeVinLast6 = (vin) => {
+        if (!vin && vin !== 0) return null;
+        const str = String(vin).trim().toUpperCase();
+        if (!str) return null;
+        return str.slice(-6);
+      };
+
+      const fetchDealsVinSet = async () => {
+        const set = new Set();
+        const pageSize = 1000;
+        let from = 0;
+        while (true) {
+          const to = from + pageSize - 1;
+          const { data, error } = await supabaseClient
+            .from(DEALS_TABLE)
+            .select('VIN', { head: false })
+            .range(from, to);
+          if (error) throw error;
+          (data || []).forEach((row) => {
+            const last6 = normalizeVinLast6(row?.VIN);
+            if (last6) set.add(last6);
+          });
+          if (!data || data.length < pageSize) break;
+          from += pageSize;
+        }
+        return set;
+      };
+
+      const submitBtn = document.getElementById('pt-ping-upload-button');
+      const status = document.getElementById('pt-ping-status');
+      const progressWrap = document.getElementById('pt-ping-progress');
+      const progressBar = document.getElementById('pt-ping-progress-bar');
+      const progressLabel = document.getElementById('pt-ping-progress-label');
+      const progressCount = document.getElementById('pt-ping-progress-count');
+      const errorBox = document.getElementById('pt-error-box');
+      const errorPre = document.getElementById('pt-error-pre');
+      const rejectedRows = [];
+      const cleanedRows = (rows || []).map(sanitizePtPingRow);
+      const ptPingDedupFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        hour12: false,
+      });
+      const aggregated = {
+        inserted: 0,
+        batches: 0,
+        rejectedMissingRequired: 0,
+        rejectedInvalidDate: 0,
+        skippedDeduplication: 0,
+        skippedSupabaseDuplicates: 0,
+        rejectedNoMatchVin: 0,
+      };
+
+      const recalcPtMovedForSerials = async (serials = []) => {
+        if (!serials.length) return;
+        try {
+          const { error } = await supabaseClient.rpc('recalc_pt_lastping_moved_2d_for_serials', { serials });
+          if (error) {
+            if (error.code === '42883') {
+              console.warn('RPC recalc_pt_lastping_moved_2d_for_serials unavailable; continuing upload.', error);
+              return;
+            }
+            console.warn('RPC recalc_pt_lastping_moved_2d_for_serials failed; continuing upload.', error);
+          }
+        } catch (err) {
+          console.warn('RPC recalc_pt_lastping_moved_2d_for_serials threw; continuing upload.', err);
+        }
+      };
+
+      const derivePtDayParts = (dateVal) => {
+        const parsedDate = new Date(dateVal);
+        if (Number.isNaN(parsedDate.getTime())) return { readDay: null, dayHalf: null };
+        const parts = ptPingDedupFormatter.formatToParts(parsedDate).reduce((acc, part) => {
+          if (part.type !== 'literal') acc[part.type] = part.value;
+          return acc;
+        }, {});
+        const { year, month, day } = parts;
+        const hour = Number(parts.hour);
+        if (!year || !month || !day || Number.isNaN(hour)) return { readDay: null, dayHalf: null };
+        const readDay = `${year}-${month}-${day}`;
+        const dayHalf = hour < 12 ? 0 : 1;
+        return { readDay, dayHalf };
+      };
+
+      const buildPtPingDedupKey = (serialVal, dateVal) => {
+        if (!serialVal || !dateVal) return null;
+        const { readDay, dayHalf } = derivePtDayParts(dateVal);
+        if (!readDay || dayHalf === null) return null;
+        return `${serialVal}__${readDay}__${dayHalf}`;
+      };
+
+      const deduplicateValidRows = (rowsToDedup) => {
+        const latestByKey = new Map();
+
+        rowsToDedup.forEach(({ row, readDay, dayHalf }, index) => {
+          const serialVal = row?.['Serial'];
+          const dateVal = row?.['Date'];
+          const key = buildPtPingDedupKey(serialVal, dateVal) || `${serialVal}__${readDay}__${dayHalf}`;
+          const currentTime = new Date(dateVal).getTime();
+          const existing = latestByKey.get(key);
+          if (existing) {
+            aggregated.skippedDeduplication += 1;
+            const existingTime = new Date(existing.row?.['Date']).getTime();
+            if (!Number.isNaN(currentTime) && (Number.isNaN(existingTime) || currentTime >= existingTime)) {
+              latestByKey.set(key, { row, index });
+            }
+            return;
+          }
+          latestByKey.set(key, { row, index });
+        });
+
+        return Array.from(latestByKey.values())
+          .sort((a, b) => a.index - b.index)
+          .map((entry) => entry.row);
+      };
+
+      const setStatus = (text) => {
+        if (status) status.textContent = text;
+      };
+
+      const setProgress = (percent, label) => {
+        const safePercent = Math.max(0, Math.min(100, percent));
+        if (progressWrap) progressWrap.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = `${safePercent}%`;
+        if (progressLabel && label) progressLabel.textContent = label;
+        if (progressCount) progressCount.textContent = `${Math.round(safePercent)}%`;
+      };
+
+      const resetErrorBox = () => {
+        if (errorBox) errorBox.classList.add('hidden');
+        if (errorPre) errorPre.textContent = '';
+      };
+
+      resetErrorBox();
+      setProgress(0, 'Preparing upload...');
+
+      setStatus(`Validating ${cleanedRows.length} rows (Serial and Date required)...`);
+      let dealsVinSet;
+      try {
+        setStatus('Loading reference VINs...');
+        dealsVinSet = await fetchDealsVinSet();
+      } catch (err) {
+        console.error('Failed to load Deals VINs', err);
+        showToast('Unable to load Deals VINs for validation.', 'error');
+        setStatus('VIN validation unavailable.');
+        setProgress(0, 'Validation failed');
+        showPtError(err, 'Deals VIN fetch failed');
+        return;
+      }
+
+      const validRows = [];
+      cleanedRows.forEach((row) => {
+        const serial = row?.['Serial'];
+        const date = row?.['Date'];
+        if (row?.__invalidDate) {
+          aggregated.rejectedInvalidDate += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'Invalid Date' });
+          return;
+        }
+        if (!serial || `${serial}`.trim() === '' || !date || `${date}`.trim() === '') {
+          aggregated.rejectedMissingRequired += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'Missing Serial or Date' });
+          return;
+        }
+        const { readDay, dayHalf } = derivePtDayParts(date);
+        if (!readDay || dayHalf === null) {
+          aggregated.rejectedInvalidDate += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'Invalid Date bucket' });
+          return;
+        }
+        const vinLast6 = normalizeVinLast6(row?.['VIN']);
+        if (!vinLast6 || !dealsVinSet.has(vinLast6)) {
+          aggregated.rejectedNoMatchVin += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'VIN not in Deals (last 6 mismatch)' });
+          return;
+        }
+        delete row.__invalidDate;
+        validRows.push({ row, readDay, dayHalf });
+      });
+
+      if (!validRows.length) {
+        setStatus('No rows contained both Serial and Date values.');
+        setProgress(0, 'No valid rows');
+        showToast('No rows contained both Serial and Date values.', 'error');
+        return;
+      }
+
+      const dedupedRows = deduplicateValidRows(validRows);
+      const totalBatches = Math.ceil(dedupedRows.length / PT_PING_BATCH_SIZE);
+      const serialsForRecalc = Array.from(
+        new Set(
+          dedupedRows
+            .map((row) => row?.['Serial'])
+            .filter((serial) => serial !== undefined && serial !== null && `${serial}`.trim() !== '')
+        )
+      );
+
+      for (let i = 0; i < dedupedRows.length; i += PT_PING_BATCH_SIZE) {
+        const batchNumber = Math.floor(i / PT_PING_BATCH_SIZE) + 1;
+        const sliceEnd = i + PT_PING_BATCH_SIZE;
+        const batchRows = dedupedRows.slice(i, sliceEnd);
+        const batch = batchRows.map(buildSlimPtPayload);
+
+        setStatus(`Uploading batch ${batchNumber} of ${totalBatches} (${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length})...`);
+        setProgress(((batchNumber - 1) / totalBatches) * 90, `Uploading batch ${batchNumber}/${totalBatches}`);
+        const { error, count } = await supabaseClient
+          .from('PT-LastPing')
+          .upsert(batch, {
+            onConflict: '"Serial",read_day,day_half',
+            ignoreDuplicates: true,
+            count: 'exact',
+          });
+
+        if (error) {
+          console.error('Supabase insert error:', { error, batchNumber });
+          if (isRlsBlocked(error)) {
+            showToast('Upload blocked by security policy (RLS).', 'error');
+            setStatus('Upload blocked by security policy (RLS).');
+            setProgress(((batchNumber - 1) / totalBatches) * 90, `Batch ${batchNumber} blocked`);
+            showPtError(error, `Batch ${batchNumber} blocked`);
+            return;
+          }
+          showToast('Upload failed', 'error');
+          setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
+          setProgress(((batchNumber - 1) / totalBatches) * 90, `Batch ${batchNumber} failed`);
+          showPtError(error, `Batch ${batchNumber} failed`);
+          throw error;
+        }
+
+        const insertedCount = typeof count === 'number' ? count : batch.length;
+        aggregated.batches += 1;
+        aggregated.inserted += insertedCount;
+        aggregated.skippedSupabaseDuplicates += Math.max(0, batch.length - insertedCount);
+        setProgress((batchNumber / totalBatches) * 90, `Uploaded batch ${batchNumber}/${totalBatches}`);
+        await new Promise((resolve) => setTimeout(resolve, PT_PING_BATCH_DELAY_MS));
+      }
+
+      setStatus(`Running PT recalc for ${serialsForRecalc.length} serials...`);
+      setProgress(95, `Running recalc RPC (${serialsForRecalc.length} serials)`);
+      await recalcPtMovedForSerials(serialsForRecalc);
+      setProgress(100, 'Done');
+
+      const summary =
+        'Completed.' +
+        '\nBatches: ' + aggregated.batches +
+        '\nInserted: ' + aggregated.inserted +
+        '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
+        '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
+        '\nSkipped duplicates (client half-day bucket): ' + aggregated.skippedDeduplication +
+        '\nSkipped duplicates (Supabase conflicts): ' + aggregated.skippedSupabaseDuplicates +
+        '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
+        '\nErrors: ' + parseErrors;
+      setStatus(`Upload complete. Inserted: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Skipped (Supabase): ${aggregated.skippedSupabaseDuplicates} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
+      showToast(summary, 'success');
+      if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+      lucide.createIcons();
+    };
+
+    const initBackground = async () => {
+      const initialMode = await loadPreferredBackgroundMode();
+      setupBackgroundManager({
+        canvasId: 'constellation-canvas',
+        controlButton: document.querySelector('[data-bg-control]'),
+        controlMenu: document.querySelector('[data-bg-menu]'),
+        statusLabel: document.querySelector('[data-bg-status]'),
+        initialMode,
+        onModeChange: persistBackgroundMode,
+      });
+    };
+
+    initBackground().catch((error) =>
+      console.error('Unable to initialize background manager', error)
+    );
+    mount();
+    wireDealsUpload();
+    wireInvoicesUpload();
+    wirePtPingUpload();
+  </script>
+  <script type="module">
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    const redirectToLogin = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        window.location.href = '../login.html';
+      }
+    };
+
+    redirectToLogin();
+  </script>
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+</body>
+</html>

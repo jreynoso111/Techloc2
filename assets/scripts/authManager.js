@@ -1,0 +1,346 @@
+import { supabase as supabaseClient } from '../js/supabaseClient.js';
+
+(function () {
+  if (!supabaseClient) {
+    console.error('Supabase client not initialized. Ensure supabaseClient.js is available.');
+    return;
+  }
+
+  const whenDomReady = new Promise((resolve) => {
+    if (document.readyState !== 'loading') {
+      resolve();
+      return;
+    }
+    document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+  });
+
+  const navIds = {
+    control: 'nav-control-view',
+    dashboard: 'nav-dashboard',
+    services: 'nav-services',
+    login: 'nav-login',
+    logout: 'nav-logout',
+  };
+
+  const getNavElement = (key) => document.getElementById(navIds[key]);
+
+  const roleAllowsDashboard = (role) => ['administrator', 'moderator'].includes(String(role || '').toLowerCase());
+  const roleAllowsServiceRequests = (role) => String(role || '').toLowerCase() === 'administrator';
+
+  // Rutas protegidas (control map served from /pages/control-map.html; root redirect removed)
+  const protectedRoutes = [
+    (path) => path.endsWith('/pages/control-map.html') || path.endsWith('pages/control-map.html'),
+    (path) => path.endsWith('/services-request.html') || path.endsWith('services-request.html'),
+    (path) => path.includes('/admin/'),
+  ];
+
+  const isServiceRequestPath = () => {
+    const path = window.location.pathname.toLowerCase();
+    return path.endsWith('/services-request.html') || path.endsWith('services-request.html');
+  };
+
+  const mapsTo = (page) => {
+    const normalizedPage = page.startsWith('/') ? page.slice(1) : page;
+    const currentPath = window.location.pathname;
+    const normalizedPath = currentPath.toLowerCase();
+    const repoSegment = '/techloc/';
+    const repoIndex = normalizedPath.indexOf(repoSegment);
+    const basePath = repoIndex !== -1 ? currentPath.slice(0, repoIndex + repoSegment.length) : '/';
+    return `${basePath}${normalizedPage}`;
+  };
+
+  // --- NUEVO: Función para obtener el rol y estado desde la tabla profiles ---
+  const fetchUserProfile = async (userId) => {
+    try {
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .select('role, status, email')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data)
+        return {
+          role: 'user',
+          status: 'active',
+          email: null,
+        }; // Valores por defecto si falla
+
+      return {
+        role: data.role || 'user',
+        status: data.status || 'active',
+        email: data.email || null,
+      };
+    } catch (err) {
+      console.error('Error fetching role:', err);
+      return {
+        role: 'user',
+        status: 'active',
+        email: null,
+      };
+    }
+  };
+
+  const waitForAccountLabel = (timeoutMs = 3000) =>
+    new Promise((resolve) => {
+      const start = Date.now();
+      const check = () => {
+        const label = document.querySelector('[data-account-name]');
+        if (label) {
+          resolve(label);
+          return;
+        }
+        if (Date.now() - start >= timeoutMs) {
+          resolve(null);
+          return;
+        }
+        setTimeout(check, 100);
+      };
+      check();
+    });
+
+  const updateHeaderAccount = async (session, profileEmail) => {
+    const accountName = await waitForAccountLabel();
+    if (!accountName) return;
+
+    if (!session?.user) {
+      accountName.textContent = 'Account';
+      return;
+    }
+
+    const label = session.user.email || profileEmail || 'Account';
+    accountName.textContent = label;
+  };
+
+  const toggleDashboardLinks = (hasSession, role, status) =>
+    whenDomReady.then(() => {
+      const isSuspended = status === 'suspended';
+      const canShowDashboard = hasSession && !isSuspended && roleAllowsDashboard(role);
+      const dashboardLinks = document.querySelectorAll('[data-dashboard-link]');
+
+      dashboardLinks.forEach((link) => {
+        if (!link) return;
+
+        if (canShowDashboard) {
+          link.classList.remove('hidden');
+          link.removeAttribute('aria-hidden');
+          link.removeAttribute('tabindex');
+          link.style.pointerEvents = '';
+        } else {
+          link.classList.add('hidden');
+          link.setAttribute('aria-hidden', 'true');
+          link.setAttribute('tabindex', '-1');
+          link.style.pointerEvents = 'none';
+        }
+      });
+    });
+
+  const updateNav = (hasSession, role, status) => // <--- Modificado para aceptar 'role' y 'status'
+    whenDomReady.then(() => {
+      const controlLink = getNavElement('control');
+      const dashboardLink = getNavElement('dashboard');
+      const servicesLink = getNavElement('services');
+      const loginLink = getNavElement('login');
+      const logoutButton = getNavElement('logout');
+
+      const isSuspended = status === 'suspended';
+      const canShowDashboard = hasSession && !isSuspended && roleAllowsDashboard(role);
+      const canShowServices = hasSession && !isSuspended && roleAllowsServiceRequests(role);
+
+      if (hasSession && !isSuspended) {
+        // Lógica de visualización basada en sesión
+        controlLink?.classList.remove('hidden');
+        controlLink?.classList.add('md:inline-flex');
+
+        if (canShowServices) {
+          servicesLink?.classList.remove('hidden');
+        } else {
+          servicesLink?.classList.add('hidden');
+        }
+
+        if (canShowDashboard) {
+          dashboardLink?.classList.remove('hidden');
+          dashboardLink?.classList.add('md:inline-flex');
+        } else {
+          dashboardLink?.classList.add('hidden');
+          dashboardLink?.classList.remove('md:inline-flex');
+        }
+
+        logoutButton?.classList.remove('hidden');
+        loginLink?.classList.add('hidden');
+      } else {
+        controlLink?.classList.add('hidden');
+        controlLink?.classList.remove('md:inline-flex');
+        servicesLink?.classList.add('hidden');
+        dashboardLink?.classList.add('hidden');
+        dashboardLink?.classList.remove('md:inline-flex');
+        logoutButton?.classList.add('hidden');
+        loginLink?.classList.remove('hidden');
+      }
+
+      toggleDashboardLinks(hasSession, role, status);
+    });
+
+  const toggleProtectedBlocks = (hasSession) =>
+    whenDomReady.then(() => {
+      const loading = document.querySelector('[data-auth-loading]');
+      const protectedBlocks = document.querySelectorAll('[data-auth-protected]');
+
+      if (hasSession) {
+        loading?.remove();
+        protectedBlocks.forEach((block) => {
+          block.classList.remove('hidden');
+          block.removeAttribute('aria-hidden');
+        });
+        return;
+      }
+
+      loading?.classList.remove('hidden');
+      protectedBlocks.forEach((block) => {
+        block.classList.add('hidden');
+        block.setAttribute('aria-hidden', 'true');
+      });
+    });
+
+  const isProtectedRoute = () => {
+    const path = window.location.pathname.toLowerCase();
+    return protectedRoutes.some((matcher) => matcher(path));
+  };
+
+  const enforceRouteProtection = (hasSession, role) => {
+    const isAdminPath = window.location.pathname.toLowerCase().includes('/admin/');
+
+    if (!hasSession && isProtectedRoute()) {
+      window.location.replace(mapsTo('pages/login.html'));
+      return;
+    }
+
+    if (hasSession && isAdminPath && !roleAllowsDashboard(role)) {
+      window.location.replace(mapsTo('index.html'));
+      return;
+    }
+
+    if (hasSession && isServiceRequestPath() && !roleAllowsServiceRequests(role)) {
+      window.location.replace(mapsTo('index.html'));
+      return;
+    }
+
+    if (window.currentUserStatus === 'suspended' && isProtectedRoute()) {
+      supabaseClient?.auth.signOut();
+      window.location.replace(mapsTo('pages/login.html'));
+    }
+  };
+
+  const bindLogout = () => {
+    whenDomReady.then(() => {
+      const logoutButton = getNavElement('logout');
+      if (!logoutButton || logoutButton.dataset.bound === 'true') return;
+
+        logoutButton.dataset.bound = 'true';
+        logoutButton.addEventListener('click', async (event) => {
+          event.preventDefault();
+          try {
+            await supabaseClient.auth.signOut();
+            // Limpiar rol global al salir
+            window.currentUserRole = null;
+            window.currentUserStatus = null;
+            document.body.removeAttribute('data-user-role');
+            document.body.removeAttribute('data-user-status');
+          } catch (error) {
+            console.error('Error during Supabase sign out', error);
+          }
+        });
+      });
+  };
+
+  const startAuthFlow = async () => {
+    try {
+      const { data } = await supabaseClient.auth.getSession();
+      const hasSession = Boolean(data?.session);
+      let userRole = 'user'; // Rol por defecto
+      let userStatus = 'active';
+
+      // --- NUEVO: Si hay sesión, buscamos el rol en la base de datos ---
+      if (hasSession && data.session.user) {
+        const profile = await fetchUserProfile(data.session.user.id);
+        userRole = profile.role;
+        userStatus = profile.status.toLowerCase();
+        await updateHeaderAccount(data.session, profile.email);
+
+        // Guardamos el rol y estado globalmente para usarlo en otros scripts
+        window.currentUserRole = userRole;
+        window.currentUserStatus = userStatus;
+
+        // Opcional: Añadir al body para usar CSS (ej: body[data-role="admin"] .delete-btn { display: block; })
+        document.body.setAttribute('data-user-role', userRole);
+        document.body.setAttribute('data-user-status', userStatus);
+
+        // Disparamos un evento para avisar a otros scripts que el rol está listo
+        window.dispatchEvent(
+          new CustomEvent('auth:role-ready', { detail: { role: userRole, status: userStatus } })
+        );
+      } else {
+        window.currentUserRole = null;
+        window.currentUserStatus = null;
+        document.body.removeAttribute('data-user-role');
+        document.body.removeAttribute('data-user-status');
+        await updateHeaderAccount(null);
+      }
+
+      const isLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
+      if (hasSession && isLoginPage) {
+        window.location.replace(mapsTo('index.html'));
+        return;
+      }
+
+      updateNav(hasSession, userRole, userStatus); // Pasamos el rol y estado
+      toggleProtectedBlocks(hasSession);
+      enforceRouteProtection(hasSession, userRole);
+      bindLogout();
+
+      supabaseClient.auth.onAuthStateChange(async (event, session) => {
+        const sessionExists = Boolean(session);
+        let updatedRole = 'user';
+        let updatedStatus = 'active';
+
+        if (sessionExists && session.user) {
+           const profile = await fetchUserProfile(session.user.id);
+           updatedRole = profile.role;
+           updatedStatus = profile.status.toLowerCase();
+           window.currentUserRole = updatedRole;
+           window.currentUserStatus = updatedStatus;
+           document.body.setAttribute('data-user-role', updatedRole);
+           document.body.setAttribute('data-user-status', updatedStatus);
+           await updateHeaderAccount(session, profile.email);
+        } else {
+           window.currentUserRole = null;
+           window.currentUserStatus = null;
+           document.body.removeAttribute('data-user-role');
+           document.body.removeAttribute('data-user-status');
+           await updateHeaderAccount(null);
+        }
+
+        const onLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
+
+        updateNav(sessionExists, updatedRole, updatedStatus);
+        toggleProtectedBlocks(sessionExists);
+        enforceRouteProtection(sessionExists, updatedRole);
+
+        if (event === 'SIGNED_IN' && onLoginPage) {
+          window.location.replace(mapsTo('index.html'));
+          return;
+        }
+
+        if (event === 'SIGNED_OUT' && isProtectedRoute()) {
+          window.location.replace(mapsTo('pages/login.html'));
+        }
+      });
+    } catch (error) {
+      console.error('Failed to verify Supabase session', error);
+      enforceRouteProtection(false, null);
+      updateNav(false, null, null);
+      toggleProtectedBlocks(false);
+    }
+  };
+
+  startAuthFlow();
+})();

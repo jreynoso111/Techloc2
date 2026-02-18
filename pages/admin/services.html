@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Services Admin</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+
+  <!-- Minimal analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <script type="module">
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+
+  <style>
+    html, body { width: 100%; height: auto; }
+    body { overflow-x: hidden; overflow-y: auto; }
+    main { width: 100%; height: auto; overflow: visible; }
+
+    .directory-shell { display: flex; flex-direction: column; gap: 0.75rem; overflow: visible; height: auto !important; min-height: 0 !important; }
+
+    .analytics-wrap { max-width: 100%; overflow: hidden; }
+    .mini-analytics { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; max-width: 100%; overflow: hidden; }
+    @media (min-width: 1024px) { .mini-analytics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .mini-chart { height: 150px; max-width: 100%; overflow: hidden; }
+    .mini-chart canvas { width: 100% !important; height: 100% !important; display: block; max-width: 100% !important; }
+
+    .table-window { display: flex; flex-direction: column; gap: 0.6rem; flex: none; min-height: 0; overflow: visible; }
+
+    .top-scrollbar-shell { flex: 0 0 auto; position: sticky; top: 0; z-index: 20; padding: 0.5rem; border: 1px solid rgb(30 41 59); background: rgba(2, 6, 23, 0.75); border-radius: 0.75rem; backdrop-filter: blur(6px); }
+    .top-scrollbar { overflow-x: auto; overflow-y: hidden; height: 14px; border-radius: 0.75rem; }
+    .top-scrollbar::-webkit-scrollbar { height: 12px; }
+    .top-scrollbar::-webkit-scrollbar-thumb { background: rgba(148,163,184,.25); border-radius: 999px; }
+    .top-scrollbar::-webkit-scrollbar-track { background: rgba(15,23,42,.35); border-radius: 999px; }
+
+    #table-scroll { overflow-x: auto; overflow-y: visible; width: 100%; max-width: 100%; border-radius: 0.75rem; }
+    #table-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+    #table-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,.25); border-radius: 999px; }
+    #table-scroll::-webkit-scrollbar-track { background: rgba(15,23,42,.35); border-radius: 999px; }
+
+    thead.sticky-head th { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(8px); }
+
+    th.resizable { position: relative; user-select: none; }
+    .col-resizer { position: absolute; right: 0; top: 0; height: 100%; width: 10px; cursor: col-resize; display: flex; align-items: center; justify-content: center; }
+    .col-resizer::after { content: ""; display: block; width: 2px; height: 55%; background: rgba(148,163,184,.35); border-radius: 999px; }
+
+    th.dragging { opacity: .55; }
+    th.drop-target { outline: 2px dashed rgba(59,130,246,.55); outline-offset: -6px; }
+
+    table.fixed-layout { table-layout: fixed; width: max-content; min-width: 100%; }
+
+    #services-table th, #services-table td { white-space: normal !important; overflow-wrap: anywhere; word-break: break-word; vertical-align: top; }
+    .th-inner { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; justify-content: flex-start; width: 100%; padding-right: 10px; padding-bottom: 26px; min-width: 0; }
+    .th-label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(226,232,240,.85); line-height: 1.2; }
+    .sort-btn { padding: 4px 6px; height: 24px; width: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid rgba(71,85,105,.8); background: rgba(2,6,23,.75); }
+    .sort-btn:hover { border-color: rgba(59,130,246,.8); color: #fff; }
+    .header-actions { position: absolute; right: 10px; bottom: 4px; display: inline-flex; align-items: center; gap: 0.35rem; }
+    .filter-btn { padding: 4px 6px; height: 24px; width: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid rgba(71,85,105,.8); background: rgba(2,6,23,.75); }
+    .filter-btn:hover { border-color: rgba(59,130,246,.8); color: #fff; }
+    .filter-popover { position: absolute; right: 0; top: calc(100% + 8px); width: min(320px, 92vw); max-width: calc(100vw - 32px); z-index: 50; border-radius: 16px; border: 1px solid rgba(30,41,59,.9); background: rgba(2,6,23,.96); padding: 12px; box-shadow: 0 20px 40px rgba(0,0,0,.4); }
+    .filter-popover label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.18em; color: rgba(148,163,184,.85); }
+    .filter-options { margin-top: 10px; max-height: 180px; overflow-y: auto; display: grid; gap: 6px; }
+    .filter-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; border: 1px solid rgba(30,41,59,.6); background: rgba(15,23,42,.65); font-size: 11px; color: rgba(226,232,240,.9); }
+    .filter-option:hover { border-color: rgba(59,130,246,.6); }
+    .filter-actions { margin-top: 12px; display: flex; gap: 8px; }
+    .filter-search { margin-top: 8px; display: flex; align-items: center; gap: 6px; border-radius: 12px; border: 1px solid rgba(51,65,85,.8); background: rgba(2,6,23,.85); padding: 6px 8px; }
+    .filter-search input { flex: 1; background: transparent; border: none; color: rgba(226,232,240,.95); font-size: 11px; outline: none; }
+    .popover { position: absolute; right: 0; top: calc(100% + 8px); width: min(340px, 92vw); z-index: 50; }
+    .compact-th { padding: 0.5rem 0.8rem; }
+    .compact-td { padding: 0.5rem 0.8rem; }
+    .compact-text { font-size: 12px; line-height: 1.25rem; }
+    .stats-grid { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+
+    /* Inline editing visuals */
+    td[data-editable="true"] { cursor: text; }
+    td.editing { outline: 2px solid rgba(59,130,246,.65); outline-offset: -2px; background: rgba(2,6,23,.65); }
+    td.saving { opacity: .75; }
+    td.saved { box-shadow: inset 0 0 0 2px rgba(16,185,129,.4); }
+    td.failed { box-shadow: inset 0 0 0 2px rgba(239,68,68,.45); }
+    .cell-input, .cell-select {
+      width: 100%;
+      border: 1px solid rgba(51,65,85,.8);
+      background: rgba(2,6,23,.9);
+      color: rgba(248,250,252,.95);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 12.5px;
+      line-height: 1.25rem;
+      outline: none;
+    }
+    .cell-input:focus, .cell-select:focus { border-color: rgba(59,130,246,.9); }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-slate-50 relative" data-page-title="Services Admin" data-active-nav="services">
+
+  <!-- HEADER -->
+  <div class="sticky top-0 z-50 space-y-px">
+    <div data-shared-header></div>
+  </div>
+
+  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10"></canvas>
+
+  <main class="w-full px-6 py-5 lg:px-10 space-y-5">
+      <section class="flex min-w-0 flex-col gap-4">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Partner network</p>
+            <h2 class="text-2xl font-black text-white">Service roster and coverage</h2>
+            <p class="text-sm text-slate-400">Double-click any cell to edit (admins only). Enter = save, Esc = cancel.</p>
+          </div>
+
+          <div class="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-300">
+            <i data-lucide="cloud" class="h-4 w-4"></i>
+            <span id="dataset-status">Connecting…</span>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <section class="grid stats-grid gap-3 sm:grid-cols-3">
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <p class="text-sm font-semibold text-slate-300">Total services</p>
+            <p id="tech-total" class="text-3xl font-black text-white">-</p>
+          </div>
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <p class="text-sm font-semibold text-slate-300">States covered</p>
+            <p id="tech-states" class="text-3xl font-black text-amber-300">-</p>
+          </div>
+          <div class="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+            <p class="text-sm font-semibold text-slate-300">Companies</p>
+            <p id="tech-companies" class="text-3xl font-black text-emerald-300">-</p>
+          </div>
+        </section>
+
+        <!-- DIRECTORY -->
+        <section class="directory-shell rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-inner shadow-slate-900/60">
+          <div class="flex flex-col gap-3">
+
+            <div class="flex flex-col gap-2">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Directory</p>
+                <h3 class="text-lg font-bold text-white">Service list</h3>
+              </div>
+
+              <!-- ANALYTICS -->
+              <div class="analytics-wrap" id="analytics-wrap">
+                <div class="mini-analytics">
+                  <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 overflow-hidden">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200">Analytics</p>
+                    <h3 class="text-sm font-bold text-white">Top states (filtered)</h3>
+                    <div class="mt-3 mini-chart"><canvas id="chart-states"></canvas></div>
+                  </div>
+                  <div class="rounded-2xl border border-slate-800 bg-slate-950/40 p-4 overflow-hidden">
+                    <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-200">Analytics</p>
+                    <h3 class="text-sm font-bold text-white">Categories share (filtered)</h3>
+                    <div class="mt-3 mini-chart"><canvas id="chart-categories"></canvas></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- FILTERS / ACTIONS -->
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <div class="relative">
+                  <button id="columns-btn" class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-950/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white" type="button">
+                    <i data-lucide="columns-3" class="h-4 w-4"></i> Columns
+                    <i data-lucide="chevron-down" class="h-4 w-4"></i>
+                  </button>
+
+                  <div id="columns-popover" class="popover hidden rounded-2xl border border-slate-800 bg-slate-950/95 p-3 shadow-2xl shadow-black">
+                    <div class="flex items-center justify-between px-2 pb-2">
+                      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Visible columns</p>
+                      <div class="flex items-center gap-2">
+                        <button id="cols-all" type="button" class="rounded-full px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800/70">All</button>
+                        <button id="cols-none" type="button" class="rounded-full px-3 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800/70">None</button>
+                      </div>
+                    </div>
+                    <div id="columns-list" class="max-h-56 overflow-y-auto px-2 pb-2"></div>
+                    <p class="px-2 pt-1 text-[11px] text-slate-500">Tip: drag headers to reorder • drag header edge to resize</p>
+                  </div>
+                </div>
+
+                <button id="add-record" class="inline-flex items-center gap-2 rounded-full border border-emerald-600 bg-emerald-600/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-100 shadow shadow-emerald-600/30 transition hover:-translate-y-0.5" data-admin-actions type="button">
+                  <i data-lucide="plus" class="h-4 w-4"></i> New record
+                </button>
+
+                <button id="refresh-button" class="inline-flex items-center gap-2 rounded-full border border-blue-600 bg-blue-600/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100 shadow shadow-blue-600/30 transition hover:-translate-y-0.5" type="button">
+                  <i data-lucide="refresh-ccw" class="h-4 w-4"></i> Refresh
+                </button>
+
+                <button id="erase-filters" class="inline-flex items-center gap-2 rounded-full border border-slate-600/80 bg-slate-900/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50" type="button">
+                  <i data-lucide="x-circle" class="h-4 w-4"></i> Erase filters
+                </button>
+
+                <div class="ml-auto hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300 md:flex">
+                  <i data-lucide="mouse-pointer-2" class="h-4 w-4"></i> <span>Resize • Reorder • Sort • Filter</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- PAGINATION (TOP) -->
+            <div class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-950/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p id="pagination-summary" class="text-sm text-slate-300">Showing 0-0 of 0</p>
+              <div class="flex items-center gap-2">
+                <button id="prev-page" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  <i data-lucide="chevron-left" class="h-4 w-4"></i> Prev
+                </button>
+                <span id="page-indicator" class="text-sm font-semibold text-slate-100">1 / 1</span>
+                <button id="next-page" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
+                  Next <i data-lucide="chevron-right" class="h-4 w-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="table-window">
+              <div class="top-scrollbar-shell">
+                <div id="top-scrollbar" class="top-scrollbar">
+                  <div id="top-scrollbar-inner" style="height:1px;"></div>
+                </div>
+              </div>
+
+              <div id="table-scroll" class="w-full border border-slate-800 bg-slate-950/25">
+                <table id="services-table" class="fixed-layout divide-y divide-slate-800 compact-text">
+                  <colgroup id="colgroup"></colgroup>
+                  <thead id="table-head" class="sticky-head bg-slate-950/60 text-slate-300"></thead>
+                  <tbody id="table-body" class="divide-y divide-slate-800 bg-slate-950/40"></tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </section>
+      </section>
+  </main>
+
+  
+  <script type="module" src="../../assets/scripts/services/services-admin.js"></script>
+</body>
+</html>

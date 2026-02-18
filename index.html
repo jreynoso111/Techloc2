@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc System | M&T Service Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        },
+      },
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="assets/js/supabaseClient.js"></script>
+  <script type="module" src="assets/scripts/authManager.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="assets/scripts/datasets.js"></script>
+  <link rel="stylesheet" href="assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 font-sans text-slate-50 selection:bg-blue-500/30" data-page-title="Home" data-active-nav="home">
+  <div data-shared-header></div>
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+
+  <main class="relative z-20 flex min-h-[calc(100vh-80px)] items-center justify-center px-6 py-12">
+    
+    <div class="w-full max-w-3xl">
+      
+      <div class="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/40 p-8 text-center shadow-2xl shadow-blue-900/10 backdrop-blur-xl sm:p-14">
+        
+        <div class="absolute left-1/2 top-0 -z-10 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-600/20 blur-[100px]"></div>
+
+        <div class="mb-8 flex justify-center">
+            <div class="group relative flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-b from-slate-800 to-slate-950 border border-slate-700 shadow-2xl transition-transform duration-500 hover:scale-105">
+                <div class="absolute inset-0 rounded-3xl bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <span class="text-4xl font-black uppercase tracking-[0.2em] text-white drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">TL</span>
+            </div>
+        </div>
+
+        <h2 class="mb-3 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-400">
+            Service Provided for <span class="text-white">M&T Equipment Funding</span>
+        </h2>
+        <h1 class="mb-6 text-4xl font-black tracking-tight text-white drop-shadow-lg sm:text-6xl">
+            TechLoc <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">System</span>
+        </h1>
+        
+        <p class="mx-auto mb-10 max-w-lg text-lg text-slate-400">
+            Secure gateway for fleet analytics, dispatch management, and nationwide technician coordination.
+        </p>
+
+        <div class="mb-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a
+              href="pages/admin/index.html"
+              data-dashboard-link
+              aria-hidden="true"
+              tabindex="-1"
+              class="group relative hidden inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition-all hover:bg-blue-500 hover:shadow-blue-500/40 hover:-translate-y-0.5"
+            >
+                <i data-lucide="layout-dashboard" class="h-4 w-4"></i>
+                <span>Access Dashboard</span>
+            </a>
+            <a href="pages/control-map.html" class="group inline-flex items-center justify-center gap-2 rounded-full border border-slate-700 bg-slate-800/50 px-8 py-3 text-sm font-bold text-slate-300 transition-all hover:bg-slate-800 hover:text-white hover:border-slate-600 hover:-translate-y-0.5">
+                <i data-lucide="map" class="h-4 w-4 text-emerald-400"></i>
+                <span>Live Map View</span>
+            </a>
+        </div>
+
+        <div class="border-t border-slate-800/60 pt-8">
+            <p class="mb-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Network Real-time Data</p>
+            <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <div class="rounded-xl bg-slate-950/50 p-3 ring-1 ring-slate-800/50 transition-all duration-300 hover:-translate-y-1 hover:bg-slate-900 hover:ring-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20">
+                    <p id="tech-count" class="text-xl font-bold text-white">-</p>
+                    <p class="text-[10px] uppercase font-medium text-slate-500">Active Partners</p>
+                </div>
+                <div class="rounded-xl bg-slate-950/50 p-3 ring-1 ring-slate-800/50 transition-all duration-300 hover:-translate-y-1 hover:bg-slate-900 hover:ring-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20">
+                    <p id="available-count" class="text-xl font-bold text-emerald-400">-</p>
+                    <p class="text-[10px] uppercase font-medium text-slate-500">Available Now</p>
+                </div>
+                <div class="rounded-xl bg-slate-950/50 p-3 ring-1 ring-slate-800/50 transition-all duration-300 hover:-translate-y-1 hover:bg-slate-900 hover:ring-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20">
+                    <p id="states-count" class="text-xl font-bold text-blue-400">-</p>
+                    <p class="text-[10px] uppercase font-medium text-slate-500">States Active</p>
+                </div>
+                <div class="rounded-xl bg-slate-950/50 p-3 ring-1 ring-slate-800/50 transition-all duration-300 hover:-translate-y-1 hover:bg-slate-900 hover:ring-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <span id="avg-rating" class="text-xl font-bold text-amber-300">-</span>
+                    </div>
+                    <p class="text-[10px] uppercase font-medium text-slate-500">SLA Rating</p>
+                </div>
+            </div>
+        </div>
+
+      </div>
+      
+      <div class="mt-8 text-center space-y-2">
+        <p class="text-xs text-slate-600">
+          <span class="font-semibold text-slate-500">TechLoc System Platform</span> owned and operated by <a href="mailto:JReynoso111@gmail.com" class="hover:text-slate-400 transition-colors">JReynoso111@gmail.com</a>.
+        </p>
+        <p class="text-[10px] uppercase tracking-wide text-slate-700">
+          Exclusively licensed for use by M&T Equipment Funding
+        </p>
+      </div>
+
+    </div>
+  </main>
+
+  <script type="module">
+    import { setupBackgroundManager } from './assets/scripts/backgroundManager.js';
+
+    // --- 1. LÓGICA DE ESTADÍSTICAS (SUPABASE) ---
+    const animateValue = (id, start, end, duration) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const decimalPlaces = Number.isInteger(end)
+        ? 0
+        : ((end.toString().split('.')[1] || '').length);
+
+      const startTime = performance.now();
+      el.classList.add('animate-pulse');
+
+      const step = (currentTime) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const currentValue = start + (end - start) * progress;
+
+        const formattedValue = decimalPlaces > 0
+          ? currentValue.toFixed(decimalPlaces)
+          : Math.round(currentValue);
+
+        el.textContent = formattedValue;
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          el.textContent = Number.isInteger(end) ? end : end.toFixed(decimalPlaces);
+          setTimeout(() => el.classList.remove('animate-pulse'), 300);
+        }
+      };
+
+      requestAnimationFrame(step);
+    };
+
+    const fetchServiceStats = async () => {
+      const CACHE_KEY = 'techloc_home_stats';
+      const CACHE_DURATION = 300000; // 5 minutos
+
+      // Intentamos obtener el cliente desde window (definido en supabaseClient.js)
+      const client = window.supabaseClient || window.supabase;
+
+      if (!client) {
+        console.error("Supabase client not initialized.");
+        return;
+      }
+
+      const cachedStats = sessionStorage.getItem(CACHE_KEY);
+      if (cachedStats) {
+        try {
+          const { totalCount, availableCount, uniqueStates, avgRating, timestamp } = JSON.parse(cachedStats);
+
+          const isFresh = typeof timestamp === 'number'
+            && (Date.now() - timestamp) < CACHE_DURATION;
+
+          if (isFresh) {
+            animateValue('tech-count', 0, totalCount ?? 0, 2000);
+            animateValue('available-count', 0, availableCount ?? 0, 2000);
+            animateValue('states-count', 0, uniqueStates ?? 0, 2000);
+            animateValue('avg-rating', 0, avgRating ?? 0, 2000);
+            return;
+          }
+        } catch (parseError) {
+          console.warn('Invalid cached stats, fetching fresh data.');
+        }
+      }
+
+      try {
+        // Consultamos la tabla 'Services' en Supabase para obtener las métricas en vivo.
+        const { data = [], error, count } = await client
+          .from('Services')
+          .select('state, status, availability', { count: 'exact' });
+
+        if (error) {
+            console.error('Error fetching stats:', error);
+            throw error;
+        }
+
+        // A. Total Partners: Total de filas retornadas
+        const totalCount = count ?? data.length ?? 0;
+
+        // B. Available Now: Filtramos filas que tengan "24/7", "Available" o "Active"
+        const availableCount = data.filter(row => {
+            const availText = String(row.availability || '').toLowerCase();
+            const statusText = String(row.status || '').toLowerCase();
+            return availText.includes('24/7') || statusText === 'available' || statusText === 'active';
+        }).length;
+
+        // C. States Active: Contamos estados únicos (ignorando mayúsculas/minúsculas)
+        const uniqueStates = new Set(
+            data
+            .map(row => row.state ? row.state.trim().toUpperCase() : null)
+            .filter(Boolean) // Elimina valores nulos
+        ).size;
+
+        // D. SLA Rating: Valor estático alto (hasta que tengas columna de rating real)
+        const avgRating = 4.8;
+
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+          totalCount,
+          availableCount,
+          uniqueStates,
+          avgRating,
+          timestamp: Date.now(),
+        }));
+
+        // Actualizamos el DOM con animación
+        animateValue('tech-count', 0, totalCount, 2000);
+        animateValue('available-count', 0, availableCount, 2000);
+        animateValue('states-count', 0, uniqueStates, 2000);
+        animateValue('avg-rating', 0, avgRating, 2000);
+
+      } catch (err) {
+        // En caso de error, dejamos los guiones o ponemos 0
+        console.warn('Could not load live stats');
+      }
+    };
+
+    // --- 2. LÓGICA DE LOG IN / LOG OUT ---
+    const handleAuthUI = async () => {
+        const loginBtn = document.getElementById('nav-login');
+        const logoutBtn = document.getElementById('nav-logout');
+        const client = window.supabase || window.supabaseClient;
+
+        if (!client) return;
+
+        const updateButtonState = (session) => {
+            if (session) {
+                // Si hay sesión: Ocultar Login, Mostrar Logout
+                if (loginBtn) loginBtn.classList.add('hidden');
+                if (logoutBtn) {
+                    logoutBtn.classList.remove('hidden');
+                    logoutBtn.onclick = async () => {
+                        logoutBtn.textContent = '...';
+                        await client.auth.signOut();
+                        window.location.reload();
+                    };
+                }
+            } else {
+                // Si NO hay sesión: Mostrar Login, Ocultar Logout
+                if (loginBtn) loginBtn.classList.remove('hidden');
+                if (logoutBtn) logoutBtn.classList.add('hidden');
+            }
+        };
+
+        // Verificar estado inicial y escuchar cambios
+        const { data: { session } } = await client.auth.getSession();
+        updateButtonState(session);
+
+        client.auth.onAuthStateChange((_event, session) => {
+            updateButtonState(session);
+        });
+    };
+
+    // --- 3. INICIALIZACIÓN ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // Iniciar iconos Lucide
+      if (window.lucide) window.lucide.createIcons();
+
+      const mobileToggle = document.getElementById('mobile-menu-toggle');
+      const primaryNav = document.getElementById('primary-nav');
+
+      const setMenuState = (expanded) => {
+        if (!primaryNav || !mobileToggle) return;
+        mobileToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        if (expanded) {
+          primaryNav.classList.remove('hidden');
+        } else {
+          primaryNav.classList.add('hidden');
+        }
+      };
+
+      if (mobileToggle && primaryNav) {
+        setMenuState(window.innerWidth >= 768);
+
+        mobileToggle.addEventListener('click', () => {
+          const expanded = mobileToggle.getAttribute('aria-expanded') === 'true';
+          setMenuState(!expanded);
+        });
+
+        primaryNav.querySelectorAll('a').forEach((link) => {
+          link.addEventListener('click', () => {
+            if (window.innerWidth < 768) setMenuState(false);
+          });
+        });
+
+        window.addEventListener('resize', () => {
+          setMenuState(window.innerWidth >= 768);
+        });
+      }
+
+      // Iniciar fondo de constelación
+      setupBackgroundManager();
+
+      // Ejecutar lógica de autenticación
+      handleAuthUI();
+
+      // Cargar estadísticas de la base de datos
+      fetchServiceStats();
+    });
+  </script>
+  <script type="module" src="assets/scripts/sharedHeader.js"></script>
+</body>
+</html>

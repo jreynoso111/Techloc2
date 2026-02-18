@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • About Us</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../assets/scripts/authManager.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="About" data-active-nav="about">
+  <div data-shared-header></div>
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+
+  <main class="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-12 relative z-10">
+
+    <section class="rounded-3xl border border-slate-900 bg-slate-900/70 p-8 shadow-xl shadow-blue-900/30 opacity-0 translate-y-8 transition-all duration-1000 ease-out js-scroll-reveal">
+      <div class="flex flex-col md:flex-row gap-8 items-start">
+        <div class="flex-1">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">System Overview</p>
+            <h2 class="mb-4 text-3xl font-black text-white leading-tight">Precision Logistics for <br/><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">M&T Equipment Funding</span></h2>
+            <p class="text-sm text-slate-300 leading-relaxed">
+              TechLoc is a proprietary platform developed exclusively to streamline the operational life of our fleet managers and dispatchers. We understand that in logistics, time is the most valuable asset. Our goal is simple: <strong>to instantly locate the right partner, in the right location, at the exact moment needed.</strong>
+            </p>
+            <p class="mt-4 text-sm text-slate-300 leading-relaxed">
+              By centralizing our network of service providers into a single, map-based interface, we eliminate the noise of traditional searches and ensure every dispatch is handled by a trusted professional.
+            </p>
+        </div>
+        <div class="hidden md:flex h-32 w-32 items-center justify-center rounded-3xl bg-slate-950 border border-slate-800 shadow-inner">
+            <i data-lucide="crosshair" class="h-12 w-12 text-blue-500"></i>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid gap-6 rounded-3xl border border-slate-900 bg-slate-900/70 p-8 shadow-xl shadow-blue-900/30 md:grid-cols-3">
+      <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-5 transition-all duration-700 ease-out opacity-0 translate-y-8 js-scroll-reveal hover:-translate-y-1 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-500/10">
+        <div class="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+            <i data-lucide="map-pin" class="h-5 w-5"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">Geo-Intelligent Search</h3>
+        <p class="text-sm text-slate-400">
+            Forget generic lists. Our system visualizes availability on the map, allowing dispatchers to find the closest qualified technician to any asset in real-time.
+        </p>
+      </div>
+      
+      <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-5 transition-all duration-700 ease-out opacity-0 translate-y-8 js-scroll-reveal delay-150 hover:-translate-y-1 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10">
+        <div class="h-10 w-10 flex items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+            <i data-lucide="database" class="h-5 w-5"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">Curated Database</h3>
+        <p class="text-sm text-slate-400">
+            Every entry in our system—from locksmiths to heavy tow operators—is vetted for M&T standards. We maintain up-to-date contact info and capability records.
+        </p>
+      </div>
+      
+      <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-all duration-700 ease-out opacity-0 translate-y-8 js-scroll-reveal delay-300 hover:-translate-y-1 hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/10">
+        <div class="h-10 w-10 flex items-center justify-center rounded-lg bg-amber-500/10 text-amber-400">
+            <i data-lucide="zap" class="h-5 w-5"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white">Operational Efficiency</h3>
+        <p class="text-sm text-slate-400">
+            Designed to facilitate our daily workflow. Reduced downtime, faster dispatching, and transparent communication between HQ and the field.
+        </p>
+      </div>
+    </section>
+
+    <section class="relative overflow-hidden rounded-3xl border border-blue-900/30 bg-gradient-to-br from-blue-900/20 to-slate-900 p-8 shadow-2xl opacity-0 translate-y-8 transition-all duration-1000 ease-out js-scroll-reveal">
+      <div class="absolute right-0 top-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-blue-600/10 blur-3xl"></div>
+      
+      <div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+          <div class="space-y-4 max-w-2xl">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Corporate Solution</p>
+            <h3 class="text-2xl font-black text-white">Exclusively for M&T Equipment Funding LLC</h3>
+            <p class="text-sm text-slate-300">
+                This isn't a public directory. It is a closed-loop ecosystem built to support M&T's specific logistical challenges. The TechLoc System evolves with our fleet, adding new categories and features as our operational needs grow across the country.
+            </p>
+            <ul class="grid grid-cols-2 gap-2 text-xs font-semibold text-slate-400 mt-2">
+                <li class="flex items-center gap-2"><i data-lucide="check" class="h-3 w-3 text-blue-500"></i> Heavy Equipment Transport</li>
+                <li class="flex items-center gap-2"><i data-lucide="check" class="h-3 w-3 text-blue-500"></i> Roadside Assistance</li>
+                <li class="flex items-center gap-2"><i data-lucide="check" class="h-3 w-3 text-blue-500"></i> Inspections & Recovery</li>
+                <li class="flex items-center gap-2"><i data-lucide="check" class="h-3 w-3 text-blue-500"></i> Commercial Locksmiths</li>
+            </ul>
+          </div>
+          
+          <div class="shrink-0">
+            <div class="h-24 w-24 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center shadow-lg">
+                <span class="text-3xl font-black text-slate-700 select-none">M&T</span>
+            </div>
+          </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const mobileToggle = document.getElementById('mobile-menu-toggle');
+      const primaryNav = document.getElementById('primary-nav');
+
+      const revealElements = document.querySelectorAll('.js-scroll-reveal');
+
+      if (revealElements.length) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.remove('opacity-0', 'translate-y-8');
+                observer.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.1 }
+        );
+
+        revealElements.forEach((element) => observer.observe(element));
+      }
+
+      const setMenuState = (expanded) => {
+        if (!primaryNav || !mobileToggle) return;
+        mobileToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        if (expanded) {
+          primaryNav.classList.remove('hidden');
+        } else {
+          primaryNav.classList.add('hidden');
+        }
+      };
+
+      if (mobileToggle && primaryNav) {
+        setMenuState(window.innerWidth >= 768);
+
+        mobileToggle.addEventListener('click', () => {
+          const expanded = mobileToggle.getAttribute('aria-expanded') === 'true';
+          setMenuState(!expanded);
+        });
+
+        primaryNav.querySelectorAll('a').forEach((link) => {
+          link.addEventListener('click', () => {
+            if (window.innerWidth < 768) setMenuState(false);
+          });
+        });
+
+        window.addEventListener('resize', () => {
+          setMenuState(window.innerWidth >= 768);
+        });
+      }
+
+      setupBackgroundManager();
+      lucide.createIcons();
+    });
+  </script>
+  <script type="module" src="../assets/scripts/sharedHeader.js"></script>
+</body>
+</html>

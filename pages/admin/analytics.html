@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Analytics</title>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+  <script src="../../assets/scripts/datasets.js"></script>
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { 
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: { 
+            slate: { 850: '#0f172a', 900: '#020617', 950: '#020617' } 
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        },
+      },
+    };
+  </script>
+  
+  <style>
+    body { background-color: #020617; color: #f8fafc; }
+    
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+
+    .frosted-card {
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+    }
+    
+    .circular-chart { display: block; margin: 0 auto; max-width: 100%; max-height: 250px; }
+    .circle-bg { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 2.8; }
+    .circle { fill: none; stroke-width: 2.8; stroke-linecap: round; animation: progress 1s ease-out forwards; }
+    @keyframes progress { 0% { stroke-dasharray: 0 100; } }
+  </style>
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen text-slate-50 relative selection:bg-blue-500/30 overflow-x-hidden" data-page-title="Analytics" data-active-nav="dashboard">
+
+  <div class="sticky top-0 z-50 space-y-px">
+    <div data-shared-header></div>
+    <div data-admin-nav data-admin-nav="analytics"></div>
+  </div>
+
+  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-60"></canvas>
+
+  <main class="px-6 py-8 lg:px-10 max-w-[1920px] mx-auto space-y-6">
+      <section class="space-y-6">
+        
+        <div class="flex flex-col justify-between gap-4 border-b border-white/5 pb-6 sm:flex-row sm:items-end">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"></span>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-500" id="dataset-status">System Live</p>
+            </div>
+            <h2 class="text-3xl font-bold tracking-tight text-white">Analytics Overview</h2>
+            <p class="mt-1 text-sm text-slate-400 max-w-2xl">Real-time telemetry from database records and fleet status.</p>
+          </div>
+          <div class="flex gap-2">
+            <button id="refresh-btn" class="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white">
+              <i data-lucide="refresh-cw" class="h-3.5 w-3.5 transition-transform group-hover:rotate-180"></i> Sync Data
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
+            <div class="absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-full bg-blue-500/10 blur-2xl"></div>
+            <div class="flex items-center gap-3 text-slate-400 mb-2">
+              <div class="rounded-lg bg-blue-500/10 p-2 text-blue-400"><i data-lucide="truck" class="h-4 w-4"></i></div>
+              <span class="text-xs font-semibold uppercase tracking-wider">Total Fleet</span>
+            </div>
+            <p id="kpi-vehicles" class="font-mono text-3xl font-bold text-white tracking-tight">-</p>
+            <p class="mt-1 text-[11px] text-slate-500">Active Units</p>
+          </div>
+
+          <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
+            <div class="absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-full bg-emerald-500/10 blur-2xl"></div>
+             <div class="flex items-center gap-3 text-slate-400 mb-2">
+              <div class="rounded-lg bg-emerald-500/10 p-2 text-emerald-400"><i data-lucide="activity" class="h-4 w-4"></i></div>
+              <span class="text-xs font-semibold uppercase tracking-wider">Moving Now</span>
+            </div>
+            <p id="kpi-moving" class="font-mono text-3xl font-bold text-white tracking-tight">-</p>
+            <p class="mt-1 text-[11px] text-slate-500">Active Status</p>
+          </div>
+
+          <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
+            <div class="absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-full bg-violet-500/10 blur-2xl"></div>
+             <div class="flex items-center gap-3 text-slate-400 mb-2">
+              <div class="rounded-lg bg-violet-500/10 p-2 text-violet-400"><i data-lucide="users" class="h-4 w-4"></i></div>
+              <span class="text-xs font-semibold uppercase tracking-wider">Service Partners</span>
+            </div>
+            <p id="kpi-services" class="font-mono text-3xl font-bold text-white tracking-tight">-</p>
+            <p class="mt-1 text-[11px] text-slate-500">Total Entities</p>
+          </div>
+
+          <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
+            <div class="absolute right-0 top-0 -mr-4 -mt-4 h-24 w-24 rounded-full bg-amber-500/10 blur-2xl"></div>
+             <div class="flex items-center gap-3 text-slate-400 mb-2">
+              <div class="rounded-lg bg-amber-500/10 p-2 text-amber-400"><i data-lucide="star" class="h-4 w-4"></i></div>
+              <span class="text-xs font-semibold uppercase tracking-wider">Avg Quality</span>
+            </div>
+            <p id="kpi-rating" class="font-mono text-3xl font-bold text-white tracking-tight">-</p>
+            <p class="mt-1 text-[11px] text-slate-500">Google Rating</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          <div class="lg:col-span-1 space-y-6">
+            
+            <div class="rounded-2xl border frosted-card p-6 relative">
+              <div class="flex items-center justify-between mb-4">
+                 <h3 class="text-sm font-bold uppercase tracking-widest text-white">Fleet Pulse</h3>
+                 <i data-lucide="navigation" class="h-4 w-4 text-blue-400"></i>
+              </div>
+              <div class="flex items-center justify-center relative h-40">
+                  <svg viewBox="0 0 36 36" class="circular-chart w-32 h-32">
+                    <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    <path id="moving-circle" class="circle stroke-emerald-500" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  </svg>
+                  <div class="absolute inset-0 flex flex-col items-center justify-center">
+                      <span id="moving-pct" class="text-2xl font-bold text-white font-mono">0%</span>
+                      <span class="text-[9px] uppercase tracking-wider text-slate-400">Moving</span>
+                  </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 mt-4 text-center">
+                  <div class="bg-emerald-500/10 rounded p-2 border border-emerald-500/20">
+                      <p class="text-[10px] text-emerald-400 uppercase font-bold">Moving</p>
+                      <p id="count-moving" class="font-mono font-bold text-white">-</p>
+                  </div>
+                  <div class="bg-slate-800/50 rounded p-2 border border-slate-700/50">
+                      <p class="text-[10px] text-slate-400 uppercase font-bold">Stopped</p>
+                      <p id="count-stopped" class="font-mono font-bold text-white">-</p>
+                  </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border frosted-card p-6">
+              <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-sm font-bold uppercase tracking-widest text-white">Deal Progress</h3>
+                  <i data-lucide="check-circle" class="h-4 w-4 text-slate-400"></i>
+              </div>
+              <div class="space-y-4">
+                  <div>
+                      <div class="flex justify-between text-xs mb-1">
+                          <span class="text-slate-400">Avg Completion</span>
+                          <span id="avg-completion-text" class="text-white font-mono">0%</span>
+                      </div>
+                      <div class="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                          <div id="avg-completion-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400" style="width: 0%"></div>
+                      </div>
+                  </div>
+                  <div class="pt-2 border-t border-white/5">
+                      <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-2">Unit Types</p>
+                      <div id="unit-types-list" class="space-y-2"></div>
+                  </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="lg:col-span-2 space-y-6">
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
+                <div class="rounded-2xl border frosted-card p-6 h-full">
+                    <div class="mb-6 flex items-center justify-between">
+                        <div>
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-white">Partner Categories</h3>
+                        <p class="text-[11px] text-slate-500">Distribution by service type</p>
+                        </div>
+                        <i data-lucide="pie-chart" class="h-4 w-4 text-violet-400"></i>
+                    </div>
+                    <div id="category-bars" class="space-y-4">
+                        <div class="animate-pulse h-4 bg-white/5 rounded col-span-2"></div>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border frosted-card p-6 h-full">
+                    <div class="mb-5 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase tracking-widest text-white">Top Regions</h3>
+                            <p class="text-[11px] text-slate-500">Highest density areas</p>
+                        </div>
+                        <i data-lucide="map" class="h-4 w-4 text-amber-400"></i>
+                    </div>
+                    <div id="top-regions" class="grid grid-cols-2 gap-3"></div>
+                </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="rounded-2xl border frosted-card p-6 flex flex-col">
+            <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200">System Activity</p>
+                <h3 class="text-sm font-bold uppercase tracking-widest text-white">Global Change History</h3>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="rounded-full border border-slate-700 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300 flex items-center gap-2">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Live Audit
+                </span>
+                <button type="button" class="text-xs text-slate-400 hover:text-white transition-colors">Export Log</button>
+            </div>
+            </div>
+            <div class="overflow-hidden rounded-xl border border-white/5 bg-black/20">
+            <div class="max-h-[500px] overflow-y-auto custom-scrollbar">
+                <table class="w-full text-left text-sm">
+                <thead class="bg-white/5 text-[10px] uppercase font-bold text-slate-400 sticky top-0 backdrop-blur-sm z-10">
+                    <tr>
+                    <th class="px-4 py-3">User</th>
+                    <th class="px-4 py-3">Entity / Table</th>
+                    <th class="px-4 py-3">Action</th>
+                    <th class="px-4 py-3">Change Summary</th>
+                    <th class="px-4 py-3 text-right">Timestamp</th>
+                    </tr>
+                </thead>
+                <tbody id="change-log-body" class="divide-y divide-white/5 text-slate-300">
+                     <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500 italic">Loading audit trail...</td></tr>
+                </tbody>
+                </table>
+            </div>
+            </div>
+        </div>
+
+      </section>
+  </main>
+
+  <div id="detail-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/70 backdrop-blur-sm px-4" aria-hidden="true">
+    <div id="detail-modal-backdrop" class="absolute inset-0"></div>
+    <div id="detail-modal-container" class="relative w-full max-w-2xl rounded-2xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl frosted-card">
+      <div class="flex items-start justify-between gap-4">
+        <div class="space-y-1">
+          <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Record Detail</p>
+          <h3 id="detail-modal-title" class="text-2xl font-black text-white"></h3>
+          <p id="detail-modal-subtitle" class="text-sm text-slate-400"></p>
+        </div>
+        <button id="detail-modal-close" type="button" class="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-200 transition hover:text-white">Close</button>
+      </div>
+      <div id="detail-modal-content" class="mt-5 space-y-4 text-sm text-slate-200"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
+    import {
+      loadPreferredBackgroundMode,
+      persistBackgroundMode,
+    } from '../../assets/scripts/backgroundPreference.js';
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    // --- CONFIG ---
+    // Alinear nombres de tabla con la vista principal de Services
+    const TABLE_SERVICES = 'Services';
+    const TABLE_VEHICLES = 'vehicles';
+    const TABLE_CHANGE_LOG = 'admin_change_log';
+    
+    const els = {
+      kpiVehicles: document.getElementById('kpi-vehicles'),
+      kpiServices: document.getElementById('kpi-services'),
+      kpiMoving: document.getElementById('kpi-moving'),
+      kpiRating: document.getElementById('kpi-rating'),
+      categoryBars: document.getElementById('category-bars'),
+      topRegions: document.getElementById('top-regions'),
+      movingCircle: document.getElementById('moving-circle'),
+      movingPct: document.getElementById('moving-pct'),
+      countMoving: document.getElementById('count-moving'),
+      countStopped: document.getElementById('count-stopped'),
+      avgCompletionBar: document.getElementById('avg-completion-bar'),
+      avgCompletionText: document.getElementById('avg-completion-text'),
+      unitTypesList: document.getElementById('unit-types-list'),
+      detailModal: document.getElementById('detail-modal'),
+      detailModalTitle: document.getElementById('detail-modal-title'),
+      detailModalContent: document.getElementById('detail-modal-content'),
+      detailModalClose: document.getElementById('detail-modal-close'),
+      status: document.getElementById('dataset-status'),
+      changeLogBody: document.getElementById('change-log-body')
+    };
+
+    // --- HELPERS ---
+    const formatCategory = (str) => {
+        if (!str) return 'Uncategorized';
+        const clean = String(str).trim().toLowerCase();
+        return clean.charAt(0).toUpperCase() + clean.slice(1);
+    };
+
+    const getCategoryColor = (cat) => {
+        const map = {
+            'Dispatcher': 'bg-violet-500',
+            'Technician': 'bg-blue-500',
+            'Towing': 'bg-amber-500',
+            'Locksmith': 'bg-pink-500',
+            'Truck': 'bg-emerald-500', 
+            'Trailer': 'bg-cyan-500'
+        };
+        return map[cat] || 'bg-slate-500';
+    };
+
+    const getField = (row, ...keys) => {
+        for (const key of keys) {
+            const value = row?.[key];
+            if (value !== undefined && value !== null && String(value).trim() !== '') return value;
+        }
+        return '';
+    };
+
+    const areDepsEqual = (next = [], prev = []) =>
+      next.length === prev.length && next.every((value, index) => Object.is(value, prev[index]));
+
+    const createMemo = () => {
+      let lastDeps = null;
+      let lastValue = null;
+      return (factory, deps = []) => {
+        if (lastDeps && areDepsEqual(deps, lastDeps)) return lastValue;
+        lastDeps = [...deps];
+        lastValue = factory();
+        return lastValue;
+      };
+    };
+
+    const useMemo = createMemo();
+
+    const normalizeRow = (row, type) => {
+        if (type === 'vehicle') {
+            return {
+                id: row['Customer ID'] || row.id,
+                name: `${row['model year'] || ''} ${row['model'] || 'Vehicle'}`,
+                category: row['unit type'] || 'Vehicle',
+                state: row['state loc'] || row.state,
+                city: row['pt city'],
+                moving: String(row['moving']) === '1', 
+                completion: parseFloat(row['deal completion']) || 0,
+                ptStatus: row['pt status'],
+                source: 'Fleet DB',
+                isVehicle: true,
+                raw: row
+            };
+        } else {
+            const ratingValue = getField(row, 'google_rating', 'Google Rating', 'rating', 'Rating');
+            return {
+                id: row.id,
+                name: getField(row, 'name', 'company_name', 'company', 'Company', 'Installation Company', 'Service name') || 'Service',
+                category: formatCategory(
+                  getField(row, 'category', 'service_type', 'authorization', 'Authorization', 'Category')
+                ),
+                state: getField(row, 'state', 'region', 'State', 'state_code'),
+                city: getField(row, 'city', 'City'),
+                rating: Number(ratingValue) || 0,
+                source: 'Services DB',
+                isVehicle: false,
+                raw: row
+            };
+        }
+    };
+
+    // --- RENDER DASHBOARD ---
+    const renderDashboard = (serviceRows, vehicleRows) => {
+        const analytics = useMemo(() => {
+          const catCounts = serviceRows.reduce((acc, row) => {
+            acc[row.category] = (acc[row.category] || 0) + 1;
+            return acc;
+          }, {});
+          const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+          const regionCounts = serviceRows.reduce((acc, row) => {
+            if (row.state) acc[row.state] = (acc[row.state] || 0) + 1;
+            return acc;
+          }, {});
+          const topRegions = Object.entries(regionCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8);
+          const movingCount = vehicleRows.filter(row => row.moving).length;
+          const stoppedCount = vehicleRows.length - movingCount;
+          const movingPct = vehicleRows.length
+            ? Math.round((movingCount / vehicleRows.length) * 100)
+            : 0;
+          const totalCompletion = vehicleRows.reduce((acc, row) => acc + row.completion, 0);
+          const avgCompletion = vehicleRows.length ? (totalCompletion / vehicleRows.length).toFixed(1) : 0;
+          const unitTypes = vehicleRows.reduce((acc, row) => {
+            acc[row.category] = (acc[row.category] || 0) + 1;
+            return acc;
+          }, {});
+          const ratedServices = serviceRows.filter(row => row.rating > 0);
+          const averageRating = ratedServices.length
+            ? (ratedServices.reduce((acc, row) => acc + row.rating, 0) / ratedServices.length).toFixed(1)
+            : '-';
+          return {
+            sortedCats,
+            topRegions,
+            movingCount,
+            stoppedCount,
+            movingPct,
+            avgCompletion,
+            unitTypes,
+            averageRating
+          };
+        }, [serviceRows, vehicleRows]);
+
+        // 1. SERVICES: Category Bars
+        els.categoryBars.innerHTML = '';
+        const sortedCats = analytics.sortedCats;
+
+        if (!sortedCats.length) els.categoryBars.innerHTML = '<p class="text-sm text-slate-500">No services found.</p>';
+
+        sortedCats.forEach(([cat, count]) => {
+            const pct = serviceRows.length ? ((count / serviceRows.length) * 100).toFixed(1) : '0.0';
+            const color = getCategoryColor(cat);
+            const html = `
+                <div class="group">
+                    <div class="flex justify-between mb-1 items-end">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${cat}</span>
+                        <div class="text-right">
+                             <span class="text-xs font-bold text-white">${count}</span>
+                             <span class="text-[9px] font-mono text-slate-500 ml-1">${pct}%</span>
+                        </div>
+                    </div>
+                    <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full ${color} w-0 transition-all duration-1000 ease-out shadow-[0_0_10px_currentColor]" style="width: 0%" data-width="${pct}%"></div>
+                    </div>
+                </div>
+            `;
+            els.categoryBars.insertAdjacentHTML('beforeend', html);
+        });
+
+        // 2. SERVICES: Top Regions
+        els.topRegions.innerHTML = '';
+        const topRegions = analytics.topRegions;
+        
+        if (!topRegions.length) els.topRegions.innerHTML = '<p class="text-sm text-slate-500">No region data available.</p>';
+        
+        topRegions.forEach(([state, count]) => {
+             const intensity = count > 10 ? 'border-amber-500/30 bg-amber-500/10' : 'border-white/5 bg-white/5';
+             els.topRegions.insertAdjacentHTML('beforeend', `
+                <div class="p-2 rounded border ${intensity} text-center hover:scale-105 transition-transform">
+                    <div class="text-[10px] font-mono text-slate-500 uppercase">State</div>
+                    <div class="text-lg font-bold text-white leading-none my-0.5">${state}</div>
+                    <div class="text-[9px] text-amber-400 font-bold">${count}</div>
+                </div>
+             `);
+        });
+
+        // 3. VEHICLES: Charts
+        const { movingCount, stoppedCount, movingPct } = analytics;
+        
+        els.movingPct.textContent = `${movingPct}%`;
+        els.countMoving.textContent = movingCount;
+        els.countStopped.textContent = stoppedCount;
+        setTimeout(() => els.movingCircle.setAttribute('stroke-dasharray', `${movingPct}, 100`), 100);
+
+        const avgCompletion = analytics.avgCompletion;
+        els.avgCompletionText.textContent = `${avgCompletion}%`;
+        setTimeout(() => els.avgCompletionBar.style.width = `${avgCompletion}%`, 200);
+
+        const unitTypes = analytics.unitTypes;
+        els.unitTypesList.innerHTML = '';
+        Object.entries(unitTypes).forEach(([type, count]) => {
+             const pct = ((count / vehicleRows.length) * 100).toFixed(0);
+             els.unitTypesList.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between text-[10px]">
+                    <span class="text-slate-300 font-medium">${type}</span>
+                    <span class="text-slate-500 font-mono">${count} (${pct}%)</span>
+                </div>
+             `);
+        });
+
+        // 4. KPIS
+        els.kpiVehicles.textContent = vehicleRows.length;
+        els.kpiServices.textContent = serviceRows.length;
+        els.kpiMoving.textContent = movingCount;
+        els.kpiRating.textContent = analytics.averageRating;
+        
+        setTimeout(() => document.querySelectorAll('[data-width]').forEach(el => el.style.width = el.getAttribute('data-width')), 100);
+    };
+
+    // --- RENDER CHANGE LOG ---
+    const renderChangeLog = (rows = []) => {
+      els.changeLogBody.innerHTML = '';
+      if (!rows.length) {
+        els.changeLogBody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500 italic">No activity recorded.</td></tr>';
+        return;
+      }
+
+      rows.forEach((row) => {
+        const ts = row.created_at ? new Date(row.created_at).toLocaleString() : '—';
+        const user = row.user_email || row.user_id || row.actor || row.author || 'System';
+        const avatarChar = String(user).charAt(0).toUpperCase();
+        const action = String(row.action || 'edit').toLowerCase();
+        const actionLabel = action.replace(/_/g, ' ').toUpperCase();
+        const badgeByAction = {
+          delete: 'bg-red-500/10 text-red-300 border border-red-500/20',
+          insert: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20',
+          edit: 'bg-blue-500/10 text-blue-300 border border-blue-500/20',
+          update: 'bg-blue-500/10 text-blue-300 border border-blue-500/20',
+          upsert: 'bg-cyan-500/10 text-cyan-200 border border-cyan-500/20',
+          bulk_upsert: 'bg-cyan-500/10 text-cyan-200 border border-cyan-500/20',
+          login: 'bg-indigo-500/10 text-indigo-200 border border-indigo-500/20',
+        };
+        const badgeClass = badgeByAction[action] || badgeByAction.edit;
+        const summary = row.summary || row.description || `Admin ${action} recorded`;
+
+        els.changeLogBody.insertAdjacentHTML('beforeend', `
+          <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
+            <td class="px-4 py-3">
+               <div class="flex items-center gap-3">
+                  <div class="h-8 w-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-2 ring-transparent group-hover:ring-blue-500/20 transition-all">
+                    ${avatarChar}
+                  </div>
+                  <div class="flex flex-col">
+                      <span class="text-xs text-slate-200 font-semibold truncate max-w-[150px]">${user}</span>
+                      <span class="text-[9px] text-slate-500 uppercase tracking-wide">Admin</span>
+                  </div>
+               </div>
+            </td>
+            <td class="px-4 py-3 text-sm text-slate-400 font-mono text-xs">${row.table_name || row.table || '—'}</td>
+            <td class="px-4 py-3 text-sm">
+              <span class="rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${badgeClass}">
+                ${actionLabel}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-300">${summary}</td>
+            <td class="px-4 py-3 text-right text-[11px] text-slate-500 font-mono">${ts}</td>
+          </tr>
+        `);
+      });
+    };
+
+    // --- LOAD DATA ---
+    const loadData = async () => {
+        try {
+            const { data: sData } = await supabaseClient.from(TABLE_SERVICES).select('*');
+            const { data: vData } = await supabaseClient.from(TABLE_VEHICLES).select('*');
+            const services = (sData || []).map(r => normalizeRow(r, 'service'));
+            const vehicles = (vData || []).map(r => normalizeRow(r, 'vehicle'));
+            renderDashboard(services, vehicles);
+            els.status.textContent = `LIVE • ${services.length + vehicles.length} RECORDS`;
+        } catch (err) { console.error(err); }
+        lucide.createIcons();
+    };
+
+    const loadChangeLog = async () => {
+      try {
+        const { data, error } = await supabaseClient
+          .from(TABLE_CHANGE_LOG)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+        renderChangeLog(data || []);
+      } catch (err) {
+        console.error('Error fetching change log', err);
+        renderChangeLog(); 
+      }
+    };
+
+    window.showDetail = (id) => {
+       els.detailModal.classList.remove('hidden');
+       els.detailModal.classList.add('flex');
+       els.detailModalTitle.textContent = "Record Details";
+       els.detailModalContent.innerHTML = `<p class="text-xs font-mono text-emerald-400">ID: ${id}</p>`;
+    };
+    els.detailModalClose.onclick = () => els.detailModal.classList.add('hidden');
+
+    (async () => {
+        try {
+          const initialMode = await loadPreferredBackgroundMode();
+          setupBackgroundManager({
+            canvasId: 'constellation-canvas',
+            initialMode,
+            onModeChange: persistBackgroundMode,
+          });
+        } catch (error) {
+          console.error('Unable to initialize background manager', error);
+        }
+
+        await loadData();
+        await loadChangeLog();
+    })();
+  </script>
+  <script type="module">
+    import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+
+    const redirectToLogin = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      const { data } = await supabaseClient.auth.getSession();
+      if (!data?.session) {
+        window.location.href = '../login.html';
+      }
+    };
+
+    redirectToLogin();
+  </script>
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Admin Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../assets/scripts/authManager.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="Login">
+  <div data-shared-header></div>
+  <div class="pointer-events-none fixed inset-0 z-0 opacity-80 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+  <main class="flex min-h-screen items-center justify-center px-6">
+    <div class="w-full max-w-xl space-y-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-8 shadow-2xl shadow-blue-900/30">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-700 shadow-lg shadow-blue-500/30">
+            <span class="text-sm font-black uppercase tracking-[0.2em] text-white">TL</span>
+          </div>
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-200">TechLoc Admin</p>
+            <h1 class="text-xl font-black text-white">Secure Login</h1>
+          </div>
+        </div>
+        <a href="../index.html" class="text-sm font-semibold text-blue-200 underline-offset-4 hover:underline">Back to site</a>
+      </div>
+
+      <div class="space-y-2">
+        <h2 class="text-2xl font-bold text-white">Access your dashboard</h2>
+        <p class="text-sm text-slate-300">Use your administrator credentials to authenticate. After signing in you'll return to the homepage with secure access to admin tools.</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div class="space-y-2">
+          <label for="email" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Email</label>
+          <input id="email" name="email" type="email" required class="w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" placeholder="admin@techloc.com" />
+        </div>
+        <div class="space-y-2">
+          <label for="password" class="block text-xs font-semibold uppercase tracking-wide text-slate-400">Password</label>
+          <input id="password" name="password" type="password" required class="w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-500 focus:outline-none" placeholder="••••••••" />
+        </div>
+        <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-lg shadow-blue-600/40 transition hover:-translate-y-0.5">
+          <span>Login</span>
+        </button>
+      </form>
+
+      <div id="status" class="text-sm text-slate-400">Use your administrator credentials.</div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
+    import { supabase as supabaseClient } from '../assets/js/supabaseClient.js';
+    import { logAdminEvent } from '../assets/scripts/adminAudit.js';
+
+    const loginForm = document.getElementById('login-form');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const submitButton = loginForm.querySelector('button[type="submit"]');
+    const submitLabel = submitButton.querySelector('span');
+
+    loginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      submitButton.disabled = true;
+      const originalText = submitLabel.textContent;
+      submitLabel.textContent = 'Verifying...';
+
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        alert(error.message);
+        submitButton.disabled = false;
+        submitLabel.textContent = originalText;
+        return;
+      }
+
+      await logAdminEvent({
+        client: supabaseClient,
+        action: 'login',
+        tableName: 'auth',
+        summary: `User ${data?.user?.email || email} signed in`,
+        recordId: data?.user?.id || null,
+        actor: data?.user?.email || email,
+      });
+
+      const basePath = window.location.hostname.includes('github.io') ? '/Techloc' : '';
+      window.location.replace(basePath + '/index.html');
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setupBackgroundManager();
+    });
+  </script>
+  <script type="module" src="../assets/scripts/sharedHeader.js"></script>
+</body>
+</html>
