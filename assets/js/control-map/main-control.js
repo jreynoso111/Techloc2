@@ -1,5 +1,6 @@
 import '../../scripts/authManager.js';
 import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
+    import { getWebAdminSession } from '../../scripts/web-admin-session.js';
     import { supabase as supabaseClient } from '../supabaseClient.js';
     import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
     import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js';
@@ -211,9 +212,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       } catch (_) {
         // keep fallback below; auth state can still resolve through an existing session
       }
+
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) return null;
       return data?.session?.user?.id || null;
+    };
+
+    const hasAuthenticatedAccess = async () => {
+      return Boolean(window.currentUserRole || getWebAdminSession());
+    };
+
+    const isAuthenticatedCached = () => {
+      return Boolean(window.currentUserRole || getWebAdminSession());
+    };
+
+    const notifyAuthRequired = () => {
+      if (typeof window.reportGlobalIssue === 'function') {
+        window.reportGlobalIssue(
+          'Authentication Required',
+          'Repair History is available only for logged users.',
+          'Sign in first to view or edit repair history.'
+        );
+        return;
+      }
+      window.alert('Repair History is available only for logged users.');
     };
 
     const hydrateVehicleClickHistory = async (vehicleRows = []) => {
@@ -614,7 +636,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const repairHistoryManager = createRepairHistoryManager({
       supabaseClient,
       startLoading,
-      ensureSupabaseSession,
       runWithTimeout,
       timeoutMs: SUPABASE_TIMEOUT_MS,
       tableName: TABLES.repairHistory,
@@ -1667,6 +1688,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           card.dataset.id = partner.id;
           card.dataset.type = 'partner';
           card.dataset.partnerType = type;
+          const canOpenRepairHistory = isAuthenticatedCached();
           card.innerHTML = `
             <div class="flex justify-between items-start gap-3">
               <div class="min-w-0">
@@ -1853,7 +1875,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation?.();
-        openRepairModal(vehicle);
+        void openRepairModal(vehicle);
         return;
       }
 
@@ -2027,6 +2049,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const fragment = document.createDocumentFragment();
       const vehiclesForMarkers = [];
+      const canOpenRepairHistory = isAuthenticatedCached();
 
       filtered.forEach((vehicle, idx) => {
         const movingMeta = getMovingMeta(vehicle);
@@ -2159,7 +2182,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   ${svgIcon('info', 'h-3.5 w-3.5')}
                   See more
                 </button>
-                <button type="button" data-action="repair-history" class="inline-flex items-center gap-1.5 rounded-lg border border-blue-400/50 bg-blue-500/15 px-3 py-1 text-[10px] font-bold text-blue-100 hover:bg-blue-500/25 transition-colors">Service History</button>
+                ${canOpenRepairHistory
+                  ? '<button type="button" data-action="repair-history" class="inline-flex items-center gap-1.5 rounded-lg border border-blue-400/50 bg-blue-500/15 px-3 py-1 text-[10px] font-bold text-blue-100 hover:bg-blue-500/25 transition-colors">Service History</button>'
+                  : ''}
                 <button type="button" data-action="gps-history" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[10px] font-bold text-emerald-100 hover:bg-emerald-500/25 transition-colors">GPS Historic</button>
               </div>
             </div>
@@ -2205,7 +2230,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           if (repairHistoryButton) {
             repairHistoryButton.addEventListener('click', (event) => {
               event.stopPropagation();
-              openRepairModal(vehicle);
+              void openRepairModal(vehicle);
             });
           }
 
@@ -2920,7 +2945,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       attachVehicleModalEditors(vehicle);
     }
 
-    function openRepairModal(vehicle) {
+    async function openRepairModal(vehicle) {
+      const canAccessRepairHistory = await hasAuthenticatedAccess();
+      if (!canAccessRepairHistory) {
+        notifyAuthRequired();
+        return;
+      }
+
       const modal = document.getElementById('vehicle-modal');
       const title = document.getElementById('vehicle-modal-title');
       const vinDisplay = document.getElementById('vehicle-modal-vin');

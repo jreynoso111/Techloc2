@@ -95,13 +95,6 @@
       let data = null;
       let error = null;
 
-      if (isWebAdminCredentials(email, password)) {
-        setWebAdminSession(email);
-        statusLabel.textContent = 'Signed in with local admin profile. Redirecting...';
-        redirectToControlMap();
-        return;
-      }
-
       if (supabaseClient?.auth?.signInWithPassword) {
         const response = await supabaseClient.auth.signInWithPassword({ email, password });
         data = response.data;
@@ -111,6 +104,12 @@
       }
 
       if (error) {
+        if (isWebAdminCredentials(email, password)) {
+          setWebAdminSession(email);
+          statusLabel.textContent = 'Signed in with local admin profile (limited mode). Repair History requires Supabase Auth.';
+          redirectToControlMap();
+          return;
+        }
         statusLabel.textContent = error.message || 'Unable to sign in. Please try again.';
         submitButton.disabled = false;
         submitLabel.textContent = originalText;

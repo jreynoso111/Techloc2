@@ -3,6 +3,7 @@ const MAX_ALERTS = 8;
 const DEFAULT_IGNORED_REQUEST_PATTERNS = [
   'https://ipapi.co/json/',
   'https://ipwho.is/',
+  '/rest/v1/admin_change_log',
 ];
 
 const toText = (value) => {
@@ -77,8 +78,21 @@ const pushAlert = (payload) => {
   }
 };
 
-export const notifyGlobalAlert = ({ title, message, details = '', level = 'error' } = {}) => {
+export const notifyGlobalAlert = ({ title, message, details = '', level = 'error', trackActivity = true } = {}) => {
   pushAlert({ title, message, details, level });
+  if (trackActivity && typeof window !== 'undefined' && typeof window.techlocLogActivity === 'function') {
+    window.techlocLogActivity({
+      action: level === 'warn' ? 'warning' : 'error',
+      summary: `${title || 'Alert'}: ${message || 'Unknown issue'}`,
+      source: 'global-alerts',
+      details: {
+        title: title || 'Alert',
+        message: message || 'Unknown issue',
+        level,
+        details: String(details || '').slice(0, 400),
+      },
+    });
+  }
 };
 
 const parsePromiseReason = (reason) => {
