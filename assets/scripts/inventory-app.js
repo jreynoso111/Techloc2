@@ -1,4 +1,5 @@
 import { setupBackgroundManager } from './backgroundManager.js';
+import { SUPABASE_KEY as SUPABASE_ANON_KEY, SUPABASE_URL } from './env.js';
 setupBackgroundManager();
 
 import {
@@ -74,10 +75,8 @@ const updateLucideIcon = (icon, name) => {
 initializeLucideIcons();
 
 const PILL_CLASSES = 'rounded-xl border border-slate-700 bg-slate-950/60 px-2 py-1 text-[10px] hover:bg-slate-900/60';
-// ✅ Fallback: pega tus credenciales si tu módulo no exporta bien.
-//    (Anon key es pública, pero igual cuida RLS.)
-const SUPABASE_URL = '';       // <-- pega aquí
-const SUPABASE_ANON_KEY = '';  // <-- pega aquí
+// Use the single source of truth from env.js so inventory-control always
+// connects to the approved Supabase project.
 
 const showDebug = (title, detail, obj) => {
   const banner = document.getElementById('debug-banner');

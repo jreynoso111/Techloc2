@@ -116,6 +116,13 @@
 
   <script type="module">
     import { setupBackgroundManager } from './assets/scripts/backgroundManager.js';
+    import { supabase as supabaseClient } from './assets/js/supabaseClient.js';
+
+    const getValidClient = () => {
+      const client = supabaseClient || window.supabaseClient || null;
+      if (!client?.auth?.getSession) return null;
+      return client;
+    };
 
     // --- 1. LÓGICA DE ESTADÍSTICAS (SUPABASE) ---
     const animateValue = (id, start, end, duration) => {
@@ -156,7 +163,7 @@
       const CACHE_DURATION = 300000; // 5 minutos
 
       // Intentamos obtener el cliente desde window (definido en supabaseClient.js)
-      const client = window.supabaseClient || window.supabase;
+      const client = getValidClient();
 
       if (!client) {
         console.error("Supabase client not initialized.");
@@ -238,7 +245,7 @@
     const handleAuthUI = async () => {
         const loginBtn = document.getElementById('nav-login');
         const logoutBtn = document.getElementById('nav-logout');
-        const client = window.supabase || window.supabaseClient;
+        const client = getValidClient();
 
         if (!client) return;
 
@@ -262,12 +269,16 @@
         };
 
         // Verificar estado inicial y escuchar cambios
-        const { data: { session } } = await client.auth.getSession();
-        updateButtonState(session);
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          updateButtonState(session);
 
-        client.auth.onAuthStateChange((_event, session) => {
-            updateButtonState(session);
-        });
+          client.auth.onAuthStateChange((_event, session) => {
+              updateButtonState(session);
+          });
+        } catch (error) {
+          console.error('Failed to initialize auth UI', error);
+        }
     };
 
     // --- 3. INICIALIZACIÓN ---

@@ -85,6 +85,8 @@
             </button>
           </div>
         </div>
+        <div id="analytics-issues" class="hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100"></div>
+        <p id="last-sync" class="text-[11px] text-slate-500">Last sync: pending</p>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
@@ -302,7 +304,36 @@
       detailModalContent: document.getElementById('detail-modal-content'),
       detailModalClose: document.getElementById('detail-modal-close'),
       status: document.getElementById('dataset-status'),
-      changeLogBody: document.getElementById('change-log-body')
+      changeLogBody: document.getElementById('change-log-body'),
+      analyticsIssues: document.getElementById('analytics-issues'),
+      lastSync: document.getElementById('last-sync'),
+      refreshBtn: document.getElementById('refresh-btn')
+    };
+    const analyticsIssueState = {
+      data: [],
+      changelog: [],
+      runtime: []
+    };
+
+    const setLastSync = (label = 'ok') => {
+      const now = new Date().toLocaleString();
+      els.lastSync.textContent = `Last sync (${label}): ${now}`;
+    };
+
+    const setIssues = (source, issues = []) => {
+      if (!analyticsIssueState[source]) return;
+      analyticsIssueState[source] = Array.isArray(issues) ? issues : [String(issues)];
+      const mergedIssues = Object.values(analyticsIssueState).flat().filter(Boolean);
+
+      if (!mergedIssues.length) {
+        els.analyticsIssues.classList.add('hidden');
+        els.analyticsIssues.textContent = '';
+        return;
+      }
+      els.analyticsIssues.classList.remove('hidden');
+      els.analyticsIssues.innerHTML = [...new Set(mergedIssues)]
+        .map((issue) => `<p>• ${issue}</p>`)
+        .join('');
     };
 
     // --- HELPERS ---
@@ -510,6 +541,8 @@
       rows.forEach((row) => {
         const ts = row.created_at ? new Date(row.created_at).toLocaleString() : '—';
         const user = row.user_email || row.user_id || row.actor || row.author || 'System';
+        const role = String(row.profile_role || 'unknown').toUpperCase();
+        const status = String(row.profile_status || 'unknown').toUpperCase();
         const avatarChar = String(user).charAt(0).toUpperCase();
         const action = String(row.action || 'edit').toLowerCase();
         const actionLabel = action.replace(/_/g, ' ').toUpperCase();
@@ -534,7 +567,7 @@
                   </div>
                   <div class="flex flex-col">
                       <span class="text-xs text-slate-200 font-semibold truncate max-w-[150px]">${user}</span>
-                      <span class="text-[9px] text-slate-500 uppercase tracking-wide">Admin</span>
+                      <span class="text-[9px] text-slate-500 uppercase tracking-wide">${role} • ${status}</span>
                   </div>
                </div>
             </td>
@@ -553,18 +586,46 @@
 
     // --- LOAD DATA ---
     const loadData = async () => {
-        try {
-            const { data: sData } = await supabaseClient.from(TABLE_SERVICES).select('*');
-            const { data: vData } = await supabaseClient.from(TABLE_VEHICLES).select('*');
-            const services = (sData || []).map(r => normalizeRow(r, 'service'));
-            const vehicles = (vData || []).map(r => normalizeRow(r, 'vehicle'));
-            renderDashboard(services, vehicles);
-            els.status.textContent = `LIVE • ${services.length + vehicles.length} RECORDS`;
-        } catch (err) { console.error(err); }
+        const issues = [];
+        const [servicesResult, vehiclesResult] = await Promise.allSettled([
+          supabaseClient.from(TABLE_SERVICES).select('*'),
+          supabaseClient.from(TABLE_VEHICLES).select('*')
+        ]);
+
+        const sData = servicesResult.status === 'fulfilled' && !servicesResult.value.error
+          ? (servicesResult.value.data || [])
+          : [];
+        const vData = vehiclesResult.status === 'fulfilled' && !vehiclesResult.value.error
+          ? (vehiclesResult.value.data || [])
+          : [];
+
+        if (servicesResult.status === 'rejected') {
+          issues.push(`Services query failed: ${servicesResult.reason?.message || servicesResult.reason || 'unknown error'}`);
+        } else if (servicesResult.value.error) {
+          issues.push(`Services query failed: ${servicesResult.value.error.message}`);
+        }
+
+        if (vehiclesResult.status === 'rejected') {
+          issues.push(`Vehicles query failed: ${vehiclesResult.reason?.message || vehiclesResult.reason || 'unknown error'}`);
+        } else if (vehiclesResult.value.error) {
+          issues.push(`Vehicles query failed: ${vehiclesResult.value.error.message}`);
+        }
+
+        const services = sData.map(r => normalizeRow(r, 'service'));
+        const vehicles = vData.map(r => normalizeRow(r, 'vehicle'));
+        renderDashboard(services, vehicles);
+        setIssues('data', issues);
+
+        const total = services.length + vehicles.length;
+        els.status.textContent = issues.length
+          ? `PARTIAL • ${total} RECORDS`
+          : `LIVE • ${total} RECORDS`;
+        setLastSync(issues.length ? 'partial' : 'ok');
         lucide.createIcons();
     };
 
     const loadChangeLog = async () => {
+      const issues = [];
       try {
         const { data, error } = await supabaseClient
           .from(TABLE_CHANGE_LOG)
@@ -573,10 +634,13 @@
           .limit(50);
 
         if (error) throw error;
+        setIssues('changelog', []);
         renderChangeLog(data || []);
       } catch (err) {
         console.error('Error fetching change log', err);
-        renderChangeLog(); 
+        renderChangeLog();
+        issues.push(`Change log unavailable (admin_change_log): ${err?.message || err}`);
+        setIssues('changelog', issues);
       }
     };
 
@@ -587,6 +651,30 @@
        els.detailModalContent.innerHTML = `<p class="text-xs font-mono text-emerald-400">ID: ${id}</p>`;
     };
     els.detailModalClose.onclick = () => els.detailModal.classList.add('hidden');
+
+    const refreshAll = async () => {
+      if (els.refreshBtn) {
+        els.refreshBtn.disabled = true;
+        els.refreshBtn.setAttribute('aria-busy', 'true');
+      }
+
+      try {
+        await loadData();
+        await loadChangeLog();
+        setIssues('runtime', []);
+      } catch (error) {
+        setIssues('runtime', [`Unexpected refresh error: ${error?.message || error}`]);
+      } finally {
+        if (els.refreshBtn) {
+          els.refreshBtn.disabled = false;
+          els.refreshBtn.removeAttribute('aria-busy');
+        }
+      }
+    };
+
+    els.refreshBtn?.addEventListener('click', () => {
+      refreshAll().catch((error) => console.error('Refresh failed', error));
+    });
 
     (async () => {
         try {
@@ -600,8 +688,7 @@
           console.error('Unable to initialize background manager', error);
         }
 
-        await loadData();
-        await loadChangeLog();
+        await refreshAll();
     })();
   </script>
   <script type="module">

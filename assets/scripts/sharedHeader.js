@@ -1,6 +1,8 @@
 import { initGlobalAlerts } from './globalAlerts.js';
+import { initGlobalActivityTracker } from './globalActivityTracker.js';
 
 initGlobalAlerts();
+initGlobalActivityTracker();
 
 const headerSlot = document.querySelector('[data-shared-header]');
 

@@ -30,6 +30,17 @@ const getDefaultHelpers = () => ({
   formatDateTime: (value) => value,
 });
 
+const toDateInputValue = (value) => {
+  if (!value) return '';
+  const asText = String(value).trim();
+  if (!asText) return '';
+  const isoLike = asText.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoLike) return isoLike[1];
+  const parsed = new Date(asText);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
+
 const getRepairVehicleVin = (vehicle) => {
   const vin = vehicle?.VIN ?? vehicle?.vin ?? vehicle?.details?.VIN ?? '';
   return typeof vin === 'string' ? vin.trim().toUpperCase() : '';
@@ -48,7 +59,6 @@ const getRepairVehicleShortVin = (vehicle) => {
 const createRepairHistoryManager = ({
   supabaseClient,
   startLoading,
-  ensureSupabaseSession,
   runWithTimeout,
   timeoutMs = 10000,
   tableName,
@@ -61,20 +71,23 @@ const createRepairHistoryManager = ({
 
   const fetchRepairs = async (vin) => {
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
+    const normalizedShortVin = normalizedVin ? normalizedVin.slice(-6) : '';
     if (!supabaseClient || !normalizedVin) {
       return { data: [], error: new Error('Missing Supabase client or VIN.') };
     }
     try {
-      await ensureSupabaseSession?.();
-      const { data, error } = await runWithTimeout(
-        supabaseClient
-          .from(tableName)
-          .select('*')
-          .ilike('shortvin', normalizedShortVin)
-          .order('request date', { ascending: false }),
-        timeoutMs,
-        'Repair history request timed out.'
-      );
+      const vinFilter = normalizedVin.replace(/[%_,]/g, '').slice(-17);
+      const shortVinFilter = normalizedShortVin.replace(/[%_,]/g, '').slice(-6);
+      const searchClauses = [`VIN.ilike.%${vinFilter}%`];
+      if (shortVinFilter) searchClauses.push(`shortvin.ilike.%${shortVinFilter}%`);
+      const query = supabaseClient
+        .from(tableName)
+        .select('*')
+        .or(searchClauses.join(','))
+        .order('created_at', { ascending: false });
+      const { data, error } = runWithTimeout
+        ? await runWithTimeout(query, timeoutMs, 'Repair history request timed out.')
+        : await query;
       if (error) throw error;
       return { data: data || [], error: null };
     } catch (error) {
@@ -88,7 +101,6 @@ const createRepairHistoryManager = ({
       if (!supabaseClient) {
         throw new Error('Supabase unavailable');
       }
-      await ensureSupabaseSession?.();
       const cleanPrice = Number.parseFloat(`${formData.get('repair_price') || '0'}`.replace(/[$,]/g, '')) || 0;
       const payload = {
         ...buildRepairSnapshot(vehicle, getRepairVehicleVin),
@@ -108,17 +120,16 @@ const createRepairHistoryManager = ({
       };
 
       const query = supabaseClient.from(tableName);
-      const { data, error } = editId
+      const request = editId
+        ? query.update(payload).eq('id', editId).select('*')
+        : query.insert(payload).select('*');
+      const { data, error } = runWithTimeout
         ? await runWithTimeout(
-          query.update(payload).eq('id', editId).select('*'),
+          request,
           timeoutMs,
-          'Repair update request timed out.'
+          editId ? 'Repair update request timed out.' : 'Repair create request timed out.'
         )
-        : await runWithTimeout(
-          query.insert(payload).select('*'),
-          timeoutMs,
-          'Repair create request timed out.'
-        );
+        : await request;
       if (error) throw error;
       return data || [];
     } catch (error) {
@@ -153,13 +164,12 @@ const createRepairHistoryManager = ({
 
     const DEFAULT_REPAIR_COLUMNS = [
       { key: 'status', label: 'Status' },
-      { key: 'request date', label: 'Request Date' },
-      { key: 'workdate', label: 'Work Date' },
-      { key: 'shipping date', label: 'Shipping Date' },
-      { key: 'company_name', label: 'Company Name' },
+      { key: 'cs_contact_date', label: 'Request Date' },
+      { key: 'shipping_date', label: 'Shipping Date' },
+      { key: 'installation_company', label: 'Company Name' },
       { key: 'shortvin', label: 'Short VIN' },
-      { key: 'Service_category', label: 'Service Category' },
-      { key: 'Notes', label: 'Notes' }
+      { key: 'repair_price', label: 'Cost' },
+      { key: 'repair_notes', label: 'Notes' }
     ];
 
     const formatRepairValue = (key, value) => {
@@ -195,8 +205,8 @@ const createRepairHistoryManager = ({
       if (columnKey === 'status') {
         return renderStatusBadge(repair?.[columnKey]);
       }
-      if (columnKey === 'Notes') {
-        return renderNotesCell(repair?.[columnKey]);
+      if (columnKey === 'repair_notes') {
+        return renderNotesCell(repair?.repair_notes);
       }
       return safeEscape(formatRepairValue(columnKey, repair?.[columnKey]));
     };
@@ -205,7 +215,7 @@ const createRepairHistoryManager = ({
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (match) => match.toUpperCase());
 
-    const CRITICAL_REPAIR_COLUMNS = new Set(['status', 'request date', 'Notes']);
+    const CRITICAL_REPAIR_COLUMNS = new Set(['status', 'cs_contact_date', 'repair_notes']);
     const TECHNICAL_REPAIR_COLUMNS = new Set([
       'id',
       'created_at',
@@ -316,9 +326,10 @@ const createRepairHistoryManager = ({
       if (!query) return repairs;
       return repairs.filter((repair) => {
         const status = `${repair?.status || ''}`.toLowerCase();
-        const notes = `${repair?.Notes || ''}`.toLowerCase();
-        const company = `${repair?.company_name || ''}`.toLowerCase();
-        return status.includes(query) || notes.includes(query) || company.includes(query);
+        const notes = `${repair?.repair_notes || ''}`.toLowerCase();
+        const company = `${repair?.installation_company || ''}`.toLowerCase();
+        const vin = `${repair?.shortvin || repair?.VIN || ''}`.toLowerCase();
+        return status.includes(query) || notes.includes(query) || company.includes(query) || vin.includes(query);
       });
     };
 
@@ -416,9 +427,13 @@ const createRepairHistoryManager = ({
       updateConnectionStatus({ state: 'connecting…' });
       const { data, error } = await fetchRepairs(VIN);
       if (error) {
+        const rawMessage = `${error?.message || 'Unable to load repair history.'}`;
+        const message = rawMessage.toLowerCase().includes('permission denied')
+          ? 'Permission denied on repair_history. Add RLS policies for anon/authenticated access as needed.'
+          : rawMessage;
         updateConnectionStatus({
           state: 'error',
-          detail: error?.message || 'Unable to load service history.',
+          detail: message,
           isError: true
         });
       } else {
@@ -499,16 +514,16 @@ const createRepairHistoryManager = ({
           const installationPlaceInput = form.querySelector('[name="installation_place"]');
           const repairPriceInput = form.querySelector('[name="repair_price"]');
           const repairNotesInput = form.querySelector('[name="repair_notes"]');
-          if (csContactInput) csContactInput.value = repair?.cs_contact_date || '';
+          if (csContactInput) csContactInput.value = toDateInputValue(repair?.cs_contact_date);
           if (statusInput) statusInput.value = repair?.status || '';
           if (docInput) docInput.value = repair?.doc || '';
-          if (shippingDateInput) shippingDateInput.value = repair?.shipping_date || '';
+          if (shippingDateInput) shippingDateInput.value = toDateInputValue(repair?.shipping_date);
           if (pocNameInput) pocNameInput.value = repair?.poc_name || '';
           if (pocPhoneInput) pocPhoneInput.value = repair?.poc_phone || '';
           if (customerAvailabilityInput) customerAvailabilityInput.value = repair?.customer_availability || '';
-          if (installerRequestInput) installerRequestInput.value = repair?.installer_request_date || '';
+          if (installerRequestInput) installerRequestInput.value = toDateInputValue(repair?.installer_request_date);
           if (installationCompanyInput) installationCompanyInput.value = repair?.installation_company || '';
-          if (technicianAvailabilityInput) technicianAvailabilityInput.value = repair?.technician_availability_date || '';
+          if (technicianAvailabilityInput) technicianAvailabilityInput.value = toDateInputValue(repair?.technician_availability_date);
           if (installationPlaceInput) installationPlaceInput.value = repair?.installation_place || '';
           if (repairPriceInput) repairPriceInput.value = repair?.repair_price ?? '';
           if (repairNotesInput) repairNotesInput.value = repair?.repair_notes || '';
