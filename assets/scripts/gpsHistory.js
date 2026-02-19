@@ -5,7 +5,7 @@ const getDefaultHelpers = () => ({
 
 const getVehicleVin = (vehicle) => {
   const vin = vehicle?.VIN ?? vehicle?.vin ?? vehicle?.details?.VIN ?? '';
-  return typeof vin === 'string' ? vin.trim() : '';
+  return typeof vin === 'string' ? vin.trim().toUpperCase() : '';
 };
 
 const getVehicleId = (vehicle) => {
@@ -32,14 +32,14 @@ const createGpsHistoryManager = ({
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
 
   const fetchGpsHistory = async ({ vin, vehicleId } = {}) => {
-    const normalizedVin = typeof vin === 'string' ? vin.trim() : '';
+    const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
     const normalizedVehicleId = typeof vehicleId === 'string' ? vehicleId.trim() : '';
     if (!supabaseClient || (!normalizedVin && !normalizedVehicleId)) {
       return { records: [], error: supabaseClient ? new Error('VIN missing') : new Error('Supabase unavailable') };
     }
     try {
       await ensureSupabaseSession?.();
-      const sourceTable = tableName || '"PT-LastPing"';
+      const sourceTable = tableName || 'PT-LastPing';
       const baseQuery = supabaseClient
         .from(sourceTable)
         .select('*');
@@ -89,6 +89,10 @@ const createGpsHistoryManager = ({
     const columnsToggle = body.querySelector('[data-gps-columns-toggle]');
     const columnsPanel = body.querySelector('[data-gps-columns-panel]');
     const columnsList = body.querySelector('[data-gps-columns-list]');
+    const widthColumnSelect = body.querySelector('[data-gps-width-column]');
+    const widthValueInput = body.querySelector('[data-gps-width-value]');
+    const widthApplyButton = body.querySelector('[data-gps-width-apply]');
+    const widthAutoButton = body.querySelector('[data-gps-width-auto]');
     const searchInput = body.querySelector('[data-gps-search]');
     const statusText = body.querySelector('[data-gps-status]');
     const connectionStatus = body.querySelector('[data-gps-connection-status]');
@@ -102,9 +106,15 @@ const createGpsHistoryManager = ({
     let searchQuery = '';
     let sortKey = '';
     let sortDirection = 'desc';
+    let activeResize = null;
+    let activeHeaderDragKey = '';
+    let suppressSortUntil = 0;
+    let headerDragEnabledBeforeResize = [];
 
     const COLUMN_STORAGE_KEY = 'gpsHistoryColumnPrefs';
     const WIDTH_STORAGE_KEY = 'gpsHistoryColumnWidths';
+    const MIN_COLUMN_WIDTH = 80;
+    const MAX_COLUMN_WIDTH = 1200;
 
     const DEFAULT_COLUMN_ORDER = [
       'created_at',
@@ -123,6 +133,12 @@ const createGpsHistoryManager = ({
     const titleCase = (value) => value
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (match) => match.toUpperCase());
+
+    const parseWidthValue = (value) => {
+      const parsed = Number.parseInt(`${value || ''}`.trim(), 10);
+      if (!Number.isFinite(parsed)) return '';
+      return String(Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, parsed)));
+    };
 
     const loadPreferences = () => {
       let savedPrefs = {};
@@ -194,8 +210,14 @@ const createGpsHistoryManager = ({
     const formatValue = (key, value) => {
       if (value === null || value === undefined || value === '') return '—';
       const normalizedKey = key.toLowerCase();
+      if (normalizedKey === 'moved') {
+        const numeric = Number(value);
+        if (numeric === 1) return 'Moving';
+        if (numeric === -1) return 'Parked';
+        if (numeric === 0) return '';
+      }
       if (key === 'PT-LastPing' || normalizedKey.includes('date') || normalizedKey.includes('time')) {
-        return safeFormatDateTime(value);
+        return safeEscape(`${safeFormatDateTime(value)}`);
       }
       if (typeof value === 'object') {
         return safeEscape(JSON.stringify(value));
@@ -220,11 +242,12 @@ const createGpsHistoryManager = ({
             const width = columnWidths[col.key];
             const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
             return `
-              <th class="py-2 pr-3 align-bottom" ${widthStyle}>
+              <th class="py-2 pr-3 align-bottom gps-history-th-resizable" data-gps-col-header="${col.key}" draggable="true" ${widthStyle}>
                 <button type="button" class="group inline-flex items-center gap-1 text-left text-[10px] uppercase tracking-[0.08em] text-slate-400 hover:text-slate-200 transition-colors" data-gps-sort="${col.key}">
                   <span>${safeEscape(col.label)}</span>
                   <span class="text-[9px] text-slate-500 group-hover:text-slate-300">${sortKey === col.key ? (sortDirection === 'asc' ? '▲' : '▼') : ''}</span>
                 </button>
+                <button type="button" class="gps-history-resize-handle" data-gps-resize="${col.key}" aria-label="Resize ${safeEscape(col.label)} column"></button>
               </th>
             `;
           }).join('')}
@@ -278,7 +301,11 @@ const createGpsHistoryManager = ({
           ${visibleColumns.map((col) => {
             const width = columnWidths[col.key];
             const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
-            return `<td class="py-2 pr-3 text-slate-300 align-top" ${widthStyle}>${formatValue(col.key, record?.[col.key])}</td>`;
+            const rawValue = record?.[col.key];
+            const tooltip = rawValue === null || rawValue === undefined || rawValue === ''
+              ? ''
+              : safeEscape(typeof rawValue === 'object' ? JSON.stringify(rawValue) : `${rawValue}`);
+            return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, rawValue)}</div></td>`;
           }).join('')}
         </tr>
       `).join('');
@@ -288,12 +315,12 @@ const createGpsHistoryManager = ({
       if (!columnsList) return;
       if (!gpsColumns.length) {
         columnsList.innerHTML = '<p class="text-xs text-slate-400">No columns available.</p>';
+        syncWidthControls();
         return;
       }
       columnsList.innerHTML = columnOrder.map((key) => {
         const column = gpsColumns.find((col) => col.key === key);
         if (!column) return '';
-        const widthValue = columnWidths[key] || '';
         return `
           <div class="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-950/70 px-2 py-1.5" draggable="true" data-gps-column="${column.key}">
             <span class="text-slate-500">⋮⋮</span>
@@ -301,19 +328,174 @@ const createGpsHistoryManager = ({
               <input type="checkbox" value="${column.key}" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-950" ${columnVisibility[column.key] ? 'checked' : ''} />
               <span class="text-slate-200">${safeEscape(column.label)}</span>
             </label>
-            <input
-              type="number"
-              min="60"
-              max="400"
-              step="10"
-              value="${widthValue}"
-              placeholder="Auto"
-              class="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200"
-              data-gps-width="${column.key}"
-            />
           </div>
         `;
       }).join('');
+      syncWidthControls();
+    };
+
+    const syncWidthControls = () => {
+      if (!widthColumnSelect || !widthValueInput || !widthApplyButton || !widthAutoButton) return;
+
+      if (!gpsColumns.length) {
+        widthColumnSelect.innerHTML = '<option value="">No columns</option>';
+        widthColumnSelect.disabled = true;
+        widthValueInput.disabled = true;
+        widthApplyButton.disabled = true;
+        widthAutoButton.disabled = true;
+        widthValueInput.value = '';
+        return;
+      }
+
+      const previousKey = widthColumnSelect.value;
+      widthColumnSelect.innerHTML = columnOrder.map((key) => {
+        const column = gpsColumns.find((col) => col.key === key);
+        if (!column) return '';
+        return `<option value="${column.key}">${safeEscape(column.label)}</option>`;
+      }).join('');
+
+      const selectedKey = (previousKey && columnOrder.includes(previousKey))
+        ? previousKey
+        : (columnOrder[0] || gpsColumns[0]?.key || '');
+
+      widthColumnSelect.value = selectedKey;
+      widthColumnSelect.disabled = false;
+      widthValueInput.disabled = false;
+      widthApplyButton.disabled = false;
+      widthAutoButton.disabled = false;
+      widthValueInput.value = selectedKey ? (columnWidths[selectedKey] || '') : '';
+    };
+
+    const applySelectedWidth = () => {
+      const key = widthColumnSelect?.value || '';
+      if (!key) return;
+      const normalized = parseWidthValue(widthValueInput?.value);
+      if (widthValueInput) widthValueInput.value = normalized;
+      columnWidths[key] = normalized;
+      savePreferences();
+      renderTableHead();
+      renderHistory(gpsCache);
+    };
+
+    const resetSelectedWidth = () => {
+      const key = widthColumnSelect?.value || '';
+      if (!key) return;
+      columnWidths[key] = '';
+      if (widthValueInput) widthValueInput.value = '';
+      savePreferences();
+      renderTableHead();
+      renderHistory(gpsCache);
+    };
+
+    const findHeaderCellByKey = (key) => {
+      if (!historyHead || !key) return null;
+      const headers = historyHead.querySelectorAll('[data-gps-col-header]');
+      return [...headers].find((header) => header.dataset.gpsColHeader === key) || null;
+    };
+
+    const getVisibleColumnIndex = (key) => getVisibleColumns().findIndex((col) => col.key === key);
+
+    const applyColumnWidthToRenderedTable = (key, widthPx) => {
+      const widthStyleValue = widthPx ? `${widthPx}px` : '';
+      const headerCell = findHeaderCellByKey(key);
+      if (headerCell) {
+        headerCell.style.width = widthStyleValue;
+        headerCell.style.minWidth = widthStyleValue;
+      }
+      if (!historyBody) return;
+      const columnIndex = getVisibleColumnIndex(key);
+      if (columnIndex < 0) return;
+      const rows = historyBody.querySelectorAll('tr');
+      rows.forEach((row) => {
+        const cell = row.children[columnIndex];
+        if (!cell) return;
+        cell.style.width = widthStyleValue;
+        cell.style.minWidth = widthStyleValue;
+      });
+    };
+
+    const stopColumnResize = () => {
+      if (!activeResize) return;
+      if (activeResize.target?.releasePointerCapture && activeResize.pointerId !== undefined) {
+        try {
+          activeResize.target.releasePointerCapture(activeResize.pointerId);
+        } catch (_error) {
+          // Ignore browsers that throw if capture was not set.
+        }
+      }
+      activeResize = null;
+      window.removeEventListener('pointermove', handleColumnResizeMove);
+      window.removeEventListener('pointerup', handleColumnResizeEnd);
+      document.body.classList.remove('gps-column-resizing');
+      if (historyHead) {
+        historyHead.style.userSelect = '';
+        headerDragEnabledBeforeResize.forEach(({ node, draggable }) => {
+          if (!node) return;
+          node.setAttribute('draggable', draggable ? 'true' : 'false');
+        });
+      }
+      headerDragEnabledBeforeResize = [];
+      savePreferences();
+      renderTableHead();
+      renderHistory(gpsCache);
+    };
+
+    const handleColumnResizeMove = (event) => {
+      if (!activeResize) return;
+      if (activeResize.pointerId !== undefined && event.pointerId !== activeResize.pointerId) return;
+      event.preventDefault();
+      const delta = event.clientX - activeResize.startX;
+      const nextWidth = Math.max(
+        MIN_COLUMN_WIDTH,
+        Math.min(MAX_COLUMN_WIDTH, Math.round(activeResize.startWidth + delta))
+      );
+      if (nextWidth === activeResize.currentWidth) return;
+      activeResize.currentWidth = nextWidth;
+      columnWidths[activeResize.key] = String(nextWidth);
+      if (widthColumnSelect?.value === activeResize.key && widthValueInput) {
+        widthValueInput.value = String(nextWidth);
+      }
+      applyColumnWidthToRenderedTable(activeResize.key, nextWidth);
+    };
+
+    const handleColumnResizeEnd = () => {
+      stopColumnResize();
+    };
+
+    const startColumnResize = (event, key, headerCell) => {
+      if (!key || !headerCell) return;
+      if (event.button !== 0) return;
+      const presetWidth = Number.parseInt(`${columnWidths[key] || ''}`, 10);
+      const measuredWidth = Math.round(headerCell.getBoundingClientRect().width || MIN_COLUMN_WIDTH);
+      const startWidth = Number.isFinite(presetWidth) ? presetWidth : measuredWidth;
+      headerDragEnabledBeforeResize = historyHead
+        ? [...historyHead.querySelectorAll('[data-gps-col-header]')].map((node) => ({
+          node,
+          draggable: node.getAttribute('draggable') === 'true'
+        }))
+        : [];
+      headerDragEnabledBeforeResize.forEach(({ node }) => node.setAttribute('draggable', 'false'));
+      if (historyHead) {
+        historyHead.style.userSelect = 'none';
+      }
+      if (event.target?.setPointerCapture && event.pointerId !== undefined) {
+        try {
+          event.target.setPointerCapture(event.pointerId);
+        } catch (_error) {
+          // Ignore browsers that do not allow capture on this target.
+        }
+      }
+      activeResize = {
+        key,
+        startX: event.clientX,
+        startWidth: Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, startWidth)),
+        currentWidth: Math.max(MIN_COLUMN_WIDTH, Math.min(MAX_COLUMN_WIDTH, startWidth)),
+        pointerId: event.pointerId,
+        target: event.target
+      };
+      document.body.classList.add('gps-column-resizing');
+      window.addEventListener('pointermove', handleColumnResizeMove);
+      window.addEventListener('pointerup', handleColumnResizeEnd);
     };
 
     const updateColumnOrder = (dragKey, targetKey) => {
@@ -329,6 +511,13 @@ const createGpsHistoryManager = ({
       renderColumnsList();
       renderTableHead();
       renderHistory(gpsCache);
+    };
+
+    const clearHeaderDropTargets = () => {
+      if (!historyHead) return;
+      historyHead
+        .querySelectorAll('.gps-history-header-drop-target')
+        .forEach((node) => node.classList.remove('gps-history-header-drop-target'));
     };
 
     const setConnectionStatus = (label, tone = 'neutral') => {
@@ -370,23 +559,23 @@ const createGpsHistoryManager = ({
 
     const loadColumnMetadata = async () => {
       if (!supabaseClient) return;
-      const rawTable = (tableName || 'PT-LastPing').replace(/"/g, '');
-      const tableKey = rawTable.includes('.') ? rawTable.split('.').pop() : rawTable;
+      const sourceTable = tableName || 'PT-LastPing';
       try {
         await ensureSupabaseSession?.();
-        const { data, error } = await runWithTimeout(
-          supabaseClient
-            .from('information_schema.columns')
-            .select('column_name,ordinal_position')
-            .eq('table_name', tableKey)
-            .order('ordinal_position', { ascending: true }),
-          timeoutMs,
-          'GPS history column request timed out.'
-        );
+        const sampleQuery = supabaseClient
+          .from(sourceTable)
+          .select('*')
+          .limit(1);
+        const { data, error } = runWithTimeout
+          ? await runWithTimeout(
+            sampleQuery,
+            timeoutMs,
+            'GPS history column request timed out.'
+          )
+          : await sampleQuery;
         if (error) throw error;
-        availableColumnKeys = (data || [])
-          .map((row) => row?.column_name)
-          .filter(Boolean);
+        const firstRow = Array.isArray(data) ? data[0] : null;
+        availableColumnKeys = firstRow ? Object.keys(firstRow) : [];
         if (availableColumnKeys.length) {
           buildColumnsFromKeys(availableColumnKeys);
           renderColumnsList();
@@ -435,16 +624,6 @@ const createGpsHistoryManager = ({
         }
       }, { signal });
 
-      columnsList.addEventListener('input', (event) => {
-        const input = event.target;
-        if (!input || input.tagName !== 'INPUT' || input.type !== 'number') return;
-        const key = input.dataset.gpsWidth;
-        columnWidths[key] = input.value;
-        savePreferences();
-        renderTableHead();
-        renderHistory(gpsCache);
-      }, { signal });
-
       let draggedKey = null;
       columnsList.addEventListener('dragstart', (event) => {
         const row = event.target.closest('[data-gps-column]');
@@ -476,8 +655,105 @@ const createGpsHistoryManager = ({
       }, { signal });
     }
 
+    if (widthColumnSelect && widthValueInput && widthApplyButton && widthAutoButton) {
+      widthColumnSelect.addEventListener('change', () => {
+        const key = widthColumnSelect.value || '';
+        widthValueInput.value = key ? (columnWidths[key] || '') : '';
+      }, { signal });
+
+      widthApplyButton.addEventListener('click', () => {
+        applySelectedWidth();
+      }, { signal });
+
+      widthAutoButton.addEventListener('click', () => {
+        resetSelectedWidth();
+      }, { signal });
+
+      widthValueInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        applySelectedWidth();
+      }, { signal });
+    }
+
     if (historyHead) {
+      historyHead.addEventListener('dragstart', (event) => {
+        if (activeResize) {
+          event.preventDefault();
+          return;
+        }
+        const header = event.target.closest('[data-gps-col-header]');
+        if (!header) return;
+        if (event.target.closest('[data-gps-resize]')) {
+          event.preventDefault();
+          return;
+        }
+        const key = header.dataset.gpsColHeader || '';
+        if (!key) return;
+        activeHeaderDragKey = key;
+        header.classList.add('opacity-60');
+        if (event.dataTransfer) {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', key);
+        }
+      }, { signal });
+
+      historyHead.addEventListener('dragend', () => {
+        activeHeaderDragKey = '';
+        clearHeaderDropTargets();
+        historyHead
+          .querySelectorAll('[data-gps-col-header].opacity-60')
+          .forEach((node) => node.classList.remove('opacity-60'));
+      }, { signal });
+
+      historyHead.addEventListener('dragover', (event) => {
+        if (!activeHeaderDragKey) return;
+        const target = event.target.closest('[data-gps-col-header]');
+        if (!target) return;
+        event.preventDefault();
+        clearHeaderDropTargets();
+        if (target.dataset.gpsColHeader !== activeHeaderDragKey) {
+          target.classList.add('gps-history-header-drop-target');
+        }
+      }, { signal });
+
+      historyHead.addEventListener('drop', (event) => {
+        if (!activeHeaderDragKey) return;
+        const target = event.target.closest('[data-gps-col-header]');
+        if (!target) return;
+        event.preventDefault();
+        const targetKey = target.dataset.gpsColHeader || '';
+        if (targetKey && targetKey !== activeHeaderDragKey) {
+          updateColumnOrder(activeHeaderDragKey, targetKey);
+          suppressSortUntil = Date.now() + 250;
+        }
+        clearHeaderDropTargets();
+      }, { signal });
+
+      historyHead.addEventListener('pointerdown', (event) => {
+        const handle = event.target.closest('[data-gps-resize]');
+        if (handle) {
+          event.preventDefault();
+          event.stopPropagation();
+          const key = handle.dataset.gpsResize;
+          const headerCell = handle.closest('[data-gps-col-header]');
+          startColumnResize(event, key, headerCell);
+          return;
+        }
+
+        const headerCell = event.target.closest('[data-gps-col-header]');
+        if (!headerCell) return;
+        const rect = headerCell.getBoundingClientRect();
+        const nearRightEdge = (rect.right - event.clientX) <= 12;
+        if (!nearRightEdge) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const key = headerCell.dataset.gpsColHeader || '';
+        startColumnResize(event, key, headerCell);
+      }, { signal });
+
       historyHead.addEventListener('click', (event) => {
+        if (Date.now() < suppressSortUntil) return;
         const button = event.target.closest('[data-gps-sort]');
         if (!button) return;
         const nextSortKey = button.dataset.gpsSort;
@@ -491,6 +767,10 @@ const createGpsHistoryManager = ({
         renderHistory(gpsCache);
       }, { signal });
     }
+
+    signal?.addEventListener('abort', () => {
+      stopColumnResize();
+    }, { once: true });
 
     if (searchInput) {
       searchInput.addEventListener('input', (event) => {
