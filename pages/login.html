@@ -43,7 +43,7 @@
 
       <div class="space-y-2">
         <h2 class="text-2xl font-bold text-white">Access your dashboard</h2>
-        <p class="text-sm text-slate-300">Use your administrator credentials to authenticate. After signing in you'll return to the homepage with secure access to admin tools.</p>
+        <p class="text-sm text-slate-300">Use your administrator credentials to authenticate. After signing in you'll open the Control Map with secure access to admin tools.</p>
       </div>
 
       <form id="login-form" class="space-y-4">
@@ -68,12 +68,19 @@
     import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
     import { supabase as supabaseClient } from '../assets/js/supabaseClient.js';
     import { logAdminEvent } from '../assets/scripts/adminAudit.js';
+    import {
+      clearWebAdminSession,
+      isWebAdminCredentials,
+      setWebAdminSession,
+    } from '../assets/scripts/web-admin-session.js';
 
     const loginForm = document.getElementById('login-form');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const submitButton = loginForm.querySelector('button[type="submit"]');
     const submitLabel = submitButton.querySelector('span');
+    const statusLabel = document.getElementById('status');
+    const redirectToControlMap = () => window.location.replace('./control-map.html');
 
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -81,19 +88,36 @@
       submitButton.disabled = true;
       const originalText = submitLabel.textContent;
       submitLabel.textContent = 'Verifying...';
+      statusLabel.textContent = 'Validating credentials...';
 
       const email = emailInput.value.trim();
       const password = passwordInput.value;
+      let data = null;
+      let error = null;
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (isWebAdminCredentials(email, password)) {
+        setWebAdminSession(email);
+        statusLabel.textContent = 'Signed in with local admin profile. Redirecting...';
+        redirectToControlMap();
+        return;
+      }
+
+      if (supabaseClient?.auth?.signInWithPassword) {
+        const response = await supabaseClient.auth.signInWithPassword({ email, password });
+        data = response.data;
+        error = response.error;
+      } else {
+        error = new Error('Supabase authentication is currently unavailable.');
+      }
 
       if (error) {
-        alert(error.message);
+        statusLabel.textContent = error.message || 'Unable to sign in. Please try again.';
         submitButton.disabled = false;
         submitLabel.textContent = originalText;
         return;
       }
 
+      clearWebAdminSession();
       await logAdminEvent({
         client: supabaseClient,
         action: 'login',
@@ -103,8 +127,8 @@
         actor: data?.user?.email || email,
       });
 
-      const basePath = window.location.hostname.includes('github.io') ? '/Techloc' : '';
-      window.location.replace(basePath + '/index.html');
+      statusLabel.textContent = 'Login successful. Redirecting to Control Map...';
+      redirectToControlMap();
     });
 
     document.addEventListener('DOMContentLoaded', () => {

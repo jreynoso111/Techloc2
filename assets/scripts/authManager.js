@@ -1,9 +1,16 @@
 import { supabase as supabaseClient } from '../js/supabaseClient.js';
+import {
+  buildWebAdminSession,
+  clearWebAdminSession,
+  getWebAdminAccess,
+  isWebAdminSession,
+} from './web-admin-session.js';
 
 (function () {
-  if (!supabaseClient) {
-    console.error('Supabase client not initialized. Ensure supabaseClient.js is available.');
-    return;
+  const hasSupabaseAuth =
+    Boolean(supabaseClient?.auth) && typeof supabaseClient.auth.getSession === 'function';
+  if (!hasSupabaseAuth) {
+    console.warn('Supabase session APIs unavailable. Using local web-admin session fallback.');
   }
 
   const whenDomReady = new Promise((resolve) => {
@@ -41,12 +48,19 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
 
   const mapsTo = (page) => {
     const normalizedPage = page.startsWith('/') ? page.slice(1) : page;
-    const currentPath = window.location.pathname;
-    const normalizedPath = currentPath.toLowerCase();
-    const repoSegment = '/techloc/';
-    const repoIndex = normalizedPath.indexOf(repoSegment);
-    const basePath = repoIndex !== -1 ? currentPath.slice(0, repoIndex + repoSegment.length) : '/';
+    const path = window.location.pathname;
+    const normalizedPath = path.toLowerCase();
+    const pagesIndex = normalizedPath.indexOf('/pages/');
+    const basePath = pagesIndex !== -1 ? path.slice(0, pagesIndex + 1) : path.slice(0, path.lastIndexOf('/') + 1);
     return `${basePath}${normalizedPage}`;
+  };
+
+  const getEffectiveSession = async () => {
+    if (hasSupabaseAuth) {
+      const { data } = await supabaseClient.auth.getSession();
+      return data?.session || buildWebAdminSession() || null;
+    }
+    return buildWebAdminSession() || null;
   };
 
   // --- NUEVO: Función para obtener el rol y estado desde la tabla profiles ---
@@ -78,6 +92,27 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
         email: null,
       };
     }
+  };
+
+  const resolveProfileForSession = async (session) => {
+    if (!session?.user) {
+      return {
+        role: 'user',
+        status: 'active',
+        email: null,
+      };
+    }
+
+    if (isWebAdminSession(session)) {
+      const localAccess = getWebAdminAccess();
+      return {
+        role: localAccess?.role || 'administrator',
+        status: localAccess?.status || 'active',
+        email: localAccess?.email || session.user.email || null,
+      };
+    }
+
+    return fetchUserProfile(session.user.id);
   };
 
   const waitForAccountLabel = (timeoutMs = 3000) =>
@@ -225,7 +260,10 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
     }
 
     if (window.currentUserStatus === 'suspended' && isProtectedRoute()) {
-      supabaseClient?.auth.signOut();
+      clearWebAdminSession();
+      if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+        supabaseClient.auth.signOut();
+      }
       window.location.replace(mapsTo('pages/login.html'));
     }
   };
@@ -239,7 +277,10 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
         logoutButton.addEventListener('click', async (event) => {
           event.preventDefault();
           try {
-            await supabaseClient.auth.signOut();
+            clearWebAdminSession();
+            if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+              await supabaseClient.auth.signOut();
+            }
             // Limpiar rol global al salir
             window.currentUserRole = null;
             window.currentUserStatus = null;
@@ -254,17 +295,17 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
 
   const startAuthFlow = async () => {
     try {
-      const { data } = await supabaseClient.auth.getSession();
-      const hasSession = Boolean(data?.session);
+      const session = await getEffectiveSession();
+      const hasSession = Boolean(session);
       let userRole = 'user'; // Rol por defecto
       let userStatus = 'active';
 
       // --- NUEVO: Si hay sesión, buscamos el rol en la base de datos ---
-      if (hasSession && data.session.user) {
-        const profile = await fetchUserProfile(data.session.user.id);
+      if (hasSession && session.user) {
+        const profile = await resolveProfileForSession(session);
         userRole = profile.role;
         userStatus = profile.status.toLowerCase();
-        await updateHeaderAccount(data.session, profile.email);
+        await updateHeaderAccount(session, profile.email);
 
         // Guardamos el rol y estado globalmente para usarlo en otros scripts
         window.currentUserRole = userRole;
@@ -288,7 +329,7 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
 
       const isLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
       if (hasSession && isLoginPage) {
-        window.location.replace(mapsTo('index.html'));
+        window.location.replace(mapsTo('pages/control-map.html'));
         return;
       }
 
@@ -297,43 +338,50 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
       enforceRouteProtection(hasSession, userRole);
       bindLogout();
 
-      supabaseClient.auth.onAuthStateChange(async (event, session) => {
-        const sessionExists = Boolean(session);
-        let updatedRole = 'user';
-        let updatedStatus = 'active';
+      if (hasSupabaseAuth && typeof supabaseClient.auth.onAuthStateChange === 'function') {
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+          if (event === 'SIGNED_OUT') {
+            clearWebAdminSession();
+          }
 
-        if (sessionExists && session.user) {
-           const profile = await fetchUserProfile(session.user.id);
-           updatedRole = profile.role;
-           updatedStatus = profile.status.toLowerCase();
-           window.currentUserRole = updatedRole;
-           window.currentUserStatus = updatedStatus;
-           document.body.setAttribute('data-user-role', updatedRole);
-           document.body.setAttribute('data-user-status', updatedStatus);
-           await updateHeaderAccount(session, profile.email);
-        } else {
-           window.currentUserRole = null;
-           window.currentUserStatus = null;
-           document.body.removeAttribute('data-user-role');
-           document.body.removeAttribute('data-user-status');
-           await updateHeaderAccount(null);
-        }
+          const effectiveSession = session || buildWebAdminSession();
+          const sessionExists = Boolean(effectiveSession);
+          let updatedRole = 'user';
+          let updatedStatus = 'active';
 
-        const onLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
+          if (sessionExists && effectiveSession.user) {
+             const profile = await resolveProfileForSession(effectiveSession);
+             updatedRole = profile.role;
+             updatedStatus = profile.status.toLowerCase();
+             window.currentUserRole = updatedRole;
+             window.currentUserStatus = updatedStatus;
+             document.body.setAttribute('data-user-role', updatedRole);
+             document.body.setAttribute('data-user-status', updatedStatus);
+             await updateHeaderAccount(effectiveSession, profile.email);
+          } else {
+             window.currentUserRole = null;
+             window.currentUserStatus = null;
+             document.body.removeAttribute('data-user-role');
+             document.body.removeAttribute('data-user-status');
+             await updateHeaderAccount(null);
+          }
 
-        updateNav(sessionExists, updatedRole, updatedStatus);
-        toggleProtectedBlocks(sessionExists);
-        enforceRouteProtection(sessionExists, updatedRole);
+          const onLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
 
-        if (event === 'SIGNED_IN' && onLoginPage) {
-          window.location.replace(mapsTo('index.html'));
-          return;
-        }
+          updateNav(sessionExists, updatedRole, updatedStatus);
+          toggleProtectedBlocks(sessionExists);
+          enforceRouteProtection(sessionExists, updatedRole);
 
-        if (event === 'SIGNED_OUT' && isProtectedRoute()) {
-          window.location.replace(mapsTo('pages/login.html'));
-        }
-      });
+          if (event === 'SIGNED_IN' && onLoginPage) {
+            window.location.replace(mapsTo('pages/control-map.html'));
+            return;
+          }
+
+          if (event === 'SIGNED_OUT' && isProtectedRoute()) {
+            window.location.replace(mapsTo('pages/login.html'));
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to verify Supabase session', error);
       enforceRouteProtection(false, null);

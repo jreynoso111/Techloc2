@@ -1,5 +1,11 @@
-import { SUPABASE_KEY, SUPABASE_URL } from './env.js';
+import { SUPABASE_KEY, SUPABASE_URL, assertSupabaseTarget } from './env.js';
 import { supabase as sharedSupabaseClient } from '../js/supabaseClient.js';
+import {
+  buildWebAdminSession,
+  clearWebAdminSession,
+  getWebAdminAccess,
+  isWebAdminSession,
+} from './web-admin-session.js';
 
 const LOGIN_PAGE = new URL('../../pages/login.html', import.meta.url).toString();
 const ADMIN_HOME = new URL('../../pages/admin/index.html', import.meta.url).toString();
@@ -9,7 +15,7 @@ const CONTROL_VIEW = new URL('../../pages/control-map.html', import.meta.url).to
 const supabaseClient =
   sharedSupabaseClient ||
   window.supabaseClient ||
-  (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY
+  (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY && assertSupabaseTarget(SUPABASE_URL, SUPABASE_KEY)
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
           persistSession: true,
@@ -18,21 +24,16 @@ const supabaseClient =
       })
     : null);
 
-if (!supabaseClient) {
-  console.error('Supabase client not initialized. Verify the Supabase library and credentials.');
-  const loading = typeof document !== 'undefined' ? document.querySelector('[data-auth-loading]') : null;
-  if (loading) {
-    loading.classList.remove('hidden');
-    loading.innerHTML =
-      '<div class="rounded-2xl border border-red-700/60 bg-red-900/40 px-4 py-3 text-sm text-red-50 shadow-lg shadow-red-900/50">' +
-      '<p class="font-semibold">Unable to reach Supabase.</p>' +
-      '<p class="text-red-100">Check your connection and credentials, then refresh.</p>' +
-      '</div>';
-  }
-  throw new Error('Supabase client unavailable');
+const hasSupabaseAuth =
+  Boolean(supabaseClient?.auth) && typeof supabaseClient.auth.getSession === 'function';
+
+if (!hasSupabaseAuth) {
+  console.warn('Supabase auth unavailable in admin guard. Using local web-admin fallback when available.');
 }
 
-window.supabaseClient = supabaseClient;
+if (supabaseClient) {
+  window.supabaseClient = supabaseClient;
+}
 
 let currentSession = null;
 let initialSessionResolved = false;
@@ -77,6 +78,8 @@ const setSession = (session) => {
   notifySessionListeners(session);
 };
 
+const getEffectiveSession = (session) => session || buildWebAdminSession() || null;
+
 const getUserAccess = async (session) => {
   if (window.currentUserRole && window.currentUserStatus) {
     return { role: window.currentUserRole, status: window.currentUserStatus };
@@ -94,6 +97,22 @@ const getUserAccess = async (session) => {
     window.currentUserRole = 'user';
     window.currentUserStatus = 'active';
     broadcastRoleStatus('user', 'active');
+    return { role: 'user', status: 'active' };
+  }
+
+  if (isWebAdminSession(session)) {
+    const localAccess = getWebAdminAccess();
+    const role = (localAccess?.role || 'administrator').toLowerCase();
+    const status = (localAccess?.status || 'active').toLowerCase();
+    cachedUserRole = role;
+    cachedUserStatus = status;
+    window.currentUserRole = role;
+    window.currentUserStatus = status;
+    broadcastRoleStatus(role, status);
+    return { role, status };
+  }
+
+  if (!supabaseClient?.from) {
     return { role: 'user', status: 'active' };
   }
 
@@ -131,6 +150,21 @@ const getUserProfile = async (session) => {
     return null;
   }
 
+  if (isWebAdminSession(session)) {
+    const localAccess = getWebAdminAccess();
+    const profile = {
+      name: 'Web Admin',
+      email: localAccess?.email || session?.user?.email || null,
+    };
+    cachedUserProfile = profile;
+    window.currentUserProfile = profile;
+    return profile;
+  }
+
+  if (!supabaseClient?.from) {
+    return null;
+  }
+
   const { data, error } = await supabaseClient.from('profiles').select('name, email').eq('id', userId).single();
 
   if (error) {
@@ -146,6 +180,8 @@ const getUserProfile = async (session) => {
 const recordLastConnection = async (session) => {
   const userId = session?.user?.id;
   if (!userId) return;
+  if (isWebAdminSession(session)) return;
+  if (!supabaseClient?.from) return;
   if (typeof localStorage === 'undefined') return;
 
   const storageKey = `techloc:last-connection:${userId}`;
@@ -216,35 +252,46 @@ const initializeAuthState = () => {
 
   initializationPromise = (async () => {
     try {
-      const { data } = await supabaseClient.auth.getSession();
-      setSession(data?.session ?? null);
+      if (hasSupabaseAuth) {
+        const { data } = await supabaseClient.auth.getSession();
+        setSession(getEffectiveSession(data?.session ?? null));
+      } else {
+        setSession(getEffectiveSession(null));
+      }
     } catch (error) {
       console.error('Session prefetch error', error);
-      setSession(null);
+      setSession(getEffectiveSession(null));
     } finally {
       initialSessionResolved = true;
     }
 
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-      setSession(session);
-
-      if (!session) {
-        cachedUserRole = null;
-        cachedUserStatus = null;
-        cachedUserProfile = null;
-        window.currentUserRole = null;
-        window.currentUserStatus = null;
-        window.currentUserProfile = null;
-        broadcastRoleStatus(null, null);
-      }
-
-      if (event === 'SIGNED_OUT') {
-        const isProtectedRoute = routeInfo.isAdminRoute || routeInfo.isControlView;
-        if (isProtectedRoute && !routeInfo.isLoginPage) {
-          redirectToLogin();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.onAuthStateChange === 'function') {
+      supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+          clearWebAdminSession();
         }
-      }
-    });
+
+        const effectiveSession = getEffectiveSession(session);
+        setSession(effectiveSession);
+
+        if (!effectiveSession) {
+          cachedUserRole = null;
+          cachedUserStatus = null;
+          cachedUserProfile = null;
+          window.currentUserRole = null;
+          window.currentUserStatus = null;
+          window.currentUserProfile = null;
+          broadcastRoleStatus(null, null);
+        }
+
+        if (event === 'SIGNED_OUT') {
+          const isProtectedRoute = routeInfo.isAdminRoute || routeInfo.isControlView;
+          if (isProtectedRoute && !routeInfo.isLoginPage) {
+            redirectToLogin();
+          }
+        }
+      });
+    }
   })();
 
   return initializationPromise;
@@ -266,7 +313,10 @@ const waitForAuthorizedSession = () =>
 
     const handleUnauthorized = async (reason) => {
       cleanup();
-      await supabaseClient.auth.signOut();
+      clearWebAdminSession();
+      if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+        await supabaseClient.auth.signOut();
+      }
       redirectToLogin();
       reject(new Error(reason));
     };
@@ -334,10 +384,13 @@ const setupLogoutButton = () => {
 
   logoutButton.dataset.bound = 'true';
   logoutButton.addEventListener('click', async () => {
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) {
-      console.error('Supabase sign out error', error);
-      return;
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) {
+        console.error('Supabase sign out error', error);
+        return;
+      }
     }
     redirectToLogin();
   });
@@ -403,7 +456,10 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
   const { role, status } = authorized ? await getUserAccess(session) : { role: 'user', status: 'active' };
 
   if (status === 'suspended' && (routeInfo.isAdminRoute || routeInfo.isControlView)) {
-    await supabaseClient.auth.signOut();
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      await supabaseClient.auth.signOut();
+    }
     redirectToLogin();
     return;
   }
@@ -436,7 +492,10 @@ const enforceAdminGuard = async () => {
   applyRoleVisibility(role);
 
   if (status === 'suspended') {
-    await supabaseClient.auth.signOut();
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      await supabaseClient.auth.signOut();
+    }
     redirectToLogin();
     return session;
   }

@@ -3,28 +3,51 @@
  * @returns {Promise<{lat:number, lon:number, source:"ip", city?:string, region?:string, country?:string} | null>}
  */
 export const resolveLocationFromIp = async () => {
+  const providers = [
+    {
+      url: 'https://ipwho.is/',
+      parse: (data) => ({
+        lat: Number(data?.latitude),
+        lon: Number(data?.longitude),
+        city: data?.city,
+        region: data?.region,
+        country: data?.country,
+      }),
+    },
+    {
+      url: 'https://ipapi.co/json/',
+      parse: (data) => ({
+        lat: Number(data?.latitude),
+        lon: Number(data?.longitude),
+        city: data?.city,
+        region: data?.region,
+        country: data?.country_name || data?.country,
+      }),
+    },
+  ];
+
   try {
-    const response = await fetch('https://ipapi.co/json/', { cache: 'no-store' });
-    if (!response.ok) return null;
+    for (const provider of providers) {
+      try {
+        const response = await fetch(provider.url, { cache: 'no-store' });
+        if (!response.ok) continue;
+        const data = await response.json();
+        const parsed = provider.parse(data);
+        if (!Number.isFinite(parsed.lat) || !Number.isFinite(parsed.lon)) continue;
 
-    const data = await response.json();
-    const lat = Number(data?.latitude);
-    const lon = Number(data?.longitude);
-
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-
-    const city = data?.city;
-    const region = data?.region;
-    const country = data?.country_name || data?.country;
-
-    return {
-      lat,
-      lon,
-      source: 'ip',
-      ...(city ? { city } : {}),
-      ...(region ? { region } : {}),
-      ...(country ? { country } : {}),
-    };
+        return {
+          lat: parsed.lat,
+          lon: parsed.lon,
+          source: 'ip',
+          ...(parsed.city ? { city: parsed.city } : {}),
+          ...(parsed.region ? { region: parsed.region } : {}),
+          ...(parsed.country ? { country: parsed.country } : {}),
+        };
+      } catch (_providerError) {
+        // try the next provider
+      }
+    }
+    return null;
   } catch (error) {
     return null;
   }
