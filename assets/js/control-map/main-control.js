@@ -3166,11 +3166,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   <button type="button" class="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200 hover:border-slate-500" data-gps-columns-toggle>
                     Columns
                   </button>
-                  <div class="absolute right-0 z-10 mt-2 hidden w-[320px] rounded-lg border border-slate-800 bg-slate-950/95 p-3 text-[11px] text-slate-200 shadow-xl" data-gps-columns-panel>
+                  <div class="absolute right-0 z-10 mt-2 hidden w-[420px] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-800 bg-slate-950/95 p-3 text-[11px] text-slate-200 shadow-xl" data-gps-columns-panel>
                     <div class="flex items-start justify-between gap-2">
                       <div>
                         <p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Column controls</p>
                         <p class="text-[10px] text-slate-500">Drag to reorder, toggle visibility, and set width.</p>
+                      </div>
+                    </div>
+                    <div class="mt-3 rounded-md border border-slate-800 bg-slate-950/70 p-2">
+                      <p class="text-[10px] uppercase tracking-[0.12em] text-slate-400">Width controls</p>
+                      <div class="mt-2 flex items-center gap-2">
+                        <select class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200" data-gps-width-column></select>
+                        <input type="number" min="80" max="1200" step="20" placeholder="Auto" class="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200" data-gps-width-value />
+                        <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:border-slate-500" data-gps-width-apply>Set</button>
+                        <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:border-slate-500" data-gps-width-auto>Auto</button>
                       </div>
                     </div>
                     <div class="mt-3 grid gap-2 max-h-64 overflow-auto" data-gps-columns-list></div>
@@ -3179,7 +3188,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               </div>
             </div>
             <div class="overflow-auto">
-              <table class="min-w-full text-left text-[11px] text-slate-200">
+              <table class="min-w-full table-fixed text-left text-[11px] text-slate-200">
                 <thead class="text-[10px] uppercase text-slate-500" data-gps-history-head></thead>
                 <tbody class="divide-y divide-slate-800/80" data-gps-history-body>
                   <tr>
