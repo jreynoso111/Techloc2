@@ -433,14 +433,14 @@
       persistBackgroundMode,
     } from '../../assets/scripts/backgroundPreference.js';
     import { supabase as supabaseClientModule } from '../../assets/js/supabaseClient.js';
-    import { SUPABASE_KEY, SUPABASE_URL } from '../../assets/scripts/env.js';
+    import { SUPABASE_KEY, SUPABASE_URL, assertSupabaseTarget } from '../../assets/scripts/env.js';
     import { logAdminEvent } from '../../assets/scripts/adminAudit.js';
 
     const READ_TABLE = 'Titles';
     const PRIMARY_KEY = 'UID'; 
     const CONFIG_TABLE = 'user_table_configs';
 
-    const supabaseClient = supabaseClientModule || (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY
+    const supabaseClient = supabaseClientModule || (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY && assertSupabaseTarget(SUPABASE_URL, SUPABASE_KEY)
         ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
             auth: { persistSession: true, autoRefreshToken: true },
           })
@@ -2333,9 +2333,14 @@
 </script>
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+    import { getWebAdminSession } from '../../assets/scripts/web-admin-session.js';
 
     const redirectToLogin = async () => {
-      if (!supabaseClient?.auth?.getSession) return;
+      if (getWebAdminSession()) return;
+      if (!supabaseClient?.auth?.getSession) {
+        window.location.href = '../login.html';
+        return;
+      }
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';

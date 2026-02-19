@@ -1,4 +1,5 @@
 import { DashboardState } from '../core/state.js';
+import { assertSupabaseTarget } from '../env.js';
 
 const resolveSupabaseModule = async () => {
   const moduleUrls = [
@@ -31,6 +32,16 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
     throw new Error('supabaseClient.js loaded but did not export a Supabase client (expected export const supabase = createClient(...)).');
   } catch (error) {
     if (supabaseUrl && supabaseAnonKey) {
+      if (!assertSupabaseTarget(supabaseUrl, supabaseAnonKey)) {
+        if (showDebug) {
+          showDebug(
+            'Blocked Supabase target',
+            'The provided Supabase URL/key do not match the allowed project.',
+            { supabaseUrl }
+          );
+        }
+        return null;
+      }
       return window.supabase.createClient(supabaseUrl, supabaseAnonKey);
     }
     if (showDebug) {

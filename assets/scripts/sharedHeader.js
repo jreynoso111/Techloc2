@@ -1,3 +1,7 @@
+import { initGlobalAlerts } from './globalAlerts.js';
+
+initGlobalAlerts();
+
 const headerSlot = document.querySelector('[data-shared-header]');
 
 const getBasePath = () => {

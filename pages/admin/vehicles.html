@@ -1908,9 +1908,14 @@
 
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
+    import { getWebAdminSession } from '../../assets/scripts/web-admin-session.js';
 
     const redirectToLogin = async () => {
-      if (!supabaseClient?.auth?.getSession) return;
+      if (getWebAdminSession()) return;
+      if (!supabaseClient?.auth?.getSession) {
+        window.location.href = '../login.html';
+        return;
+      }
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';
