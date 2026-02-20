@@ -33,3 +33,89 @@ body {
   background: rgba(2, 6, 23, 0.65) !important;
   border-color: rgba(255, 255, 255, 0.04) !important;
 }
+
+/* Shared header consistency lock across pages with custom density/font rules */
+[data-site-header].tl-header-root {
+  position: sticky;
+  top: 0;
+  z-index: 1200;
+}
+
+[data-site-header] .tl-header-shell {
+  max-width: 1152px !important;
+  padding: 14px 24px !important;
+  gap: 14px !important;
+}
+
+[data-site-header] .tl-header-brand-row {
+  gap: 14px !important;
+}
+
+[data-site-header] .tl-header-brand {
+  gap: 10px !important;
+}
+
+[data-site-header] .tl-header-mark {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 14px !important;
+}
+
+[data-site-header] .tl-header-eyebrow {
+  font-size: 11px !important;
+  letter-spacing: 0.16em !important;
+}
+
+[data-site-header] .tl-header-title {
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+
+[data-site-header] .tl-header-mobile {
+  border-radius: 14px !important;
+  padding: 8px !important;
+}
+
+[data-site-header] .tl-header-nav-shell {
+  gap: 12px !important;
+  font-size: 13px !important;
+  border-radius: 16px !important;
+  padding: 12px !important;
+}
+
+[data-site-header] .tl-header-nav {
+  gap: 8px !important;
+}
+
+[data-site-header] .tl-header-link {
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+  padding: 5px 12px !important;
+}
+
+[data-site-header] .tl-header-actions {
+  gap: 10px !important;
+  padding-top: 10px !important;
+}
+
+[data-site-header] .tl-header-account {
+  font-size: 11px !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+}
+
+[data-site-header] .tl-header-auth {
+  font-size: 11px !important;
+  padding: 5px 12px !important;
+}
+
+@media (min-width: 768px) {
+  [data-site-header] .tl-header-nav-shell {
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  [data-site-header] .tl-header-actions {
+    padding-top: 0 !important;
+  }
+}
