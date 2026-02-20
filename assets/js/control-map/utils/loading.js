@@ -1,6 +1,11 @@
 let loadingCounter = 0;
 
 export function startLoading(message = 'Loading…') {
+  const deferredAuthLoading = document.querySelector('[data-auth-loading][data-auth-loading-mode="defer"]');
+  if (deferredAuthLoading) {
+    return () => {};
+  }
+
   const overlay = document.getElementById('loading-overlay');
   const text = document.getElementById('loading-text');
   if (!overlay || !text) return () => {};

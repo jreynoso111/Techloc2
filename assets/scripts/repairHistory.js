@@ -10,19 +10,13 @@ const buildRepairSnapshot = (vehicle, getRepairVehicleVin) => ({
   pt_status: vehicle?.pt_status ?? vehicle?.ptStatus,
   pt_serial: vehicle?.pt_serial ?? vehicle?.ptSerial,
   encore_serial: vehicle?.encore_serial ?? vehicle?.encoreSerial,
-  moving: vehicle?.moving,
-  pt_last_read: vehicle?.pt_last_read ?? vehicle?.lastRead,
-  lat: vehicle?.lat,
-  long: vehicle?.long ?? vehicle?.lng,
   phys_loc: vehicle?.phys_loc ?? vehicle?.lastLocation,
   VIN: getRepairVehicleVin(vehicle),
   vehicle_status: vehicle?.vehicle_status ?? vehicle?.status,
   open_balance: vehicle?.open_balance ?? vehicle?.openBalance,
   days_stationary: vehicle?.days_stationary ?? vehicle?.daysStationary,
   short_location: vehicle?.short_location ?? vehicle?.shortLocation ?? vehicle?.city,
-  current_stock_no: vehicle?.details?.['Current Stock No'] ?? vehicle?.current_stock_no,
-  gps_fix: vehicle?.gps_fix ?? vehicle?.gpsFix,
-  gps_fix_reason: vehicle?.gps_fix_reason ?? vehicle?.gpsReason
+  current_stock_no: vehicle?.details?.['Current Stock No'] ?? vehicle?.current_stock_no
 });
 
 const getDefaultHelpers = () => ({

@@ -928,12 +928,6 @@
 
       console.info('DealsJP1 vehicle sync updated rows:', syncData);
 
-      const { error: updatesSyncError } = await supabaseClient.rpc('sync_vehicles_updates_to_vehicles');
-      if (updatesSyncError) {
-        console.error('Supabase vehicle updates sync error:', updatesSyncError);
-        showToast('Vehicle updates sync failed: ' + formatSupabaseError(updatesSyncError), 'error');
-      }
-
       const summary =
         'Completed.' +
         '\nTotal rows processed: ' + rows.length +
