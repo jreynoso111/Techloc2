@@ -79,7 +79,7 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
     if (showDebug) {
       showDebug(
         'Supabase client not available',
-        'Tu import falló y el fallback no tiene URL/KEY. Revisa supabaseClient.js export o pega credenciales aquí.',
+        'Import failed and the fallback has no URL/KEY. Check the supabaseClient.js export or provide credentials here.',
         { error: String(error) }
       );
     }

@@ -225,6 +225,24 @@ body.gps-column-resizing {
       background: rgba(16, 185, 129, 0.2);
     }
 
+    .legend-history-hotspot {
+      position: relative;
+      display: inline-flex;
+      height: 14px;
+      width: 14px;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .legend-history-hotspot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 9999px;
+      border: 1px solid rgba(30, 58, 138, 0.58);
+      background: rgba(30, 58, 138, 0.13);
+    }
+
     .legend-badge {
       display: inline-flex;
       align-items: center;
@@ -313,6 +331,145 @@ body.gps-column-resizing {
       filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.45));
       stroke-linecap: round;
       stroke-linejoin: round;
+    }
+
+    .vehicle-history-hotspot-ring {
+      animation: vehicle-history-hotspot-pulse 2.8s ease-in-out infinite;
+      filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.22));
+    }
+
+    .vehicle-history-hotspot-glass-halo {
+      filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.15));
+    }
+
+    .vehicle-history-hotspot-core-halo {
+      filter: drop-shadow(0 0 6px rgba(30, 58, 138, 0.25));
+    }
+
+    .vehicle-history-hotspot-core {
+      filter: drop-shadow(0 0 4px rgba(148, 163, 184, 0.35));
+    }
+
+    .vehicle-history-hotspot-core.leaflet-interactive {
+      cursor: pointer;
+    }
+
+    .vehicle-history-hotspot-ring.leaflet-interactive {
+      cursor: pointer;
+    }
+
+    .vehicle-history-hotspot-popup .leaflet-popup-content-wrapper {
+      background: #1e3a8af0;
+      color: #dbeafe;
+      border: 1px solid rgba(96, 165, 250, 0.68);
+      border-radius: 12px;
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.4);
+    }
+
+    .vehicle-history-hotspot-popup .leaflet-popup-content {
+      margin: 8px 10px;
+      width: 100%;
+      min-width: 245px;
+    }
+
+    .vehicle-history-hotspot-popup .leaflet-popup-tip {
+      background: #1e3a8a;
+      border: 1px solid rgba(96, 165, 250, 0.68);
+    }
+
+    .gps-record-popup .leaflet-popup-content-wrapper {
+      background: #020617f2;
+      color: #e2e8f0;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      box-shadow: 0 20px 38px rgba(0, 0, 0, 0.48);
+      overflow: hidden;
+      width: min(380px, calc(100vw - 64px));
+      max-width: min(380px, calc(100vw - 64px));
+    }
+
+    .gps-record-popup .leaflet-popup-content {
+      margin: 0;
+      width: 100%;
+    }
+
+    .gps-record-popup .leaflet-popup-tip {
+      background: #020617;
+      border: 1px solid #334155;
+    }
+
+    .gps-record-card {
+      padding: 10px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .gps-record-title {
+      margin: 0;
+      color: #f8fafc;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .gps-record-meta {
+      margin: 2px 0 0;
+      color: #94a3b8;
+      font-size: 10px;
+    }
+
+    .gps-record-empty {
+      margin: 8px 0 0;
+      color: #94a3b8;
+      font-size: 11px;
+    }
+
+    .gps-record-table-wrap {
+      margin-top: 8px;
+      max-height: 230px;
+      overflow: auto;
+      border: 1px solid rgba(51, 65, 85, 0.85);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.75);
+    }
+
+    .gps-record-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .gps-record-table th,
+    .gps-record-table td {
+      border-bottom: 1px solid rgba(51, 65, 85, 0.75);
+      padding: 4px 6px;
+      vertical-align: top;
+      word-break: break-word;
+    }
+
+    .gps-record-table th {
+      width: 42%;
+      color: #cbd5e1;
+      text-align: left;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .gps-record-table td {
+      color: #f1f5f9;
+      font-size: 10px;
+    }
+
+    .gps-record-table tr:last-child th,
+    .gps-record-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    @keyframes vehicle-history-hotspot-pulse {
+      0% { stroke-opacity: 0.34; fill-opacity: 0.03; }
+      100% { stroke-opacity: 0.6; fill-opacity: 0.1; }
     }
 
     .vehicle-marker-icon {
