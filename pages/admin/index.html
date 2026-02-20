@@ -572,34 +572,22 @@
 
     const tableColumnCache = new Map();
 
-    const fetchTableColumns = async (tableName) => {
+    const fetchTableColumns = async (tableName, fallbackColumns = []) => {
       if (tableColumnCache.has(tableName)) return tableColumnCache.get(tableName);
-      const emptySet = new Set();
+      const fallbackSet = new Set((fallbackColumns || []).filter(Boolean));
+      const emptySet = new Set(fallbackSet);
       if (!supabaseClient) return emptySet;
       let columns = [];
       try {
         const { data, error } = await supabaseClient
-          .from('information_schema.columns')
-          .select('column_name')
-          .eq('table_schema', 'public')
-          .eq('table_name', tableName);
-        if (!error && data?.length) {
-          columns = data.map((row) => row.column_name).filter(Boolean);
-        }
+          .from(tableName)
+          .select('*')
+          .limit(1);
+        if (!error && data?.length) columns = Object.keys(data[0]);
       } catch (err) {
-        console.warn('Unable to query information_schema.columns:', err);
+        console.warn(`Unable to infer columns for ${tableName} from sample row:`, err);
       }
-      if (!columns.length) {
-        try {
-          const { data, error } = await supabaseClient
-            .from(tableName)
-            .select('*')
-            .limit(1);
-          if (!error && data?.length) columns = Object.keys(data[0]);
-        } catch (err) {
-          console.warn('Unable to infer columns from sample row:', err);
-        }
-      }
+      if (!columns.length && fallbackSet.size) columns = Array.from(fallbackSet);
       const columnSet = new Set(columns);
       tableColumnCache.set(tableName, columnSet);
       return columnSet;
@@ -798,7 +786,7 @@
       };
       
       const columnMap = buildColumnMap(KNOWN_DEALS_COLUMNS);
-      const tableColumns = await fetchTableColumns(DEALS_TABLE);
+      const tableColumns = await fetchTableColumns(DEALS_TABLE, KNOWN_DEALS_COLUMNS);
       const usingFallbackSchema = !tableColumns.size;
       const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_DEALS_COLUMNS) : tableColumns;
       if (usingFallbackSchema) {
@@ -1027,7 +1015,7 @@
       };
 
       const columnMap = buildColumnMap(NS_INVOICES_COLUMNS);
-      const tableColumns = await fetchTableColumns(NS_INVOICES_TABLE);
+      const tableColumns = await fetchTableColumns(NS_INVOICES_TABLE, NS_INVOICES_COLUMNS);
       const usingFallbackSchema = !tableColumns.size;
       const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_NS_INVOICES_COLUMNS) : tableColumns;
       if (usingFallbackSchema) {
