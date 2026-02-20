@@ -219,9 +219,11 @@ import {
     whenDomReady.then(() => {
       const loading = document.querySelector('[data-auth-loading]');
       const protectedBlocks = document.querySelectorAll('[data-auth-protected]');
+      const loadingMode = loading?.dataset?.authLoadingMode || '';
+      const deferLoadingRemoval = loadingMode === 'defer';
 
       if (hasSession) {
-        loading?.remove();
+        if (!deferLoadingRemoval) loading?.remove();
         protectedBlocks.forEach((block) => {
           block.classList.remove('hidden');
           block.removeAttribute('aria-hidden');

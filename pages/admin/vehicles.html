@@ -411,6 +411,8 @@
 
     const normalizeHeader = (header = '') => {
       const aliases = {
+        'vehicle status': 'vehicle_status',
+        'vehicle_status': 'vehicle_status',
         'deal status': 'deal_status',
         'deal_status': 'deal_status',
         'dealstatus': 'deal_status',
@@ -1051,6 +1053,10 @@
 
     const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
 
+    const ALLOWED_VEHICLE_STATUSES = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
+
+    const normalizeVehicleStatus = (value = '') => String(value).trim().toUpperCase();
+
 
 
     const mapVehicleRows = (rows = []) => {
@@ -1060,6 +1066,10 @@
       const deduped = new Map();
 
       normalizedRows.forEach((row) => {
+        const vehicleStatus = normalizeVehicleStatus(
+          row.vehicle_status || row['vehicle status'] || row['Vehicle Status'],
+        );
+        if (!ALLOWED_VEHICLE_STATUSES.has(vehicleStatus)) return;
 
         const key = row.short_vin || row.shortvin;
 
@@ -1072,45 +1082,6 @@
       return Array.from(deduped.values());
 
     };
-
-    const collectFixUpdatesSyncData = (rows = []) => {
-      const normalizedRows = normalizeRows(rows);
-      const vins = new Set();
-      const customers = new Set();
-      normalizedRows.forEach((row) => {
-        const vin = String(getValue(row, 'VIN')).trim();
-        const customer = String(getValue(row, 'customer_id', 'customer')).trim();
-        if (vin) vins.add(vin);
-        if (customer) customers.add(customer);
-      });
-      return {
-        vins: Array.from(vins),
-        customers: Array.from(customers),
-      };
-    };
-
-    const syncVehiclesFromFixUpdates = async ({ vins = [], customers = [] } = {}) => {
-      if (!supabaseClient) return;
-      if (!vins.length && !customers.length) return;
-      if (els.uploadStatus) {
-        els.uploadStatus.textContent = 'Syncing vehicles...';
-        els.uploadStatus.classList.remove('text-emerald-300', 'text-red-300');
-        els.uploadStatus.classList.add('text-amber-300');
-      }
-      try {
-        const { error } = await supabaseClient.rpc('sync_vehicles_from_fix_updates', {
-          p_vins: vins,
-          p_customers: customers,
-        });
-        if (error) throw error;
-        showToast('Vehicle sync complete.', 'success');
-      } catch (error) {
-        console.warn('Vehicle sync failed', error?.message || error);
-        showToast('Vehicle sync failed. Check console.', 'error');
-      }
-    };
-
-
 
     const hydrateActor = async () => {
 
@@ -1159,7 +1130,6 @@
       updateUploadProgress(20, 'Parsing rows');
 
       const { rows } = parseCsvText(text);
-      const { vins, customers } = collectFixUpdatesSyncData(rows);
 
       updateUploadProgress(40, 'Normalizing vehicles');
 
@@ -1205,7 +1175,6 @@
         action: 'bulk_upsert',
         summary: `Uploaded ${mapped.length} vehicle rows via CSV`,
       });
-      await syncVehiclesFromFixUpdates({ vins, customers });
 
     };
 

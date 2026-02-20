@@ -628,9 +628,32 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isAdminUser = () => `${window.currentUserRole || ''}`.toLowerCase() === 'administrator';
 
+    const normalizeVehicleHeader = (value = '') => `${value}`.trim().toLowerCase().replace(/[_\s]+/g, ' ');
+
     const EDITABLE_VEHICLE_FIELDS = {
-      'gps fix': { fieldKey: 'gpsFix', updateColumn: 'gps to fix', table: TABLES.vehiclesUpdates },
-      'gps fix reason': { fieldKey: 'gpsReason', updateColumn: 'gps fix reason', table: TABLES.vehiclesUpdates }
+      'gps fix': { fieldKey: 'gpsFix', updateColumn: 'gps fix', table: TABLES.vehicles },
+      'gps fix reason': { fieldKey: 'gpsReason', updateColumn: 'gps fix reason', table: TABLES.vehicles }
+    };
+
+    const REQUIRED_VEHICLE_HEADERS = [
+      'gps fix',
+      'gps fix reason',
+      'moving',
+      'pt last read',
+      'lat',
+      'long',
+    ];
+
+    const ensureRequiredVehicleHeaders = (headers = []) => {
+      const normalizedHeaders = new Set(headers.map((header) => normalizeVehicleHeader(header)));
+      const nextHeaders = [...headers];
+      REQUIRED_VEHICLE_HEADERS.forEach((header) => {
+        const normalized = normalizeVehicleHeader(header);
+        if (normalizedHeaders.has(normalized)) return;
+        nextHeaders.push(header);
+        normalizedHeaders.add(normalized);
+      });
+      return nextHeaders;
     };
 
     const repairHistoryManager = createRepairHistoryManager({
@@ -1127,44 +1150,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const stopLoading = startLoading('Loading Vehicles…');
       try {
         const data = await vehicleService.listVehicles();
-        let updateRows = [];
-        if (supabaseClient) {
-          try {
-            const { data: updatesData, error: updatesError } = await runWithTimeout(
-              supabaseClient
-                .from(TABLES.vehiclesUpdates)
-                .select('VIN,"gps to fix","gps fix reason"'),
-              8000,
-              'Error de comunicación con la base de datos.'
-            );
-            if (updatesError) throw updatesError;
-            updateRows = updatesData || [];
-          } catch (error) {
-            console.warn('Vehicle updates load warning: ' + (error?.message || error));
-          }
-        }
-
-        const updatesByVin = new Map();
-        updateRows.forEach((row) => {
-          const vin = String(getField(row, 'VIN', 'vin') || '').trim();
-          if (!vin) return;
-          updatesByVin.set(vin.toLowerCase(), row);
-        });
-
-        const normalizedVehicles = data.map((row, idx) => {
-          const normalized = normalizeVehicle(row, idx, { getField, toStateCode, resolveCoords });
-          const vinValue = String(getField(row, 'VIN', 'vin', 'ShortVIN') || normalized.vin || '').trim();
-          const update = updatesByVin.get(vinValue.toLowerCase());
-          const gpsFix = update ? getField(update, 'gps to fix', 'gps_to_fix') : '';
-          const gpsReason = update ? getField(update, 'gps fix reason', 'gps_fix_reason') : '';
-          normalized.gpsFix = gpsFix;
-          normalized.gpsReason = gpsReason;
-          if (normalized.details) {
-            normalized.details['GPS Fix'] = gpsFix;
-            normalized.details['GPS Fix Reason'] = gpsReason;
-          }
-          return normalized;
-        });
+        const normalizedVehicles = data.map((row, idx) =>
+          normalizeVehicle(row, idx, { getField, toStateCode, resolveCoords })
+        );
 
         let dealsByStockNo = new Map();
         if (supabaseClient) {
@@ -1178,7 +1166,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
         }
 
-        const allowedDealStatuses = new Set(['ACTIVE', 'STOCK']);
+        const allowedDealStatuses = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
         const filteredVehicles = normalizedVehicles.filter((vehicle) => {
           const stockNo = normalizeStockNumber(vehicle.stockNo);
           const dealValues = dealsByStockNo.get(stockNo) ?? null;
@@ -1197,13 +1185,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         vehicles = filteredVehicles;
         await hydrateVehicleClickHistory(vehicles);
-        vehicleHeaders = data.length ? Object.keys(data[0]) : [];
-        if (!vehicleHeaders.some((header) => header.toLowerCase() === 'gps fix')) {
-          vehicleHeaders.push('GPS Fix');
-        }
-        if (!vehicleHeaders.some((header) => header.toLowerCase() === 'gps fix reason')) {
-          vehicleHeaders.push('GPS Fix Reason');
-        }
+        vehicleHeaders = data.length ? ensureRequiredVehicleHeaders(Object.keys(data[0])) : [...REQUIRED_VEHICLE_HEADERS];
         updateVehicleFilterOptions();
         syncVehicleFilterInputs();
         renderVehicles();
@@ -2104,6 +2086,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             : 'rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 flex items-center gap-2 text-slate-200';
           const gpsIconClasses = hasNoGps ? 'h-3 w-3 text-red-300' : 'h-3 w-3 text-amber-300';
           const gpsReasonClasses = hasNoGps ? 'text-[10px] text-red-200/90' : 'text-[10px] text-slate-400';
+          const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
+          const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = vehicle.id;
           card.dataset.type = 'vehicle';
@@ -2167,6 +2151,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div class="flex items-center justify-between text-[11px] text-slate-400">
                 <span class="flex items-center gap-2 font-semibold text-slate-200">${svgIcon('clock', 'h-3 w-3')} PT Last Read ${formatDateTime(vehicle.lastRead)}</span>
                 <span class="text-slate-400">${vehicle.payment || ''}</span>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-slate-400">
+                <span>Lat <span class="text-slate-200">${latLabel}</span></span>
+                <span>Long <span class="text-slate-200">${longLabel}</span></span>
               </div>
             </div>
             <div class="pt-1 flex items-end justify-between gap-2">
@@ -2911,7 +2899,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const { headers, hidden } = getVehicleModalHeaders(vehicleHeaders);
       const detailRows = headers.map(header => {
         const displayHeader = VEHICLE_HEADER_LABELS[header] || header;
-        const editConfig = EDITABLE_VEHICLE_FIELDS[header.toLowerCase()];
+        const editConfig = EDITABLE_VEHICLE_FIELDS[normalizeVehicleHeader(header)];
         const fieldKey = editConfig?.fieldKey;
         const isEditable = Boolean(editConfig);
         const value = editConfig
@@ -3315,23 +3303,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               }
             }
 
-            const vin = String(
-              getField(vehicle?.details || {}, 'VIN', 'Vin', 'vin')
-                || vehicle?.VIN
-                || vehicle?.vin
-                || ''
-            ).trim();
-            if (updateTable === TABLES.vehiclesUpdates && !vin) {
-              throw new Error('VIN missing for update.');
-            }
-            const updateRequest = updateTable === TABLES.vehiclesUpdates
-              ? supabaseClient
-                  .from(updateTable)
-                  .upsert({ VIN: vin, [updateColumn]: newValue }, { onConflict: 'VIN' })
-              : supabaseClient
-                  .from(updateTable)
-                  .update({ [updateColumn]: newValue })
-                  .eq('id', vehicle.id);
+            const updateRequest = supabaseClient
+              .from(updateTable)
+              .update({ [updateColumn]: newValue })
+              .eq('id', vehicle.id);
             const { error } = await runWithTimeout(
               updateRequest,
               8000,
@@ -3869,90 +3844,103 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         }
       });
       (async () => {
-        setupBackgroundManager();
-        await loadStateCenters();
-        initMap();
-        await syncAvailableServiceTypes();
-        updateServiceVisibilityUI();
-        if (isServiceTypeEnabled('tech')) loadTechnicians();
-        loadHotspots();
-        loadBlacklistSites();
-        await loadVehicleFilterPrefs();
-        loadVehicles();
-        await loadAllServices();
-        setupResizableSidebars();
-        setupSidebarToggles();
-        setupLayerToggles();
-        bindVehicleFilterHandlers();
-        syncVehicleFilterInputs();
-        const filterConfigs = [
-          { id: 'tech-filter', type: 'tech' },
-          { id: 'reseller-filter', type: 'reseller' },
-          { id: 'repair-filter', type: 'repair' },
-          { id: 'dynamic-service-filter', type: 'custom' },
-        ].filter(({ type }) => isServiceTypeEnabled(type));
+        try {
+          setupBackgroundManager();
+          await loadStateCenters();
+          initMap();
+          await syncAvailableServiceTypes();
+          updateServiceVisibilityUI();
 
-        filterConfigs.forEach(({ id, type }) => {
-          const input = document.getElementById(id);
-          if (!input) return;
-          input.addEventListener('input', () => {
-            serviceFilters[type] = input.value;
-            setServiceFilter(type, input.value);
-            renderVisibleSidebars();
-            const origin = getCurrentOrigin();
-            if (origin) {
-              showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
+          const initialDataTasks = [
+            loadHotspots(),
+            loadBlacklistSites(),
+            loadVehicles(),
+            loadAllServices(),
+          ];
+
+          if (isServiceTypeEnabled('tech')) {
+            initialDataTasks.push(loadTechnicians());
+          }
+
+          await loadVehicleFilterPrefs();
+          await Promise.all(initialDataTasks);
+
+          setupResizableSidebars();
+          setupSidebarToggles();
+          setupLayerToggles();
+          bindVehicleFilterHandlers();
+          syncVehicleFilterInputs();
+          const filterConfigs = [
+            { id: 'tech-filter', type: 'tech' },
+            { id: 'reseller-filter', type: 'reseller' },
+            { id: 'repair-filter', type: 'repair' },
+            { id: 'dynamic-service-filter', type: 'custom' },
+          ].filter(({ type }) => isServiceTypeEnabled(type));
+
+          filterConfigs.forEach(({ id, type }) => {
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.addEventListener('input', () => {
+              serviceFilters[type] = input.value;
+              setServiceFilter(type, input.value);
+              renderVisibleSidebars();
+              const origin = getCurrentOrigin();
+              if (origin) {
+                showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
+              }
+            });
+          });
+
+          syncServiceFilterInputs();
+
+          setupEventDelegation();
+
+          let vehicleSearchTimer;
+          document.getElementById('vehicle-search').addEventListener('input', () => {
+            clearTimeout(vehicleSearchTimer);
+            vehicleSearchTimer = setTimeout(() => renderVehicles(), 250);
+          });
+
+          document.getElementById('clear-selection')?.addEventListener('click', () => resetSelection());
+          document.getElementById('vehicle-modal-close')?.addEventListener('click', closeVehicleModal);
+          document.getElementById('vehicle-modal-columns-toggle')?.addEventListener('click', () => {
+            const panel = document.getElementById('vehicle-modal-columns-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+          });
+          document.getElementById('vehicle-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'vehicle-modal') closeVehicleModal();
+          });
+
+          const refreshVehicles = debounceAsync(async () => {
+            await loadVehicles();
+          }, 600);
+          const refreshHotspots = debounceAsync(async () => {
+            await loadHotspots();
+          }, 600);
+          const refreshBlacklist = debounceAsync(async () => {
+            await loadBlacklistSites();
+          }, 600);
+          const refreshServices = debounceAsync(async () => {
+            await loadAllServices();
+          }, 800);
+
+          createControlMapApiService({
+            supabaseClient,
+            tables: TABLES,
+            handlers: {
+              vehicles: refreshVehicles,
+              hotspots: refreshHotspots,
+              blacklist: refreshBlacklist,
+              services: refreshServices
             }
           });
-        });
 
-        syncServiceFilterInputs();
+          startSupabaseKeepAlive({ supabaseClient, table: TABLES.vehicles });
 
-        setupEventDelegation();
-
-        let vehicleSearchTimer;
-        document.getElementById('vehicle-search').addEventListener('input', () => {
-          clearTimeout(vehicleSearchTimer);
-          vehicleSearchTimer = setTimeout(() => renderVehicles(), 250);
-        });
-
-        document.getElementById('clear-selection')?.addEventListener('click', () => resetSelection());
-        document.getElementById('vehicle-modal-close')?.addEventListener('click', closeVehicleModal);
-        document.getElementById('vehicle-modal-columns-toggle')?.addEventListener('click', () => {
-          const panel = document.getElementById('vehicle-modal-columns-panel');
-          if (!panel) return;
-          panel.classList.toggle('hidden');
-        });
-        document.getElementById('vehicle-modal')?.addEventListener('click', (e) => {
-          if (e.target.id === 'vehicle-modal') closeVehicleModal();
-        });
-
-        const refreshVehicles = debounceAsync(async () => {
-          await loadVehicles();
-        }, 600);
-        const refreshHotspots = debounceAsync(async () => {
-          await loadHotspots();
-        }, 600);
-        const refreshBlacklist = debounceAsync(async () => {
-          await loadBlacklistSites();
-        }, 600);
-        const refreshServices = debounceAsync(async () => {
-          await loadAllServices();
-        }, 800);
-
-        createControlMapApiService({
-          supabaseClient,
-          tables: TABLES,
-          handlers: {
-            vehicles: refreshVehicles,
-            hotspots: refreshHotspots,
-            blacklist: refreshBlacklist,
-            services: refreshServices
-          }
-        });
-
-        startSupabaseKeepAlive({ supabaseClient, table: TABLES.vehicles });
-
-        window.addEventListener('auth:role-ready', () => renderVehicles());
+          window.addEventListener('auth:role-ready', () => renderVehicles());
+        } finally {
+          document.dispatchEvent(new CustomEvent('control-map:boot-complete'));
+        }
       })();
     });

@@ -26,21 +26,9 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="assets/scripts/datasets.js"></script>
   <link rel="stylesheet" href="assets/visuals/theme.css" />
-  <link rel="stylesheet" href="assets/visuals/home-entry-3d.css" />
 </head>
 <body class="min-h-screen bg-slate-950 font-sans text-slate-50 selection:bg-blue-500/30" data-page-title="Home" data-active-nav="home">
   <div data-shared-header></div>
-  <div id="home-intro" class="home-intro" aria-hidden="true">
-    <div id="home-intro-scene" class="home-intro__scene">
-      <canvas id="home-intro-canvas" class="home-intro__canvas" aria-hidden="true"></canvas>
-      <div class="home-intro__copy">
-        <p class="home-intro__eyebrow">TechLoc System</p>
-        <h2 class="home-intro__title">Booting Fleet Intelligence Grid</h2>
-        <p class="home-intro__status">Calibrating geospatial telemetry, dispatch channels, and live operations.</p>
-        <div class="home-intro__progress"><span></span></div>
-      </div>
-    </div>
-  </div>
   <div class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen" aria-hidden="true">
     <canvas id="constellation-canvas" class="h-full w-full"></canvas>
   </div>
@@ -128,7 +116,6 @@
 
   <script type="module">
     import { setupBackgroundManager } from './assets/scripts/backgroundManager.js';
-    import { initHomeEntry3d } from './assets/scripts/homeEntry3d.js';
     import { supabase as supabaseClient } from './assets/js/supabaseClient.js';
 
     const getValidClient = () => {
@@ -298,9 +285,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       // Iniciar iconos Lucide
       if (window.lucide) window.lucide.createIcons();
-
-      // Iniciar intro 3D interactiva
-      initHomeEntry3d();
 
       const mobileToggle = document.getElementById('mobile-menu-toggle');
       const primaryNav = document.getElementById('primary-nav');

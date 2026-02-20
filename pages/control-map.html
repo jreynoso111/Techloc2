@@ -26,6 +26,7 @@
   </script>
 
     <link rel="stylesheet" href="../assets/visuals/control-map.css" />
+  <link rel="stylesheet" href="../assets/visuals/home-entry-3d.css" />
 
   <link rel="stylesheet" href="../assets/visuals/theme.css" />
 </head>
@@ -33,10 +34,17 @@
   <div class="pointer-events-none fixed inset-0 -z-10 opacity-80 mix-blend-screen" aria-hidden="true">
     <canvas id="constellation-canvas" class="h-full w-full"></canvas>
   </div>
-  <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
-    <div class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/60">
-      <span class="h-3 w-3 animate-pulse rounded-full bg-blue-400"></span>
-      <p class="text-sm font-semibold text-slate-200">Validating secure session…</p>
+  <div data-auth-loading data-auth-loading-mode="defer" class="fixed inset-0 z-50 bg-slate-950">
+    <div id="home-intro" class="home-intro" aria-hidden="true">
+      <div id="home-intro-scene" class="home-intro__scene">
+        <canvas id="home-intro-canvas" class="home-intro__canvas" aria-hidden="true"></canvas>
+        <div class="home-intro__copy">
+          <p class="home-intro__eyebrow">TechLoc System</p>
+          <h2 class="home-intro__title">Booting Fleet Intelligence Grid</h2>
+          <p class="home-intro__status">Calibrating geospatial telemetry, dispatch channels, and live operations.</p>
+          <div class="home-intro__progress"><span></span></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -315,6 +323,18 @@
       <div class="flex-1 overflow-y-auto p-4" id="vehicle-modal-body"></div>
     </div>
   </div>
+  <script type="module">
+    import { initHomeEntry3d } from '../assets/scripts/homeEntry3d.js';
+
+    initHomeEntry3d();
+
+    document.addEventListener('control-map:boot-complete', () => {
+      const loadingLayer = document.querySelector('[data-auth-loading][data-auth-loading-mode="defer"]');
+      if (!loadingLayer) return;
+      loadingLayer.classList.add('transition-opacity', 'duration-500', 'opacity-0');
+      setTimeout(() => loadingLayer.remove(), 520);
+    }, { once: true });
+  </script>
   <script type="module" src="../assets/js/control-map/main-control.js"></script>
   <script type="module" src="../assets/scripts/sharedHeader.js"></script>
 
