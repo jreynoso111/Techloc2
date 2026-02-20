@@ -129,9 +129,13 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     getField: field
   });
   const dealCompletion = field(row, 'Deal Completion', 'Deal completion', 'Deal completition', 'Remaining');
+  const dealStatus = field(row, 'Deal Status', 'deal status');
+  const vehicleStatus = field(row, 'Vehicle Status', 'vehicle status', 'vehicle_status');
   const v = {
     id: row?.id ?? idx,
-    status: field(row, 'Deal Status', 'status') || 'ACTIVE',
+    status: dealStatus || 'ACTIVE',
+    dealStatus: dealStatus || 'ACTIVE',
+    vehicleStatus: vehicleStatus || '',
     invPrepStatus: field(row, 'INV Prep Stat', 'Inv. Prep. Stat.', 'Inv Prep Stat'),
     dealCompletion,
     type: field(row, 'Unit Type', 'type') || 'Vehicle',
@@ -145,6 +149,15 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     movingCalc: field(row, 'Moving (Calc)', 'moving_calc'),
     ptStatus: field(row, 'PT Status', 'pt_status'),
     ptSerial: field(row, 'PT Serial ', 'PT Serial', 'pt_serial'),
+    winnerSerial: field(
+      row,
+      'Winner Serial',
+      'winner_serial',
+      'Winning Serial',
+      'winning_serial',
+      'serial_winner',
+      'Serial Winner'
+    ),
     encoreSerial: field(row, 'Encore Serial', 'encore_serial'),
     lastRead: field(row, 'PT Last Read', 'pt_last_read'),
     daysStationary: field(row, 'days_stationary', 'Days Stationary', 'Days stationary', 'Days Stationary (Calc)', 'Days Parked'),

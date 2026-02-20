@@ -37,12 +37,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       bindNavigationStorageListener,
       getSelectedVehicle,
       getServiceFilterIds,
-      getServiceFilters,
       setSelectedVehicle,
-      setServiceFilter,
-      setServiceFilters,
       subscribeSelectedVehicle,
-      subscribeServiceFilters,
       subscribeServiceFilterIds,
     } from '../shared/navigationStore.js';
     
@@ -86,7 +82,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let lastClientLocation = null;
     let renderedTechIds = '';
     let lastOriginPoint = null;
-    const serviceFilters = { ...getServiceFilters() };
+    const serviceZipFilters = { tech: '', reseller: '', repair: '', custom: '' };
+    const serviceVendorFilters = { tech: '', reseller: '', repair: '', custom: '' };
     const serviceFilterIds = { ...getServiceFilterIds() };
     const vehicleFilters = {
       invPrep: [],
@@ -727,6 +724,146 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return accuracy === 'exact' ? 'bg-emerald-300' : 'bg-amber-300';
     };
 
+    const GPS_TRAIL_POINT_LIMIT = 5;
+    let gpsTrailRequestCounter = 0;
+
+    const parseGpsTrailCoordinate = (record = {}, key = 'lat') => {
+      const lowerKey = key.toLowerCase();
+      const upperKey = `${key}`.charAt(0).toUpperCase() + `${key}`.slice(1);
+      const rawValue = record?.[lowerKey] ?? record?.[upperKey];
+      const parsed = Number.parseFloat(`${rawValue ?? ''}`.trim());
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const parseGpsTrailTimestamp = (record = {}) => {
+      const dateCandidates = [
+        record?.['PT-LastPing'],
+        record?.gps_time,
+        record?.Date,
+        record?.created_at,
+        record?.updated_at
+      ];
+
+      for (const candidate of dateCandidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+
+      const numericId = Number(record?.id);
+      if (Number.isFinite(numericId)) return numericId;
+      return 0;
+    };
+
+    const toGpsTrailPoint = (record = {}) => {
+      // Route visualization must be driven by lat/long from GPS history records.
+      const lat = parseGpsTrailCoordinate(record, 'lat');
+      const lng = parseGpsTrailCoordinate(record, 'long');
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+      return {
+        lat,
+        lng,
+        timestamp: parseGpsTrailTimestamp(record)
+      };
+    };
+
+    const getGpsTrailBearingDegrees = (fromPoint, toPoint) => {
+      const toRadians = (value) => value * (Math.PI / 180);
+      const lat1 = toRadians(fromPoint.lat);
+      const lat2 = toRadians(toPoint.lat);
+      const deltaLng = toRadians(toPoint.lng - fromPoint.lng);
+      const y = Math.sin(deltaLng) * Math.cos(lat2);
+      const x = (Math.cos(lat1) * Math.sin(lat2))
+        - (Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng));
+      let bearing = Math.atan2(y, x) * (180 / Math.PI);
+      if (!Number.isFinite(bearing)) return 0;
+      if (bearing < 0) bearing += 360;
+      return bearing;
+    };
+
+    const drawVehicleGpsTrail = (points = [], markerColor = '#38bdf8') => {
+      if (!highlightLayer || !Array.isArray(points) || !points.length) return;
+      const pathPoints = points.map((point) => [point.lat, point.lng]);
+
+      if (pathPoints.length > 1) {
+        const trailLine = L.polyline(pathPoints, {
+          color: markerColor,
+          weight: 2.4,
+          opacity: 0.9,
+          dashArray: '4 6',
+          lineCap: 'round',
+          lineJoin: 'round',
+          interactive: false
+        }).addTo(highlightLayer);
+        trailLine.bringToBack();
+      }
+
+      points.forEach((point, index) => {
+        const isLatestPoint = index === points.length - 1;
+        L.circleMarker([point.lat, point.lng], {
+          radius: isLatestPoint ? 5.5 : 4,
+          color: isLatestPoint ? '#e2e8f0' : markerColor,
+          weight: 1.4,
+          fillColor: markerColor,
+          fillOpacity: isLatestPoint ? 0.95 : 0.7,
+          opacity: 0.95,
+          interactive: false
+        }).addTo(highlightLayer);
+      });
+
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const fromPoint = points[index];
+        const toPoint = points[index + 1];
+        const midpoint = {
+          lat: (fromPoint.lat + toPoint.lat) / 2,
+          lng: (fromPoint.lng + toPoint.lng) / 2
+        };
+        const bearing = getGpsTrailBearingDegrees(fromPoint, toPoint);
+        L.marker([midpoint.lat, midpoint.lng], {
+          icon: L.divIcon({
+            className: 'gps-trail-arrow',
+            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${markerColor};font-size:12px;line-height:12px;text-shadow:0 0 3px rgba(2,6,23,0.9)">▲</span>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+          }),
+          interactive: false,
+          zIndexOffset: 420
+        }).addTo(highlightLayer);
+      }
+    };
+
+    const renderVehicleGpsTrail = async (vehicle, requestId) => {
+      if (!vehicle || !highlightLayer || requestId !== gpsTrailRequestCounter) return;
+
+      const vin = gpsHistoryManager.getVehicleVin(vehicle);
+      const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+      if (!vin && !vehicleId) return;
+
+      const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+      if (requestId !== gpsTrailRequestCounter) return;
+      if (error || !Array.isArray(records) || !records.length) return;
+
+      const winnerSerial = gpsHistoryManager.getVehicleWinnerSerial(vehicle);
+      const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
+        ? gpsHistoryManager.getRecordSerial
+        : () => '';
+      const winnerScopedRecords = winnerSerial
+        ? records.filter((record) => getRecordSerial(record) === winnerSerial)
+        : records;
+
+      const latestRecords = [...winnerScopedRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
+        .slice(0, GPS_TRAIL_POINT_LIMIT);
+
+      const trailPoints = latestRecords
+        .map((record) => toGpsTrailPoint(record))
+        .filter((point) => point !== null)
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      if (requestId !== gpsTrailRequestCounter || !trailPoints.length) return;
+      drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle));
+    };
+
     const ICON_PATHS = {
       mapPin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle>',
       navigation: '<polygon points="3 11 12 2 21 11 12 20 3 11"></polygon><line x1="12" y1="22" x2="12" y2="13"></line>',
@@ -820,13 +957,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <div class="flex justify-between items-end">
               <div id="${type}-search-status" class="hidden text-xs text-blue-400 animate-pulse font-medium">Locating address...</div>
             </div>
-            <input
-              id="${type}-filter"
-              type="text"
-              class="mt-2 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-              placeholder="${filterPlaceholder}"
-              autocomplete="off"
-            >
+            <div class="grid grid-cols-2 gap-2">
+              <input
+                id="${type}-zip-filter"
+                type="text"
+                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Search ZIP code"
+                autocomplete="off"
+              >
+              <input
+                id="${type}-vendor-filter"
+                type="text"
+                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Search vendor"
+                autocomplete="off"
+              >
+            </div>
           </div>
         </div>
         <div id="${type}-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
@@ -853,13 +999,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             </div>
           </div>
           <div class="mt-4 space-y-2">
-            <input
-              id="dynamic-service-filter"
-              type="text"
-              class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-              placeholder="Filter services by name, city, or state"
-              autocomplete="off"
-            >
+            <div class="grid grid-cols-2 gap-2">
+              <input
+                id="dynamic-service-zip-filter"
+                type="text"
+                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Search ZIP code"
+                autocomplete="off"
+              >
+              <input
+                id="dynamic-service-vendor-filter"
+                type="text"
+                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                placeholder="Search vendor"
+                autocomplete="off"
+              >
+            </div>
           </div>
         </div>
         <div id="dynamic-service-list" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900 scroll-smooth relative">
@@ -881,6 +1036,37 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     buildPartnerSidebars();
+
+    function ensureTechZipVendorControls() {
+      if (document.getElementById('tech-zip-filter') && document.getElementById('tech-vendor-filter')) return;
+      const sidebar = document.getElementById('left-sidebar');
+      if (!sidebar) return;
+      const header = sidebar.querySelector('.p-5.border-b.border-slate-800.bg-slate-900');
+      if (!header) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'grid grid-cols-2 gap-2';
+      wrapper.innerHTML = `
+        <input
+          id="tech-zip-filter"
+          type="text"
+          class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+          placeholder="Search ZIP code"
+          autocomplete="off"
+        >
+        <input
+          id="tech-vendor-filter"
+          type="text"
+          class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+          placeholder="Search vendor"
+          autocomplete="off"
+        >
+      `;
+
+      header.appendChild(wrapper);
+    }
+
+    ensureTechZipVendorControls();
 
     const isServiceSidebarVisible = (type) => {
       if (!isServiceTypeEnabled(type)) return false;
@@ -1145,8 +1331,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
-    async function loadVehicles() {
-      if (vehicles.length) return;
+    async function loadVehicles({ force = false } = {}) {
+      if (vehicles.length && !force) return;
       const stopLoading = startLoading('Loading Vehicles…');
       try {
         const data = await vehicleService.listVehicles();
@@ -1173,7 +1359,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const normalizedStatus = String(dealValues?.vehicleStatus ?? '').trim().toUpperCase();
           if (normalizedStatus && !allowedDealStatuses.has(normalizedStatus)) return false;
           if (normalizedStatus) {
-            vehicle.status = normalizedStatus;
+            vehicle.vehicleStatus = normalizedStatus;
           }
           const regularAmount = dealValues?.regularAmount ?? null;
           const openBalance = dealValues?.openBalance ?? null;
@@ -1407,10 +1593,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
       const listContainer = document.getElementById('tech-list');
       listContainer.innerHTML = '';
+      const filteredTechList = applyServiceFilter(techList, 'tech');
+      const totalCountEl = document.getElementById('total-count');
+      if (totalCountEl) {
+        totalCountEl.textContent = filteredTechList.length !== techList.length
+          ? `${filteredTechList.length}/${techList.length}`
+          : `${techList.length}`;
+      }
 
       const origin = clientLocation || getCurrentOrigin();
       const techWithDistances = attachDistances(
-        techList,
+        filteredTechList,
         origin,
         distanceCaches.tech,
         (tech) => getDistance(origin.lat, origin.lng, tech.lat, tech.lng)
@@ -1420,7 +1613,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         : [...techWithDistances];
 
       const selectedTech = selectedTechId !== null
-        ? sortedList.find(t => t.id === selectedTechId) || techList.find(t => t.id === selectedTechId)
+        ? sortedList.find(t => t.id === selectedTechId) || filteredTechList.find(t => t.id === selectedTechId)
         : null;
 
       const displayList = selectedTech
@@ -1498,29 +1691,38 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isAnyServiceSidebarOpen = () => getVisibleServiceTypes().length > 0;
 
-    const getPartnerFilterValue = (type = 'tech') => `${serviceFilters[type] || ''}`.trim().toLowerCase();
+    const getServiceZipFilterValue = (type = 'tech') => `${serviceZipFilters[type] || ''}`.trim().toLowerCase();
+    const getServiceVendorFilterValue = (type = 'tech') => `${serviceVendorFilters[type] || ''}`.trim().toLowerCase();
+
+    const getServiceZipInputId = (type) => (type === 'custom' ? 'dynamic-service-zip-filter' : `${type}-zip-filter`);
+    const getServiceVendorInputId = (type) => (type === 'custom' ? 'dynamic-service-vendor-filter' : `${type}-vendor-filter`);
 
     const applyServiceFilter = (list = [], type = 'tech') => {
-      const query = getPartnerFilterValue(type);
+      const zipQuery = getServiceZipFilterValue(type);
+      const vendorQuery = getServiceVendorFilterValue(type);
       const allowedIds = Array.isArray(serviceFilterIds[type]) ? new Set(serviceFilterIds[type].map((id) => `${id}`)) : null;
       const baseList = allowedIds ? list.filter((partner) => allowedIds.has(`${partner.id}`)) : list;
-      if (!query) return baseList;
+      if (!zipQuery && !vendorQuery) return baseList;
       return baseList.filter((partner) => {
-        return [partner.company, partner.contact, partner.city, partner.state, partner.zip, partner.region]
-          .some(value => `${value || ''}`.toLowerCase().includes(query));
+        const zipHaystack = `${partner.zip || partner.zipcode || ''}`.toLowerCase();
+        const vendorHaystack = [partner.company, partner.name, partner.contact, partner.vendor]
+          .map((value) => `${value || ''}`.toLowerCase())
+          .join(' ');
+
+        if (zipQuery && !zipHaystack.includes(zipQuery)) return false;
+        if (vendorQuery && !vendorHaystack.includes(vendorQuery)) return false;
+        return true;
       });
     };
 
     function filterSidebarForPartner(type, partner) {
       if (!type || !partner) return;
-      const filterValue = partner.company || partner.name || partner.zip || '';
-      serviceFilters[type] = filterValue;
-      setServiceFilter(type, filterValue);
-      const inputId = type === 'custom' ? 'dynamic-service-filter' : `${type}-filter`;
-      const input = document.getElementById(inputId);
-      if (input) {
-        input.value = filterValue;
-      }
+      serviceZipFilters[type] = partner.zip || partner.zipcode || '';
+      serviceVendorFilters[type] = partner.company || partner.name || '';
+      const zipInput = document.getElementById(getServiceZipInputId(type));
+      if (zipInput) zipInput.value = serviceZipFilters[type];
+      const vendorInput = document.getElementById(getServiceVendorInputId(type));
+      if (vendorInput) vendorInput.value = serviceVendorFilters[type];
       renderVisibleSidebars();
     }
 
@@ -1553,20 +1755,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const getSelectedService = (type) => selectedServiceByType[type] || null;
 
-    const syncServiceFilterInputs = () => {
-      const inputConfigs = [
-        { id: 'tech-filter', type: 'tech' },
-        { id: 'reseller-filter', type: 'reseller' },
-        { id: 'repair-filter', type: 'repair' },
-        { id: 'dynamic-service-filter', type: 'custom' },
-      ];
+    const syncServiceZipVendorInputs = () => {
+      SERVICE_TYPES.forEach((type) => {
+        const zipInput = document.getElementById(getServiceZipInputId(type));
+        const zipValue = serviceZipFilters[type] || '';
+        if (zipInput && zipInput.value !== zipValue) {
+          zipInput.value = zipValue;
+        }
 
-      inputConfigs.forEach(({ id, type }) => {
-        const input = document.getElementById(id);
-        if (!input) return;
-        const value = serviceFilters[type] || '';
-        if (input.value !== value) {
-          input.value = value;
+        const vendorInput = document.getElementById(getServiceVendorInputId(type));
+        const vendorValue = serviceVendorFilters[type] || '';
+        if (vendorInput && vendorInput.value !== vendorValue) {
+          vendorInput.value = vendorValue;
         }
       });
     };
@@ -1718,7 +1918,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const titleEl = document.getElementById('dynamic-service-title');
       const eyebrowEl = document.getElementById('dynamic-service-eyebrow');
       const descEl = document.getElementById('dynamic-service-description');
-      const filterInput = document.getElementById('dynamic-service-filter');
       if (!container) return;
 
       const meta = categoryKey ? customCategories.get(categoryKey) || ensureCustomCategoryMeta(categoryKey) : null;
@@ -1732,19 +1931,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const constrainedList = allowedIds
         ? normalizedList.filter((partner) => allowedIds.has(`${partner.id}`))
         : normalizedList;
-      const filterValue = `${serviceFilters.custom || filterInput?.value || ''}`.toLowerCase();
+      const constrainedFiltered = applyServiceFilter(constrainedList, 'custom');
       const origin = getCurrentOrigin();
-      const withDistances = attachDistances(constrainedList, origin, distanceCaches.partners, (partner) => {
+      const withDistances = attachDistances(constrainedFiltered, origin, distanceCaches.partners, (partner) => {
         if (!origin) return 0;
         return getDistance(origin.lat, origin.lng, partner.lat, partner.lng);
       });
       const sorted = origin ? [...withDistances].sort((a, b) => a.distance - b.distance) : [...withDistances];
-      const filtered = filterValue
-        ? sorted.filter((partner) => {
-            const haystack = `${partner.company || partner.name || ''} ${partner.city || ''} ${partner.state || ''}`.toLowerCase();
-            return haystack.includes(filterValue);
-          })
-        : sorted;
+      const filtered = sorted;
 
       const markersAllowed = customSidebarVisible && isServiceTypeEnabled('custom');
       customCategories.forEach(({ layer }) => layer?.clearLayers?.());
@@ -1991,6 +2185,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
           vehicleMarkers.clear();
           highlightLayer?.clearLayers();
+          gpsTrailRequestCounter += 1;
         }
       });
     }
@@ -2102,7 +2297,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               </div>
               <div class="flex flex-col items-end gap-1 text-right">
                 <div class="inline-flex items-center gap-2 text-[10px] font-bold text-slate-300">
-                  <span class="px-2 py-1 rounded-full border border-amber-400/40 bg-amber-500/10 text-amber-100">${vehicle.status}</span>
+                  <span class="px-2 py-1 rounded-full border border-amber-400/40 bg-amber-500/10 text-amber-100">${vehicle.dealStatus || vehicle.status || 'ACTIVE'}</span>
                 </div>
                 <div class="inline-flex items-center gap-2 text-[10px] font-semibold ${movingMeta.text} px-2 py-1 rounded-full border border-slate-800 ${movingMeta.bg}">
                   <span class="w-2 h-2 rounded-full ${movingMeta.dot}"></span>
@@ -2254,6 +2449,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
     function focusVehicle(vehicle) {
+      const trailRequestId = ++gpsTrailRequestCounter;
       if (!vehicle) return;
       if (!hasValidCoords(vehicle)) return;
       if (!vehicleMarkersVisible) return;
@@ -2293,6 +2489,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       showServicesFromOrigin(vehicle, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
 
       applySelection(vehicle.id, null);
+      void renderVehicleGpsTrail(vehicle, trailRequestId);
     }
 
     function vehicleCard(vehicle) {
@@ -2301,7 +2498,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return vehiclePopupTemplate({
         modelYear: modelYear || 'Vehicle',
         vin: vehicle.vin || 'N/A',
-        status: vehicle.status || 'ACTIVE',
+        status: vehicle.dealStatus || vehicle.status || 'ACTIVE',
         customer: vehicle.customer || 'Customer pending',
         lastLocation: vehicle.lastLocation || 'No location provided',
         locationNote: vehicle.locationNote || '',
@@ -2329,7 +2526,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const gpsFixValue = normalizeFilterValue(vehicle.gpsFix) || EMPTY_FILTER_VALUE;
       if (vehicleFilters.gpsFix.length && !vehicleFilters.gpsFix.includes(gpsFixValue)) return false;
 
-      const dealStatus = normalizeFilterValue(vehicle.status);
+      const dealStatus = normalizeFilterValue(vehicle.dealStatus ?? vehicle.status);
       if (vehicleFilters.dealStatus.length && !vehicleFilters.dealStatus.includes(dealStatus)) return false;
 
       const ptStatus = normalizeFilterValue(vehicle.ptStatus);
@@ -2451,7 +2648,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function updateVehicleFilterOptions() {
       const invPrepValues = getUniqueVehicleValues('invPrepStatus');
       const gpsValues = getUniqueVehicleValues('gpsFix', { includeEmpty: true });
-      const dealStatusValues = getUniqueVehicleValues('status');
+      const dealStatusValues = Array.from(
+        new Set(
+          vehicles
+            .map((vehicle) => normalizeFilterValue(vehicle.dealStatus ?? vehicle.status))
+            .filter(Boolean)
+        )
+      ).sort();
       const ptValues = getUniqueVehicleValues('ptStatus');
       const movingValues = getMovingOptions();
 
@@ -2729,6 +2932,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function resetSelection() {
+      gpsTrailRequestCounter += 1;
       selectedVehicleId = null;
       selectedTechId = null;
       Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
@@ -3144,11 +3348,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div>
                 <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">GPS History</p>
                 <p class="text-[10px] text-slate-500" data-gps-status>Loading GPS history...</p>
+                <p class="text-[10px] text-slate-500" data-gps-winner-info></p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300" data-gps-connection-status>
                   Checking connection
                 </button>
+                <div class="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950/70 p-1">
+                  <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors" data-gps-view="winner">
+                    Winner only
+                  </button>
+                  <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors" data-gps-view="all">
+                    All serials
+                  </button>
+                </div>
                 <input type="text" class="w-52 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200 placeholder-slate-500" placeholder="Search GPS records" data-gps-search />
                 <div class="relative">
                   <button type="button" class="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200 hover:border-slate-500" data-gps-columns-toggle>
@@ -3826,15 +4039,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (!vehicles.length) return;
         syncVehicleSelectionFromStore(selection);
       });
-      subscribeServiceFilters((filters) => {
-        Object.assign(serviceFilters, filters);
-        syncServiceFilterInputs();
-        renderVisibleSidebars();
-        const origin = getCurrentOrigin();
-        if (origin) {
-          showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
-        }
-      });
       subscribeServiceFilterIds((filters) => {
         Object.assign(serviceFilterIds, filters);
         renderVisibleSidebars();
@@ -3871,27 +4075,39 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           bindVehicleFilterHandlers();
           syncVehicleFilterInputs();
           const filterConfigs = [
-            { id: 'tech-filter', type: 'tech' },
-            { id: 'reseller-filter', type: 'reseller' },
-            { id: 'repair-filter', type: 'repair' },
-            { id: 'dynamic-service-filter', type: 'custom' },
+            { type: 'tech' },
+            { type: 'reseller' },
+            { type: 'repair' },
+            { type: 'custom' },
           ].filter(({ type }) => isServiceTypeEnabled(type));
 
-          filterConfigs.forEach(({ id, type }) => {
-            const input = document.getElementById(id);
-            if (!input) return;
-            input.addEventListener('input', () => {
-              serviceFilters[type] = input.value;
-              setServiceFilter(type, input.value);
-              renderVisibleSidebars();
-              const origin = getCurrentOrigin();
-              if (origin) {
-                showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
-              }
-            });
+          const refreshServiceSearch = () => {
+            renderVisibleSidebars();
+            const origin = getCurrentOrigin();
+            if (origin) {
+              showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
+            }
+          };
+
+          filterConfigs.forEach(({ type }) => {
+            const zipInput = document.getElementById(getServiceZipInputId(type));
+            if (zipInput) {
+              zipInput.addEventListener('input', () => {
+                serviceZipFilters[type] = zipInput.value;
+                refreshServiceSearch();
+              });
+            }
+
+            const vendorInput = document.getElementById(getServiceVendorInputId(type));
+            if (vendorInput) {
+              vendorInput.addEventListener('input', () => {
+                serviceVendorFilters[type] = vendorInput.value;
+                refreshServiceSearch();
+              });
+            }
           });
 
-          syncServiceFilterInputs();
+          syncServiceZipVendorInputs();
 
           setupEventDelegation();
 
@@ -3913,7 +4129,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           });
 
           const refreshVehicles = debounceAsync(async () => {
-            await loadVehicles();
+            await loadVehicles({ force: true });
           }, 600);
           const refreshHotspots = debounceAsync(async () => {
             await loadHotspots();

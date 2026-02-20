@@ -120,13 +120,50 @@ const getPtLastReadStatus = (value) => {
   return 'fresh';
 };
 
+const parseMovingIndicator = (...candidates) => {
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const raw = String(candidate).trim();
+    if (!raw) continue;
+    const numeric = Number.parseInt(raw, 10);
+    if (Number.isFinite(numeric)) {
+      if (numeric === 1) return 'moving';
+      if (numeric === -1) return 'stopped';
+    }
+    const normalized = raw.toLowerCase();
+    if (normalized === 'moving' || normalized === 'move' || normalized === 'true' || normalized === 'yes') {
+      return 'moving';
+    }
+    if (
+      normalized === 'not moving' ||
+      normalized === 'stopped' ||
+      normalized === 'stop' ||
+      normalized === 'false' ||
+      normalized === 'no'
+    ) {
+      return 'stopped';
+    }
+  }
+  return null;
+};
+
 export const getMovingStatus = (vehicle = {}) => {
+  const explicitStatus = parseMovingIndicator(
+    vehicle?.moving,
+    vehicle?.movingCalc,
+    vehicle?.gpsMoving,
+    vehicle?.details?.moving,
+    vehicle?.details?.moving_calc,
+    vehicle?.details?.gps_moving,
+    vehicle?.details?.['Moving'],
+    vehicle?.details?.['Moving (Calc)'],
+    vehicle?.details?.['GPS Moving']
+  );
+  if (explicitStatus) return explicitStatus;
+
   const ptReadStatus = getPtLastReadStatus(vehicle?.lastRead);
-  if (ptReadStatus === 'unknown') return 'unknown';
   if (ptReadStatus === 'stale') return 'stopped';
-  const movingValue = parseInt(vehicle.moving || vehicle.movingCalc || vehicle.gpsMoving || '', 10);
-  if (movingValue === 1) return 'moving';
-  if (movingValue === -1) return 'stopped';
+  if (ptReadStatus === 'unknown') return 'unknown';
   return 'unknown';
 };
 

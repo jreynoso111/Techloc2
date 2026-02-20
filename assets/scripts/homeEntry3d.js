@@ -69,9 +69,9 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.48 + pointerY * 0.03),
     width * (0.92 + progress * 0.08)
   );
-  nebulaCore.addColorStop(0, 'rgba(124, 58, 237, 0.18)');
-  nebulaCore.addColorStop(0.35, 'rgba(59, 130, 246, 0.12)');
-  nebulaCore.addColorStop(0.62, 'rgba(20, 184, 166, 0.08)');
+  nebulaCore.addColorStop(0, 'rgba(67, 56, 202, 0.12)');
+  nebulaCore.addColorStop(0.35, 'rgba(30, 64, 175, 0.08)');
+  nebulaCore.addColorStop(0.62, 'rgba(15, 23, 42, 0.06)');
   nebulaCore.addColorStop(1, 'rgba(2, 6, 23, 0)');
   ctx.fillStyle = nebulaCore;
   ctx.fillRect(0, 0, width, height);
@@ -84,8 +84,8 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.28 + pointerY * 0.02),
     width * 0.58
   );
-  nebulaArmA.addColorStop(0, 'rgba(244, 114, 182, 0.08)');
-  nebulaArmA.addColorStop(0.45, 'rgba(129, 140, 248, 0.1)');
+  nebulaArmA.addColorStop(0, 'rgba(190, 24, 93, 0.05)');
+  nebulaArmA.addColorStop(0.45, 'rgba(79, 70, 229, 0.07)');
   nebulaArmA.addColorStop(1, 'rgba(2, 6, 23, 0)');
   ctx.fillStyle = nebulaArmA;
   ctx.fillRect(0, 0, width, height);
@@ -98,8 +98,8 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.74 - pointerY * 0.02),
     width * 0.6
   );
-  nebulaArmB.addColorStop(0, 'rgba(34, 211, 238, 0.1)');
-  nebulaArmB.addColorStop(0.42, 'rgba(59, 130, 246, 0.09)');
+  nebulaArmB.addColorStop(0, 'rgba(8, 145, 178, 0.06)');
+  nebulaArmB.addColorStop(0.42, 'rgba(30, 64, 175, 0.07)');
   nebulaArmB.addColorStop(1, 'rgba(2, 6, 23, 0)');
   ctx.fillStyle = nebulaArmB;
   ctx.fillRect(0, 0, width, height);
