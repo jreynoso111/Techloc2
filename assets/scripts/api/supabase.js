@@ -1,6 +1,38 @@
 import { DashboardState } from '../core/state.js';
 import { assertSupabaseTarget } from '../env.js';
 
+const MAX_PAGE_SIZE = 1000;
+
+export const fetchAllRowsFromTable = async ({ supabaseClient, tableName, pageSize = MAX_PAGE_SIZE }) => {
+  if (!supabaseClient?.from) {
+    return {
+      data: null,
+      error: { message: 'Supabase client not available.' },
+    };
+  }
+
+  const safePageSize = Math.max(1, Number(pageSize) || MAX_PAGE_SIZE);
+  const allRows = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + safePageSize - 1;
+    const { data, error } = await supabaseClient
+      .from(tableName)
+      .select('*')
+      .range(from, to);
+
+    if (error) return { data: null, error };
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    allRows.push(...data);
+    if (data.length < safePageSize) break;
+    from += safePageSize;
+  }
+
+  return { data: allRows, error: null };
+};
+
 const resolveSupabaseModule = async () => {
   const moduleUrls = [
     new URL('../../js/supabaseClient.js', import.meta.url),
@@ -106,10 +138,10 @@ export const hydrateVehiclesFromSupabase = async ({
 
   setConnectionStatus('Reconnecting…');
 
-  const { data, error } = await supabaseClient
-    .from('DealsJP1')
-    .select('*')
-    .limit(5000);
+  const { data, error } = await fetchAllRowsFromTable({
+    supabaseClient,
+    tableName: 'DealsJP1',
+  });
 
   if (error) {
     setConnectionStatus('Offline');
@@ -119,7 +151,7 @@ export const hydrateVehiclesFromSupabase = async ({
     if (showDebug) {
       showDebug(
         'Supabase SELECT failed',
-        'Esto suele ser RLS (no tienes SELECT permitido), credenciales, o tabla/columnas distintas.',
+        'Esto suele ser RLS (no tienes SELECT permitido), credenciales, o tabla/columnas distintas en DealsJP1.',
         { code: error.code, message: error.message, details: error.details, hint: error.hint }
       );
     }
@@ -129,16 +161,21 @@ export const hydrateVehiclesFromSupabase = async ({
   DashboardState.schema = buildSchemaFromData(data || []);
 
   setVehiclesFromArray((data || []).map((vehicle) => {
-    const updatedAt = getField(vehicle, 'Updated At', 'Updated', 'Last Updated');
+    const ptLastRead = vehicle?.['PT Last Read'] ?? vehicle?.['pt last read'] ?? vehicle?.pt_last_read ?? null;
+    const lastPingFallback = vehicle?.['Last Ping'] ?? vehicle?.last_ping ?? ptLastRead ?? null;
+    const updatedAt = getField(vehicle, 'Updated At', 'Updated', 'Last Updated', 'Last Update');
     return {
       ...vehicle,
+      'PT Last Read': ptLastRead,
+      pt_last_read: ptLastRead,
+      last_ping: lastPingFallback,
       lastEventAt: updatedAt ? new Date(updatedAt).getTime() : null,
     };
   }));
 
   DashboardState.ui.isLoading = false;
   initializeTablePreferences();
-  setupFilters({ preserveSelections: true });
+  setupFilters({ preserveSelections: false });
   renderDashboard();
   setConnectionStatus('Live');
 };

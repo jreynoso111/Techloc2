@@ -2,11 +2,11 @@ export const DashboardState = {
   filters: {
     dateRange: { start: '', end: '' },
     dateKey: '',
-    salesChannels: ['Finance-EX'],
+    salesChannels: [],
     salesChannelKey: '',
     lastLeadKey: '',
     lastLeadSelection: true,
-    lastLeadFilterActive: false,
+    lastLeadFilterActive: true,
     categoryFilters: {},
     columnFilters: {},
     chartFilters: {},

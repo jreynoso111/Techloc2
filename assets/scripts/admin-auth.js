@@ -1,10 +1,7 @@
 import { SUPABASE_KEY, SUPABASE_URL, assertSupabaseTarget } from './env.js';
 import { supabase as sharedSupabaseClient } from '../js/supabaseClient.js';
 import {
-  buildWebAdminSession,
   clearWebAdminSession,
-  getWebAdminAccess,
-  isWebAdminSession,
 } from './web-admin-session.js';
 
 const LOGIN_PAGE = new URL('../../pages/login.html', import.meta.url).toString();
@@ -28,7 +25,7 @@ const hasSupabaseAuth =
   Boolean(supabaseClient?.auth) && typeof supabaseClient.auth.getSession === 'function';
 
 if (!hasSupabaseAuth) {
-  console.warn('Supabase auth unavailable in admin guard. Using local web-admin fallback when available.');
+  console.warn('Supabase auth unavailable in admin guard.');
 }
 
 if (supabaseClient) {
@@ -72,26 +69,23 @@ const notifySessionListeners = (session) => {
 };
 
 const roleAllowsDashboard = (role) => ['administrator', 'moderator'].includes(String(role || '').toLowerCase());
+const normalizeRoleValue = (value, fallback = 'user') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || fallback;
+};
+const normalizeStatusValue = (value, fallback = 'active') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || fallback;
+};
 
 const setSession = (session) => {
   currentSession = session;
   notifySessionListeners(session);
 };
 
-const getEffectiveSession = (session) => session || buildWebAdminSession() || null;
+const getEffectiveSession = (session) => session || null;
 
 const getUserAccess = async (session) => {
-  if (window.currentUserRole && window.currentUserStatus) {
-    return { role: window.currentUserRole, status: window.currentUserStatus };
-  }
-
-  if (cachedUserRole && cachedUserStatus) {
-    window.currentUserRole = cachedUserRole;
-    window.currentUserStatus = cachedUserStatus;
-    broadcastRoleStatus(cachedUserRole, cachedUserStatus);
-    return { role: cachedUserRole, status: cachedUserStatus };
-  }
-
   const userId = session?.user?.id;
   if (!userId) {
     window.currentUserRole = 'user';
@@ -100,35 +94,49 @@ const getUserAccess = async (session) => {
     return { role: 'user', status: 'active' };
   }
 
-  if (isWebAdminSession(session)) {
-    const localAccess = getWebAdminAccess();
-    const role = (localAccess?.role || 'administrator').toLowerCase();
-    const status = (localAccess?.status || 'active').toLowerCase();
-    cachedUserRole = role;
-    cachedUserStatus = status;
-    window.currentUserRole = role;
-    window.currentUserStatus = status;
-    broadcastRoleStatus(role, status);
-    return { role, status };
-  }
+  const fallbackRole = normalizeRoleValue(
+    cachedUserRole ||
+      window.currentUserRole ||
+      session?.user?.app_metadata?.role ||
+      session?.user?.user_metadata?.role ||
+      'user',
+    'user',
+  );
+  const fallbackStatus = normalizeStatusValue(
+    cachedUserStatus || window.currentUserStatus || 'active',
+    'active',
+  );
 
   if (!supabaseClient?.from) {
-    return { role: 'user', status: 'active' };
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return { role: fallbackRole, status: fallbackStatus };
   }
 
   const { data, error } = await supabaseClient
     .from('profiles')
     .select('role, status')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.warn('Unable to fetch user role', error);
-    return { role: 'user', status: 'active' };
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return { role: fallbackRole, status: fallbackStatus };
   }
 
-  const normalizedRole = (data?.role || 'user').toLowerCase();
-  const normalizedStatus = (data?.status || 'active').toLowerCase();
+  if (!data) {
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return { role: fallbackRole, status: fallbackStatus };
+  }
+
+  const normalizedRole = normalizeRoleValue(data.role, fallbackRole);
+  const normalizedStatus = normalizeStatusValue(data.status, fallbackStatus);
   cachedUserRole = normalizedRole;
   cachedUserStatus = normalizedStatus;
   window.currentUserRole = normalizedRole;
@@ -150,17 +158,6 @@ const getUserProfile = async (session) => {
     return null;
   }
 
-  if (isWebAdminSession(session)) {
-    const localAccess = getWebAdminAccess();
-    const profile = {
-      name: 'Web Admin',
-      email: localAccess?.email || session?.user?.email || null,
-    };
-    cachedUserProfile = profile;
-    window.currentUserProfile = profile;
-    return profile;
-  }
-
   if (!supabaseClient?.from) {
     return null;
   }
@@ -180,7 +177,6 @@ const getUserProfile = async (session) => {
 const recordLastConnection = async (session) => {
   const userId = session?.user?.id;
   if (!userId) return;
-  if (isWebAdminSession(session)) return;
   if (!supabaseClient?.from) return;
   if (typeof localStorage === 'undefined') return;
 
@@ -254,8 +250,11 @@ const initializeAuthState = () => {
     try {
       if (hasSupabaseAuth) {
         const { data } = await supabaseClient.auth.getSession();
-        setSession(getEffectiveSession(data?.session ?? null));
+        const resolved = getEffectiveSession(data?.session ?? null);
+        if (!resolved) clearWebAdminSession();
+        setSession(resolved);
       } else {
+        clearWebAdminSession();
         setSession(getEffectiveSession(null));
       }
     } catch (error) {

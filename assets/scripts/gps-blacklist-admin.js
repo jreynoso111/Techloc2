@@ -1,4 +1,5 @@
-import { requireSession, redirectToAdminHome, supabaseClient } from './admin-auth.js';
+import { requireSession, redirectToAdminHome, redirectToLogin, supabaseClient } from './admin-auth.js';
+import { clearWebAdminSession, getWebAdminAccess, isWebAdminSession } from './web-admin-session.js';
 
 const TABLE_NAME = 'gps_blacklist';
 const KEY_CANDIDATES = ['id', 'uuid', 'serial', 'device_id', 'gps_id'];
@@ -8,6 +9,10 @@ const els = {
   totalCount: document.getElementById('total-count'),
   pkLabel: document.getElementById('pk-label'),
   lastSync: document.getElementById('last-sync'),
+  diagnosticsPanel: document.getElementById('diagnostics-panel'),
+  diagnosticsSummary: document.getElementById('diagnostics-summary'),
+  diagnosticsLog: document.getElementById('diagnostics-log'),
+  clearErrorsBtn: document.getElementById('clear-errors-btn'),
   headRow: document.getElementById('table-head-row'),
   body: document.getElementById('table-body'),
   feedback: document.getElementById('feedback'),
@@ -31,6 +36,7 @@ const state = {
   rows: [],
   columns: [],
   visibleColumns: [],
+  diagnostics: [],
   searchQuery: '',
   sortColumn: '',
   sortDirection: 'asc',
@@ -44,6 +50,9 @@ const state = {
 const ADDED_AT_COL = 'added_at';
 const AUTO_FIELDS = new Set(['is_active', 'added_by', 'uuid']);
 const HIDDEN_COLUMNS = new Set(['uuid', 'is_active']);
+const ADMIN_ROLE = 'administrator';
+const DIAGNOSTIC_LIMIT = 40;
+let diagnosticsBound = false;
 
 const setStatus = (message, tone = 'neutral') => {
   if (!els.statusPill) return;
@@ -70,6 +79,120 @@ const setFeedback = (message, tone = 'neutral') => {
 
 
 const normalizeColumnName = (value) => String(value || '').trim().toLowerCase();
+const normalizeRole = (value) => String(value || '').trim().toLowerCase();
+const toText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch (_error) {
+    return String(value);
+  }
+};
+
+const normalizeErrorPayload = (error) => {
+  if (!error) {
+    return {
+      message: 'Unknown error',
+      code: null,
+      details: null,
+      hint: null,
+    };
+  }
+
+  if (typeof error === 'string') {
+    return {
+      message: error,
+      code: null,
+      details: null,
+      hint: null,
+    };
+  }
+
+  return {
+    message: toText(error.message || error.error || 'Unknown error'),
+    code: toText(error.code || ''),
+    details: toText(error.details || ''),
+    hint: toText(error.hint || ''),
+  };
+};
+
+const renderDiagnostics = () => {
+  if (!els.diagnosticsPanel || !els.diagnosticsSummary || !els.diagnosticsLog) return;
+
+  if (!state.diagnostics.length) {
+    els.diagnosticsPanel.classList.add('hidden');
+    els.diagnosticsSummary.textContent = 'No runtime errors detected.';
+    els.diagnosticsLog.textContent = '';
+    return;
+  }
+
+  els.diagnosticsPanel.classList.remove('hidden');
+  els.diagnosticsSummary.textContent = `${state.diagnostics.length} error(s) detected during this session.`;
+  els.diagnosticsLog.textContent = state.diagnostics
+    .map((entry, index) => {
+      const lines = [
+        `#${index + 1} ${entry.at}`,
+        `context: ${entry.context}`,
+        `message: ${entry.message}`,
+      ];
+      if (entry.code) lines.push(`code: ${entry.code}`);
+      if (entry.details) lines.push(`details: ${entry.details}`);
+      if (entry.hint) lines.push(`hint: ${entry.hint}`);
+      if (entry.metadata && Object.keys(entry.metadata).length) lines.push(`meta: ${toText(entry.metadata)}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
+};
+
+const reportError = (context, error, metadata = {}) => {
+  const payload = normalizeErrorPayload(error);
+  const entry = {
+    at: new Date().toISOString(),
+    context,
+    message: payload.message || 'Unknown error',
+    code: payload.code || null,
+    details: payload.details || null,
+    hint: payload.hint || null,
+    metadata,
+  };
+
+  state.diagnostics.unshift(entry);
+  if (state.diagnostics.length > DIAGNOSTIC_LIMIT) {
+    state.diagnostics.length = DIAGNOSTIC_LIMIT;
+  }
+
+  renderDiagnostics();
+
+  const suffix = entry.code ? ` [${entry.code}]` : '';
+  setStatus('Error detected', 'error');
+  setFeedback(`${entry.context}: ${entry.message}${suffix}`, 'error');
+
+  console.error(`[gps_blacklist_admin] ${context}`, error, metadata);
+};
+
+const bindDiagnostics = () => {
+  if (diagnosticsBound) return;
+  diagnosticsBound = true;
+
+  els.clearErrorsBtn?.addEventListener('click', () => {
+    state.diagnostics = [];
+    renderDiagnostics();
+    setFeedback('Diagnostics cleared.', 'neutral');
+  });
+
+  window.addEventListener('error', (event) => {
+    reportError('window.error', event.error || event.message || 'Unhandled window error', {
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError('window.unhandledrejection', event.reason || 'Unhandled promise rejection');
+  });
+};
 
 const detectPrimaryKey = (columns) => KEY_CANDIDATES.find((key) => columns.includes(key)) || null;
 
@@ -278,8 +401,11 @@ const saveModalRecord = async () => {
   if (state.editingKey !== null && state.primaryKey) {
     const { error } = await supabaseClient.from(TABLE_NAME).update(payload).eq(state.primaryKey, state.editingKey);
     if (error) {
-      setStatus('Error updating', 'error');
-      setFeedback(error.message || 'Could not update the record.', 'error');
+      reportError('saveModalRecord.update', error, {
+        table: TABLE_NAME,
+        primaryKey: state.primaryKey,
+        rowKey: state.editingKey,
+      });
       return;
     }
     setFeedback('Record updated successfully.', 'success');
@@ -287,8 +413,9 @@ const saveModalRecord = async () => {
     const insertPayload = applyInsertDefaults(payload);
     const { error } = await supabaseClient.from(TABLE_NAME).insert([insertPayload]);
     if (error) {
-      setStatus('Error inserting', 'error');
-      setFeedback(error.message || 'Could not insert the record.', 'error');
+      reportError('saveModalRecord.insert', error, {
+        table: TABLE_NAME,
+      });
       return;
     }
     setFeedback('Record inserted successfully.', 'success');
@@ -303,9 +430,20 @@ const fetchRows = async () => {
   const { data, error } = await supabaseClient.from(TABLE_NAME).select('*').limit(500);
 
   if (error) {
-    console.error(`Error loading ${TABLE_NAME}`, error);
-    setStatus('Error loading', 'error');
-    setFeedback(error.message || 'Could not query the table.', 'error');
+    const isPermissionError = String(error?.code || '') === '42501';
+    if (isPermissionError) {
+      reportError('fetchRows.select', error, {
+        table: TABLE_NAME,
+        authHint: 'The request is not authenticated as an admin Supabase user.',
+      });
+      setFeedback(
+        'Permission denied. Re-login with Supabase credentials from /pages/login.html (not local limited mode).',
+        'error',
+      );
+      return;
+    }
+
+    reportError('fetchRows.select', error, { table: TABLE_NAME });
     return;
   }
 
@@ -325,16 +463,57 @@ const fetchRows = async () => {
 };
 
 const validateAdminRole = async (session) => {
-  const userId = session?.user?.id;
-  if (!userId) return false;
+  const roleCandidates = new Set(
+    [
+      window.currentUserRole,
+      document.body?.dataset.userRole,
+      session?.user?.user_metadata?.role,
+      session?.user?.app_metadata?.role,
+    ]
+      .map((role) => normalizeRole(role))
+      .filter(Boolean),
+  );
 
-  const { data, error } = await supabaseClient.from('profiles').select('role').eq('id', userId).single();
-  if (error) {
-    console.error('Unable to validate role for GPS blacklist page', error);
-    return false;
+  if (isWebAdminSession(session)) {
+    const localRole = normalizeRole(getWebAdminAccess()?.role);
+    if (localRole) roleCandidates.add(localRole);
   }
 
-  return String(data?.role || '').toLowerCase() === 'administrator';
+  // Resolve source of truth from profiles to avoid auth metadata races.
+  const userId = session?.user?.id;
+  if (userId && supabaseClient?.from) {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('role, status')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      reportError('validateAdminRole.profile_lookup', error, { userId });
+    } else if (data) {
+      const profileRole = normalizeRole(data.role);
+      const profileStatus = normalizeRole(data.status) || 'active';
+      if (profileRole) {
+        roleCandidates.add(profileRole);
+        window.currentUserRole = profileRole;
+        if (document.body) document.body.dataset.userRole = profileRole;
+      }
+      if (profileStatus) {
+        window.currentUserStatus = profileStatus;
+        if (document.body) document.body.dataset.userStatus = profileStatus;
+      }
+      if (profileStatus === 'suspended') return false;
+    }
+  }
+
+  if (roleCandidates.has(ADMIN_ROLE)) return true;
+
+  reportError(
+    'validateAdminRole',
+    { message: 'Administrator role was not found for the current user.' },
+    { roles: [...roleCandidates] },
+  );
+  return false;
 };
 
 const handleRowActions = async (event) => {
@@ -354,8 +533,11 @@ const handleRowActions = async (event) => {
     setStatus('Deleting…');
     const { error } = await supabaseClient.from(TABLE_NAME).delete().eq(state.primaryKey, deleteValue);
     if (error) {
-      setStatus('Error deleting', 'error');
-      setFeedback(error.message || 'Could not delete the record.', 'error');
+      reportError('handleRowActions.delete', error, {
+        table: TABLE_NAME,
+        primaryKey: state.primaryKey,
+        rowKey: deleteValue,
+      });
       return;
     }
 
@@ -366,12 +548,27 @@ const handleRowActions = async (event) => {
 
 const initialize = async () => {
   try {
+    bindDiagnostics();
+    renderDiagnostics();
+
     const session = await requireSession();
+    if (isWebAdminSession(session)) {
+      clearWebAdminSession();
+      reportError('initialize.auth_mode', {
+        message: 'GPS Blacklist requires a real Supabase authenticated session. Local admin mode is not enough.',
+      });
+      setStatus('Supabase auth required', 'error');
+      setFeedback('Go to /pages/login.html and sign in with Supabase credentials.', 'error');
+      setTimeout(() => redirectToLogin(), 500);
+      return;
+    }
+
     state.currentUserLabel = session?.user?.email || session?.user?.id || 'unknown-user';
 
     const isAdmin = await validateAdminRole(session);
 
     if (!isAdmin) {
+      reportError('initialize.authorization', { message: 'Administrator role is required for this page.' });
       redirectToAdminHome();
       return;
     }
@@ -423,22 +620,20 @@ const initialize = async () => {
     els.modalCancel?.addEventListener('click', closeModal);
     els.modalSave?.addEventListener('click', () => {
       saveModalRecord().catch((error) => {
-        console.error('Save failed', error);
-        setFeedback('Could not save the record.', 'error');
+        reportError('saveModalRecord.catch', error);
       });
     });
 
     els.body?.addEventListener('click', (event) => {
       handleRowActions(event).catch((error) => {
-        console.error('Row action failed', error);
-        setFeedback('Could not complete the action.', 'error');
+        reportError('handleRowActions.catch', error);
       });
     });
 
     await fetchRows();
     window.lucide?.createIcons();
   } catch (error) {
-    console.error('GPS blacklist admin initialization failed', error);
+    reportError('initialize.catch', error);
     setStatus('Session error', 'error');
   }
 };

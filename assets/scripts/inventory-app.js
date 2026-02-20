@@ -33,6 +33,7 @@ import {
   getSupabaseClient,
   hydrateVehiclesFromSupabase,
   initializeSupabaseRealtime,
+  fetchAllRowsFromTable,
 } from './api/supabase.js';
 import { getVehicles } from './services/fleetService.js';
 
@@ -343,12 +344,34 @@ const insertAlertsLastClickHistory = async (vin, clickedAtIso) => {
 const getGpsOfflineCount = () => {
   const cutoff = Date.now() - (10 * 24 * 60 * 60 * 1000);
   const rows = DashboardState.derived.filtered || [];
+  const hasAnyPingValue = rows.some((row) => {
+    const pingValue = getField(
+      row,
+      'Last Ping',
+      'last_ping',
+      'LastPing',
+      'PT Last Read',
+      'pt_last_read',
+      'pt last read'
+    );
+    return String(pingValue ?? '').trim() !== '';
+  });
+  if (!hasAnyPingValue) return 0;
+
   return rows.filter((row) => {
     const vin = row?.vin || row?.VIN || getField(row, 'VIN');
     if (!vin) return false;
-    const dealStatus = String(getField(row, 'Deal Status', 'dealStatus') || '').trim().toUpperCase();
-    if (dealStatus !== 'ACTIVE') return false;
-    const lastPingValue = getField(row, 'Last Ping', 'last_ping', 'LastPing');
+    const vehicleStatus = String(getField(row, 'Vehicle Status', 'vehicle status', 'status') || '').trim().toUpperCase();
+    if (vehicleStatus !== 'ACTIVE') return false;
+    const lastPingValue = getField(
+      row,
+      'Last Ping',
+      'last_ping',
+      'LastPing',
+      'PT Last Read',
+      'pt_last_read',
+      'pt last read'
+    );
     const lastPingString = String(lastPingValue ?? '').trim();
     if (!lastPingString) return true;
     const parsed = new Date(lastPingString);
@@ -372,32 +395,39 @@ const fetchAlertsDealCount = async () => {
     updateAlertsDealsList();
     return;
   }
-  const { data, error } = await supabaseClient
-    .from('DealsJP1')
-    .select('*');
-  if (error || !Array.isArray(data)) {
-    return;
+  let sourceRows = getCurrentDataset();
+  if (!Array.isArray(sourceRows) || !sourceRows.length) {
+    const { data, error } = await fetchAllRowsFromTable({
+      supabaseClient,
+      tableName: 'DealsJP1',
+    });
+    if (error || !Array.isArray(data)) return;
+    sourceRows = data;
   }
-  const onlineRows = data.filter((row) => {
+
+  const normalizedRows = sourceRows.map((row) => ({
+    ...row,
+    VIN: getField(row, 'VIN'),
+    'Vehicle Status': getField(row, 'Vehicle Status', 'vehicle status'),
+    'Current Stock No': getField(row, 'Current Stock No', 'current stock no'),
+    'Physical Location': getField(row, 'Physical Location', 'phys_loc'),
+    'Inventory Preparation Status': getField(row, 'Inventory Preparation Status', 'inv. prep. stat.'),
+    'Last Deal': getField(row, 'Last Deal', 'last_deal'),
+  }));
+
+  const onlineRows = normalizedRows.filter((row) => {
     if (!row?.VIN) return false;
-    const status = String(row['Vehicle Status'] || '').trim().toUpperCase();
-    if (!['ACTIVE', 'STOCK', 'STOLEN'].includes(status)) return false;
-    const prepStatus = String(row['Inventory Preparation Status'] || '').trim().toLowerCase();
-    return [
-      'out for repo',
-      'stolen',
-      'accidented',
-      'accident',
-      'stolen vehicle',
-      'third party repair shop',
-    ].includes(prepStatus);
+    const isLastDeal = normalizeBoolean(getField(row, 'Last Deal'));
+    if (!isLastDeal) return false;
+    const status = String(getField(row, 'Vehicle Status') || '').trim().toUpperCase();
+    return status === 'ACTIVE';
   });
   setAlertsDealCount(onlineRows.length);
   alertsDealsRows = onlineRows;
   alertsDealsFilterOptions = Array.from(
     new Set(
       onlineRows
-        .map((row) => String(row['Inventory Preparation Status'] || '').trim().toLowerCase())
+        .map((row) => String(getField(row, 'Inventory Preparation Status') || '').trim().toLowerCase())
         .filter(Boolean),
     ),
   ).sort();
@@ -480,10 +510,18 @@ const LOCATION_FILTER_VALUES = [
 ];
 const LOCATION_FILTER_SET = new Set(LOCATION_FILTER_VALUES.map((value) => value.toLowerCase()));
 const STATUS_FILTER_SET = new Set(['active', 'stock', 'stolen']);
+const normalizeLookupKey = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const getField = (row, ...keys) => {
+  if (!row || typeof row !== 'object') return '';
+  const normalizedEntries = new Map();
+  Object.entries(row).forEach(([key, value]) => {
+    normalizedEntries.set(normalizeLookupKey(key), value);
+  });
   for (const key of keys) {
     const value = row?.[key];
     if (value !== undefined && value !== null && value !== '') return value;
+    const normalizedValue = normalizedEntries.get(normalizeLookupKey(key));
+    if (normalizedValue !== undefined && normalizedValue !== null && normalizedValue !== '') return normalizedValue;
   }
   return '';
 };
@@ -493,29 +531,33 @@ const normalizeVehicle = (vehicle) => {
   const dateValue = getField(vehicle, 'Date') || updatedAt || createdAt;
   const vin = getField(vehicle, 'VIN');
   const uniqueId = vehicle.id || getField(vehicle, 'Current Stock No') || vin;
-  const physicalLocation = getField(vehicle, 'Physical Location');
+  const physicalLocation = getField(vehicle, 'Physical Location', 'phys_loc', 'physical_location');
   const normalizedPhysicalLocation = normalizePhysicalLocation(physicalLocation);
   return {
     ...vehicle,
     id: uniqueId || null,
-    stockNo: getField(vehicle, 'Current Stock No'),
+    stockNo: getField(vehicle, 'Current Stock No', 'current_stock_no'),
     vin,
-    status: normalizeStatus(getField(vehicle, 'Vehicle Status')),
-    hold: normalizeBoolean(getField(vehicle, 'HOLD')),
+    status: normalizeStatus(getField(vehicle, 'Vehicle Status', 'vehicle status')),
+    hold: normalizeBoolean(getField(vehicle, 'HOLD', 'hold')),
     isLastDeal: normalizeBoolean(getField(vehicle, 'Last Deal', 'last_deal')),
     brand: getField(vehicle, 'Brand'),
     model: getField(vehicle, 'Model'),
     modelYear: getField(vehicle, 'Model Year'),
-    dealStatus: getField(vehicle, 'Deal Status'),
+    dealStatus: getField(vehicle, 'Deal Status', 'deal status'),
     gpsStatus: getField(vehicle, 'gps_status'),
     gpsFlag: getField(vehicle, 'gps_review_flag'),
     completion: getField(vehicle, 'Deal Completion'),
     psrCategory: getField(vehicle, 'PSR Category'),
-    prepStatus: getField(vehicle, 'Inventory Preparation Status'),
+    prepStatus: getField(vehicle, 'Inventory Preparation Status', 'inv. prep. stat.'),
     createdAt: createdAt ? String(createdAt).slice(0, 10) : '',
     updatedAt: updatedAt ? String(updatedAt).slice(0, 10) : '',
     date: dateValue ? String(dateValue).slice(0, 10) : '',
     lastEventAt: vehicle.lastEventAt || (updatedAt ? new Date(updatedAt).getTime() : null),
+    'Vehicle Status': getField(vehicle, 'Vehicle Status', 'vehicle status'),
+    'Deal Status': getField(vehicle, 'Deal Status', 'deal status'),
+    'Current Stock No': getField(vehicle, 'Current Stock No', 'current_stock_no'),
+    'Inventory Preparation Status': getField(vehicle, 'Inventory Preparation Status', 'inv. prep. stat.'),
     'Physical Location': normalizedPhysicalLocation,
   };
 };
@@ -808,8 +850,13 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
   if (!preserveSelections) {
     DashboardState.filters.categoryFilters = {};
     DashboardState.filters.columnFilters = {};
+    DashboardState.filters.chartFilters = {};
+    DashboardState.filters.salesChannels = [];
+    DashboardState.filters.lastLeadSelection = true;
+    DashboardState.filters.lastLeadFilterActive = true;
     DashboardState.filters.unitTypeSelection = [];
     DashboardState.filters.vehicleStatusSelection = [];
+    DashboardState.filters.locationFocusActive = false;
   }
 
   DashboardState.filters.dateKey = dateKey;
@@ -858,10 +905,7 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
       .sort();
 
     if (dateValues.length && !preserveSelections) {
-      const latest = new Date(dateValues[dateValues.length - 1]);
-      const startDate = new Date(latest);
-      startDate.setDate(startDate.getDate() - 29);
-      DashboardState.filters.dateRange = { start: startDate.toISOString().slice(0, 10), end: '' };
+      DashboardState.filters.dateRange = { start: '', end: '' };
     } else if (!dateValues.length) {
       DashboardState.filters.dateRange = { start: '', end: '' };
     } else {
@@ -881,18 +925,11 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
   if (salesChannelOptions && salesChannelSummary) {
     if (salesChannelKey) {
       const channelValues = getUniqueValues(dataset, salesChannelKey);
-      const preferredValues = ['Finance-EX', 'Finance-EXT', 'Finance-ext', 'Finance-Ext'];
       const existingSelections = DashboardState.filters.salesChannels.filter((value) => channelValues.includes(value));
-      if (!preserveSelections || !existingSelections.length) {
-        const selections = preferredValues.filter((value) => channelValues.includes(value));
-        if (selections.length) {
-          DashboardState.filters.salesChannels = selections;
-        } else {
-          const nonFinance = channelValues.find((value) => value.toUpperCase() !== 'FINANCE');
-          DashboardState.filters.salesChannels = nonFinance ? [nonFinance] : [...channelValues];
-        }
-      } else {
+      if (preserveSelections && existingSelections.length) {
         DashboardState.filters.salesChannels = existingSelections;
+      } else {
+        DashboardState.filters.salesChannels = [];
       }
       salesChannelOptions.innerHTML = (channelValues.length ? channelValues : [''])
         .map((value) => `
@@ -968,20 +1005,14 @@ const applyFilters = ({ ignoreChartFilter = false, ignoreChartId = null } = {}) 
       return String(item[key] ?? '') === value;
     });
 
-    const salesChannelMatch = !filters.salesChannelKey || !filters.salesChannels.length
-      || filters.salesChannels.includes(String(item[filters.salesChannelKey] ?? ''));
+    const salesChannelMatch = true;
 
     const unitTypeSelections = Array.isArray(filters.unitTypeSelection) ? filters.unitTypeSelection : [];
     const unitTypeMatch = !filters.unitTypeKey
       || !unitTypeSelections.length
       || unitTypeSelections.includes(String(item[filters.unitTypeKey] ?? ''));
 
-    const vehicleStatusSelections = Array.isArray(filters.vehicleStatusSelection)
-      ? filters.vehicleStatusSelection
-      : [];
-    const vehicleStatusMatch = !filters.vehicleStatusKey
-      || !vehicleStatusSelections.length
-      || vehicleStatusSelections.includes(String(item[filters.vehicleStatusKey] ?? ''));
+    const vehicleStatusMatch = true;
     const locationValue = String(item['Physical Location'] ?? '').trim().toLowerCase();
     const isCopartLike = locationValue.includes('co part') || locationValue.includes('copart');
     const locationMatch = !filters.locationFocusActive
