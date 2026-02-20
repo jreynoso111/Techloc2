@@ -18,6 +18,65 @@ const getVehicleId = (vehicle) => {
   return vehicleId ? `${vehicleId}`.trim() : '';
 };
 
+const normalizeSerial = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toUpperCase();
+};
+
+const getVehicleWinnerSerial = (vehicle = {}) => {
+  const details = vehicle?.details || {};
+  const candidates = [
+    vehicle?.winnerSerial,
+    vehicle?.winningSerial,
+    vehicle?.serialWinner,
+    details?.winner_serial,
+    details?.winning_serial,
+    details?.serial_winner,
+    details?.['Winner Serial'],
+    details?.['Winning Serial'],
+    vehicle?.ptSerial,
+    details?.['PT Serial'],
+    details?.['PT Serial '],
+    details?.pt_serial,
+    details?.['PassTime Serial No'],
+    details?.['PassTime Serial Number'],
+    details?.['GPS Serial No'],
+    vehicle?.encoreSerial,
+    details?.['Encore Serial'],
+    details?.encore_serial,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeSerial(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const getRecordSerial = (record = {}) => {
+  const candidates = [
+    record?.Serial,
+    record?.serial,
+    record?.['Serial No'],
+    record?.serial_no,
+    record?.serial_number,
+    record?.['PT Serial'],
+    record?.['PT Serial '],
+    record?.pt_serial,
+    record?.['PassTime Serial No'],
+    record?.['PassTime Serial Number'],
+    record?.['GPS Serial No'],
+    record?.encore_serial,
+    record?.['Encore Serial'],
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = normalizeSerial(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
 const createGpsHistoryManager = ({
   supabaseClient,
   ensureSupabaseSession,
@@ -84,6 +143,7 @@ const createGpsHistoryManager = ({
   const setupGpsHistoryUI = ({ vehicle, body, signal, records: preloadedRecords, error: preloadedError }) => {
     const VIN = getVehicleVin(vehicle);
     const vehicleId = getVehicleId(vehicle);
+    const winnerSerial = getVehicleWinnerSerial(vehicle);
     const historyBody = body.querySelector('[data-gps-history-body]');
     const historyHead = body.querySelector('[data-gps-history-head]');
     const columnsToggle = body.querySelector('[data-gps-columns-toggle]');
@@ -96,6 +156,9 @@ const createGpsHistoryManager = ({
     const searchInput = body.querySelector('[data-gps-search]');
     const statusText = body.querySelector('[data-gps-status]');
     const connectionStatus = body.querySelector('[data-gps-connection-status]');
+    const viewWinnerButton = body.querySelector('[data-gps-view="winner"]');
+    const viewAllButton = body.querySelector('[data-gps-view="all"]');
+    const winnerInfo = body.querySelector('[data-gps-winner-info]');
 
     let gpsCache = [];
     let gpsColumns = [];
@@ -110,6 +173,7 @@ const createGpsHistoryManager = ({
     let activeHeaderDragKey = '';
     let suppressSortUntil = 0;
     let headerDragEnabledBeforeResize = [];
+    let viewMode = winnerSerial ? 'winner' : 'all';
 
     const COLUMN_STORAGE_KEY = 'gpsHistoryColumnPrefs';
     const WIDTH_STORAGE_KEY = 'gpsHistoryColumnWidths';
@@ -138,6 +202,52 @@ const createGpsHistoryManager = ({
       const parsed = Number.parseInt(`${value || ''}`.trim(), 10);
       if (!Number.isFinite(parsed)) return '';
       return String(Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, parsed)));
+    };
+
+    const applyViewButtonState = (button, isActive) => {
+      if (!button) return;
+      button.classList.toggle('border-blue-400/60', isActive);
+      button.classList.toggle('bg-blue-500/20', isActive);
+      button.classList.toggle('text-blue-100', isActive);
+      button.classList.toggle('border-slate-700', !isActive);
+      button.classList.toggle('bg-slate-900', !isActive);
+      button.classList.toggle('text-slate-300', !isActive);
+    };
+
+    const syncViewControls = () => {
+      const winnerEnabled = Boolean(winnerSerial);
+      if (viewWinnerButton) {
+        viewWinnerButton.disabled = !winnerEnabled;
+        viewWinnerButton.classList.toggle('opacity-50', !winnerEnabled);
+        viewWinnerButton.classList.toggle('cursor-not-allowed', !winnerEnabled);
+      }
+      if (!winnerEnabled && viewMode === 'winner') {
+        viewMode = 'all';
+      }
+
+      applyViewButtonState(viewWinnerButton, viewMode === 'winner');
+      applyViewButtonState(viewAllButton, viewMode === 'all');
+
+      if (winnerInfo) {
+        winnerInfo.textContent = winnerEnabled
+          ? `Winner serial: ${winnerSerial}`
+          : 'Winner serial not available for this vehicle.';
+      }
+    };
+
+    const setViewMode = (nextMode) => {
+      if (nextMode === 'winner' && !winnerSerial) {
+        viewMode = 'all';
+      } else {
+        viewMode = nextMode === 'winner' ? 'winner' : 'all';
+      }
+      syncViewControls();
+      renderHistory(gpsCache);
+    };
+
+    const getModeFilteredRecords = (records = []) => {
+      if (viewMode !== 'winner' || !winnerSerial) return records;
+      return records.filter((record) => getRecordSerial(record) === winnerSerial);
     };
 
     const loadPreferences = () => {
@@ -207,6 +317,40 @@ const createGpsHistoryManager = ({
       .map((key) => gpsColumns.find((col) => col.key === key))
       .filter(Boolean);
 
+    const normalizeAddressToken = (value = '') => value
+      .toLowerCase()
+      .replace(/\./g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const ADDRESS_COUNTRY_SUFFIXES = new Set([
+      'usa',
+      'us',
+      'u s a',
+      'united states',
+      'united states of america',
+      'estados unidos',
+      'eeuu',
+    ]);
+
+    const isAddressColumn = (normalizedKey = '') =>
+      normalizedKey === 'address' || normalizedKey.endsWith('_address') || normalizedKey.includes('address');
+
+    const stripAddressCountrySuffix = (value) => {
+      const text = `${value ?? ''}`.trim();
+      if (!text) return '';
+      const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+      if (!parts.length) return text;
+
+      while (parts.length > 1) {
+        const token = normalizeAddressToken(parts[parts.length - 1]);
+        if (!ADDRESS_COUNTRY_SUFFIXES.has(token)) break;
+        parts.pop();
+      }
+
+      return parts.join(', ') || text;
+    };
+
     const formatValue = (key, value) => {
       if (value === null || value === undefined || value === '') return '—';
       const normalizedKey = key.toLowerCase();
@@ -218,6 +362,9 @@ const createGpsHistoryManager = ({
       }
       if (key === 'PT-LastPing' || normalizedKey.includes('date') || normalizedKey.includes('time')) {
         return safeEscape(`${safeFormatDateTime(value)}`);
+      }
+      if (isAddressColumn(normalizedKey)) {
+        return safeEscape(stripAddressCountrySuffix(value));
       }
       if (typeof value === 'object') {
         return safeEscape(JSON.stringify(value));
@@ -286,12 +433,24 @@ const createGpsHistoryManager = ({
       renderColumnsList();
       renderTableHead();
       const visibleColumns = getVisibleColumns();
-      const filteredRecords = getSortedRecords(getFilteredRecords(records));
+      const modeRecords = getModeFilteredRecords(records);
+      const filteredRecords = getSortedRecords(getFilteredRecords(modeRecords));
+
+      if (statusText) {
+        const modeSuffix = viewMode === 'winner' && winnerSerial
+          ? ` (winner serial ${winnerSerial})`
+          : '';
+        statusText.textContent = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown${modeSuffix}.`;
+      }
+
       if (!filteredRecords.length) {
         const colSpan = Math.max(visibleColumns.length, 1);
+        const emptyMessage = viewMode === 'winner' && winnerSerial
+          ? `No GPS history found for winner serial ${safeEscape(winnerSerial)}.`
+          : 'No GPS history found.';
         historyBody.innerHTML = `
           <tr>
-            <td class="py-2 pr-3 text-slate-400" colspan="${colSpan}">No GPS history found.</td>
+            <td class="py-2 pr-3 text-slate-400" colspan="${colSpan}">${emptyMessage}</td>
           </tr>
         `;
         return;
@@ -302,9 +461,13 @@ const createGpsHistoryManager = ({
             const width = columnWidths[col.key];
             const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
             const rawValue = record?.[col.key];
+            const normalizedKey = `${col.key || ''}`.toLowerCase();
+            const tooltipValue = isAddressColumn(normalizedKey)
+              ? stripAddressCountrySuffix(rawValue)
+              : rawValue;
             const tooltip = rawValue === null || rawValue === undefined || rawValue === ''
               ? ''
-              : safeEscape(typeof rawValue === 'object' ? JSON.stringify(rawValue) : `${rawValue}`);
+              : safeEscape(typeof tooltipValue === 'object' ? JSON.stringify(tooltipValue) : `${tooltipValue}`);
             return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, rawValue)}</div></td>`;
           }).join('')}
         </tr>
@@ -545,11 +708,7 @@ const createGpsHistoryManager = ({
 
     const finalizeRender = (records, error) => {
       renderHistory(records);
-      if (statusText) {
-        statusText.textContent = error
-          ? 'Unable to load GPS history.'
-          : `${records.length} record${records.length === 1 ? '' : 's'} loaded.`;
-      }
+      if (statusText && error) statusText.textContent = 'Unable to load GPS history.';
       if (error) {
         setConnectionStatus('Connection failed', 'error');
       } else {
@@ -587,6 +746,7 @@ const createGpsHistoryManager = ({
     };
 
     loadPreferences();
+    syncViewControls();
     if (statusText) statusText.textContent = 'Loading GPS history...';
     loadColumnMetadata();
     if (!VIN && !vehicleId) {
@@ -609,6 +769,18 @@ const createGpsHistoryManager = ({
     if (columnsToggle && columnsPanel) {
       columnsToggle.addEventListener('click', () => {
         columnsPanel.classList.toggle('hidden');
+      }, { signal });
+    }
+
+    if (viewWinnerButton) {
+      viewWinnerButton.addEventListener('click', () => {
+        setViewMode('winner');
+      }, { signal });
+    }
+
+    if (viewAllButton) {
+      viewAllButton.addEventListener('click', () => {
+        setViewMode('all');
       }, { signal });
     }
 
@@ -783,6 +955,8 @@ const createGpsHistoryManager = ({
   return {
     getVehicleId,
     getVehicleVin,
+    getVehicleWinnerSerial,
+    getRecordSerial,
     fetchGpsHistory,
     setupGpsHistoryUI
   };
