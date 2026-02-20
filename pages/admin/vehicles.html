@@ -105,6 +105,7 @@
       height: 100%;
       cursor: col-resize;
       z-index: 10;
+      touch-action: none;
     }
     .filter-popover {
       position: absolute;
@@ -872,33 +873,69 @@
 
         const resizer = document.createElement('span');
         resizer.className = 'column-resizer';
-        resizer.addEventListener('mousedown', (event) => {
+        resizer.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
           event.stopPropagation();
+          const pointerId = event.pointerId;
           const startX = event.clientX;
           const startWidth = th.offsetWidth;
           const columnIndex = Array.from(th.parentElement.children).indexOf(th);
+          const headerDraggable = th.draggable;
+
+          state.isResizingColumn = true;
+          th.draggable = false;
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+          if (resizer.setPointerCapture) resizer.setPointerCapture(pointerId);
+
           const handleMove = (moveEvent) => {
+            if (moveEvent.pointerId !== pointerId) return;
             const nextWidth = Math.max(90, startWidth + (moveEvent.clientX - startX));
-            th.style.width = `${nextWidth}px`;
-            state.columnWidths[header] = `${nextWidth}px`;
+            const widthPx = `${Math.round(nextWidth)}px`;
+            th.style.width = widthPx;
+            th.style.minWidth = widthPx;
+            state.columnWidths[header] = widthPx;
             els.tableBody.querySelectorAll('tr').forEach((row) => {
               const cell = row.children[columnIndex];
-              if (cell) cell.style.width = `${nextWidth}px`;
+              if (cell) {
+                cell.style.width = widthPx;
+                cell.style.minWidth = widthPx;
+              }
             });
             syncScrollbars();
           };
-          const handleUp = () => {
-            document.removeEventListener('mousemove', handleMove);
-            document.removeEventListener('mouseup', handleUp);
+
+          const cleanup = () => {
+            resizer.removeEventListener('pointermove', handleMove);
+            resizer.removeEventListener('pointerup', handleUp);
+            resizer.removeEventListener('pointercancel', handleUp);
+            if (resizer.releasePointerCapture && resizer.hasPointerCapture?.(pointerId)) {
+              resizer.releasePointerCapture(pointerId);
+            }
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            th.draggable = headerDraggable;
+            state.isResizingColumn = false;
             saveColumnWidths();
           };
-          document.addEventListener('mousemove', handleMove);
-          document.addEventListener('mouseup', handleUp);
+
+          const handleUp = (upEvent) => {
+            if (upEvent.pointerId !== pointerId) return;
+            cleanup();
+          };
+
+          resizer.addEventListener('pointermove', handleMove);
+          resizer.addEventListener('pointerup', handleUp);
+          resizer.addEventListener('pointercancel', handleUp);
         });
         th.appendChild(resizer);
 
         th.draggable = true;
-        th.addEventListener('dragstart', () => {
+        th.addEventListener('dragstart', (event) => {
+          if (state.isResizingColumn) {
+            event.preventDefault();
+            return;
+          }
           state.draggingHeader = header;
         });
         th.addEventListener('dragover', (event) => {
@@ -1324,6 +1361,7 @@
       columnWidths: {},
 
       draggingHeader: null,
+      isResizingColumn: false,
 
       pagination: {
 

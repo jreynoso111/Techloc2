@@ -373,8 +373,9 @@
       'Lat',
       'Long',
     ];
-    const PT_PING_BATCH_SIZE = 10;
-    const PT_PING_BATCH_DELAY_MS = 150;
+    const PT_PING_INITIAL_BATCH_SIZE = 500;
+    const PT_PING_MIN_BATCH_SIZE = 50;
+    const PT_PING_BATCH_DELAY_MS = 0;
     const PT_PING_HEADER_MAP = (() => {
       const map = new Map();
       PT_PING_COLUMNS.forEach((col) => {
@@ -1444,7 +1445,7 @@
                 .replace(/^\uFEFF/, '')
                 .replace(/\u00A0/g, ' ')
                 .trim(),
-            worker: false,
+            worker: true,
             complete: (results) => {
               const headers = results.meta?.fields || [];
               resolve({ rows: results.data || [], headers, errors: results.errors || [] });
@@ -1734,16 +1735,46 @@
         return;
       }
 
+      const isPtBatchRetryable = (error) => {
+        const text = [error?.message, error?.details, error?.hint]
+          .filter(Boolean)
+          .join(' | ')
+          .toLowerCase();
+        const code = (error?.code || '').toLowerCase();
+        return (
+          code === '57014' ||
+          code === '53300' ||
+          text.includes('statement timeout') ||
+          text.includes('timeout') ||
+          text.includes('timed out') ||
+          text.includes('gateway timeout') ||
+          text.includes('payload too large') ||
+          text.includes('request body too large')
+        );
+      };
+
       const dedupedRows = deduplicateValidRows(validRows);
-      const totalBatches = Math.ceil(dedupedRows.length / PT_PING_BATCH_SIZE);
-      for (let i = 0; i < dedupedRows.length; i += PT_PING_BATCH_SIZE) {
-        const batchNumber = Math.floor(i / PT_PING_BATCH_SIZE) + 1;
-        const sliceEnd = i + PT_PING_BATCH_SIZE;
-        const batchRows = dedupedRows.slice(i, sliceEnd);
+      let nextIndex = 0;
+      let batchNumber = 0;
+      let targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, dedupedRows.length);
+
+      while (nextIndex < dedupedRows.length) {
+        const remaining = dedupedRows.length - nextIndex;
+        const batchSize = Math.min(targetBatchSize, remaining);
+        const sliceEnd = nextIndex + batchSize;
+        const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
         const batch = batchRows.map(buildSlimPtPayload);
 
-        setStatus(`Uploading batch ${batchNumber} of ${totalBatches} (${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length})...`);
-        setProgress(((batchNumber - 1) / totalBatches) * 90, `Uploading batch ${batchNumber}/${totalBatches}`);
+        batchNumber += 1;
+        setStatus(
+          `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
+          `(batch ${batchNumber}, size ${batchSize})...`
+        );
+        setProgress(
+          (nextIndex / dedupedRows.length) * 90,
+          `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
+        );
+
         const { error, count } = await supabaseClient
           .from('PT-LastPing')
           .upsert(batch, {
@@ -1753,17 +1784,23 @@
           });
 
         if (error) {
-          console.error('Supabase insert error:', { error, batchNumber });
+          console.error('Supabase insert error:', { error, batchNumber, batchSize, nextIndex });
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             setStatus('Upload blocked by security policy (RLS).');
-            setProgress(((batchNumber - 1) / totalBatches) * 90, `Batch ${batchNumber} blocked`);
+            setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} blocked`);
             showPtError(error, `Batch ${batchNumber} blocked`);
             return;
           }
+          if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
+            targetBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+            batchNumber -= 1;
+            setStatus(`Batch too large. Retrying with smaller batch size (${targetBatchSize})...`);
+            continue;
+          }
           showToast('Upload failed', 'error');
           setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
-          setProgress(((batchNumber - 1) / totalBatches) * 90, `Batch ${batchNumber} failed`);
+          setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} failed`);
           showPtError(error, `Batch ${batchNumber} failed`);
           throw error;
         }
@@ -1772,8 +1809,18 @@
         aggregated.batches += 1;
         aggregated.inserted += insertedCount;
         aggregated.skippedSupabaseDuplicates += Math.max(0, batch.length - insertedCount);
-        setProgress((batchNumber / totalBatches) * 90, `Uploaded batch ${batchNumber}/${totalBatches}`);
-        await new Promise((resolve) => setTimeout(resolve, PT_PING_BATCH_DELAY_MS));
+        nextIndex = sliceEnd;
+        setProgress(
+          (nextIndex / dedupedRows.length) * 90,
+          `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
+        );
+
+        if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
+          targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, targetBatchSize * 2);
+        }
+        if (PT_PING_BATCH_DELAY_MS > 0) {
+          await new Promise((resolve) => setTimeout(resolve, PT_PING_BATCH_DELAY_MS));
+        }
       }
 
       setProgress(100, 'Done');
