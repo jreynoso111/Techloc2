@@ -1,16 +1,13 @@
 import { supabase as supabaseClient } from '../js/supabaseClient.js';
 import {
-  buildWebAdminSession,
   clearWebAdminSession,
-  getWebAdminAccess,
-  isWebAdminSession,
 } from './web-admin-session.js';
 
 (function () {
   const hasSupabaseAuth =
     Boolean(supabaseClient?.auth) && typeof supabaseClient.auth.getSession === 'function';
   if (!hasSupabaseAuth) {
-    console.warn('Supabase session APIs unavailable. Using local web-admin session fallback.');
+    console.warn('Supabase session APIs unavailable.');
   }
 
   const whenDomReady = new Promise((resolve) => {
@@ -58,9 +55,9 @@ import {
   const getEffectiveSession = async () => {
     if (hasSupabaseAuth) {
       const { data } = await supabaseClient.auth.getSession();
-      return data?.session || buildWebAdminSession() || null;
+      return data?.session || null;
     }
-    return buildWebAdminSession() || null;
+    return null;
   };
 
   // --- NUEVO: Función para obtener el rol y estado desde la tabla profiles ---
@@ -100,15 +97,6 @@ import {
         role: 'user',
         status: 'active',
         email: null,
-      };
-    }
-
-    if (isWebAdminSession(session)) {
-      const localAccess = getWebAdminAccess();
-      return {
-        role: localAccess?.role || 'administrator',
-        status: localAccess?.status || 'active',
-        email: localAccess?.email || session.user.email || null,
       };
     }
 
@@ -298,6 +286,7 @@ import {
   const startAuthFlow = async () => {
     try {
       const session = await getEffectiveSession();
+      if (!session) clearWebAdminSession();
       const hasSession = Boolean(session);
       let userRole = 'user'; // Rol por defecto
       let userStatus = 'active';
@@ -346,7 +335,7 @@ import {
             clearWebAdminSession();
           }
 
-          const effectiveSession = session || buildWebAdminSession();
+          const effectiveSession = session || null;
           const sessionExists = Boolean(effectiveSession);
           let updatedRole = 'user';
           let updatedStatus = 'active';

@@ -68,17 +68,6 @@
           <button id="location-filter-toggle" type="button" data-pill-control class="flex items-center gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-100 transition hover:border-blue-400 hover:text-white" aria-pressed="false">
             Key Locations
           </button>
-          <div id="vehicle-status-filters" class="mt-2 flex w-full justify-center md:mt-0 md:w-auto md:flex-1 md:justify-center"></div>
-          <div class="relative">
-            <button id="sales-channel-toggle" type="button" class="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200" aria-expanded="false">
-              <span id="sales-channel-label">Sales Channel</span>
-              <span id="sales-channel-summary" class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">0</span>
-            </button>
-            <div id="sales-channel-panel" class="absolute right-0 z-40 mt-2 hidden w-56 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-800 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-lg">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Choose channels</p>
-              <div id="sales-channel-options" class="mt-2 grid gap-2"></div>
-            </div>
-          </div>
           <label class="flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
             <span>Last Deal</span>
             <select id="last-deal-select" class="h-6 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
@@ -179,7 +168,7 @@
                 </button>
               </div>
               <div class="flex flex-1 flex-col space-y-3 overflow-hidden text-sm text-slate-200">
-                <p>The red badge reflects the number of DealsJP1 rows where Vehicle Status is Active, Stock, or Stolen.</p>
+                <p>The red badge reflects the number of DealsJP1 rows where Last Deal is true and Vehicle Status is Active.</p>
                 <div class="flex flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Matching deals</p>
@@ -219,8 +208,8 @@
                   <i data-lucide="alert-triangle" class="h-4 w-4"></i>
                 </span>
                 <div class="min-w-0 flex-1 text-left">
-                  <p class="truncate text-[11px] font-semibold text-white">DealsJP1 Alerts</p>
-                  <p class="truncate text-[10px] text-rose-100/80">Vehicle Status: active, stock, or stolen.</p>
+                  <p class="truncate text-[11px] font-semibold text-white">Deals Alerts</p>
+                  <p class="truncate text-[10px] text-rose-100/80">Last Deal: true and Vehicle Status: active.</p>
                 </div>
                 <span id="alerts-deals-row-count" class="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-rose-200">0</span>
               </button>

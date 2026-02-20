@@ -182,9 +182,9 @@
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
                   <h3 class="text-lg font-bold text-white">Import Deals CSV</h3>
-                  <p class="text-sm text-slate-400">Upsert into DealsJP1 (Finance Only).</p>
+                  <p class="text-sm text-slate-400">Upsert into DealsJP1 (Finance EX/EXT).</p>
                 </div>
-                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Filter: Finance</span>
+                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Filter: FINANCE-EX / FINANCE-EXT</span>
               </div>
 
               <div class="mt-auto space-y-4">
@@ -207,7 +207,7 @@
                     <div id="deals-progress-bar" class="h-2 w-0 bg-emerald-500 transition-all duration-200"></div>
                   </div>
                 </div>
-                <p class="text-xs leading-relaxed text-slate-400">Requires: VIN, Current Stock No. & Sales Channel containing 'Finance'.</p>
+                <p class="text-xs leading-relaxed text-slate-400">Requires: VIN, Current Stock No, and Sales Channel = FINANCE-EX or FINANCE-EXT.</p>
               </div>
             </section>
 
@@ -779,13 +779,11 @@
       const hasStockHeader = normalizedHeaders.has('current stock no');
       const hasDealStatusHeader = normalizedHeaders.has('deal status');
       const hasVehicleStatusHeader = normalizedHeaders.has('vehicle status');
-
-      const normalizeFinanceSalesChannel = (value) => {
+      const normalizeAllowedSalesChannel = (value) => {
         if (typeof value !== 'string') return '';
-        const trimmed = value.trim().toUpperCase();
-        if (trimmed === 'FINANCE-EX' || trimmed === 'FINANCE EXT' || trimmed === 'FINANCE-EXT') {
-          return 'FINANCE-EXT';
-        }
+        const normalized = value.trim().toUpperCase().replace(/\s+/g, '-');
+        if (normalized === 'FINANCE-EX') return 'FINANCE-EX';
+        if (normalized === 'FINANCE-EXT') return 'FINANCE-EXT';
         return '';
       };
 
@@ -798,32 +796,23 @@
       
       // 1. DEDUPLICACIÓN PARA EVITAR ERROR 'ON CONFLICT'
       const uniqueDealsMap = new Map();
-      let skippedInvalid = 0;
       let skippedInvalidSalesChannel = 0;
       let skippedMissingRequired = 0;
       let duplicatesRemoved = 0;
 
       rows.forEach((rawRow) => {
         const normalizedRow = normalizeRow(rawRow);
-        // Validaciones
-        const salesChannel = normalizedRow['sales channel'];
-        const normalizedSalesChannel = normalizeFinanceSalesChannel(salesChannel);
-
-        if (normalizedSalesChannel !== 'FINANCE-EXT') {
-          skippedInvalid += 1;
+        const normalizedSalesChannel = normalizeAllowedSalesChannel(normalizedRow['sales channel']);
+        if (!normalizedSalesChannel) {
           skippedInvalidSalesChannel += 1;
           return;
         }
-
-        if (normalizedSalesChannel) {
-          normalizedRow['sales channel'] = normalizedSalesChannel;
-        }
+        normalizedRow['sales channel'] = normalizedSalesChannel;
 
         const stockNumber = normalizeStockNumber(normalizedRow['current stock no']);
         const vin = cleanValue(normalizedRow['vin']);
 
         if (!stockNumber || !vin) {
-          skippedInvalid += 1;
           skippedMissingRequired += 1;
           return; 
         }
@@ -844,8 +833,8 @@
           mapped[vehicleStatusColumn] = cleanValue(normalizedRow['vehicle status']) ?? null;
         }
 
-        // LLAVE UNICA: VIN + Current Stock No
-        const uniqueKey = `${vin}_${stockNumber}`;
+        // LLAVE UNICA: Current Stock No (alineado con onConflict)
+        const uniqueKey = `${stockNumber}`;
 
         if (uniqueDealsMap.has(uniqueKey)) {
             duplicatesRemoved++;
@@ -857,8 +846,8 @@
       const filteredRows = Array.from(uniqueDealsMap.values());
 
       if (!filteredRows.length) {
-        setProgress(0, 'No finance rows detected.');
-        showToast('No valid FINANCE rows detected.\nCheck "Current Stock No." and "Sales Channel".', 'error');
+        setProgress(0, 'No valid rows detected.');
+        showToast('No valid rows detected.\nCheck "Current Stock No.", "VIN", and "Sales Channel" (FINANCE-EX / FINANCE-EXT).', 'error');
         return;
       }
 
@@ -931,7 +920,7 @@
       const summary =
         'Completed.' +
         '\nTotal rows processed: ' + rows.length +
-        '\nProcessed (Unique Finance): ' + filteredRows.length +
+        '\nProcessed (Unique by Stock No): ' + filteredRows.length +
         '\nUpserted: ' + totalUpserted +
         '\nSkipped (Invalid Sales Channel): ' + skippedInvalidSalesChannel +
         '\nSkipped (Missing Stock No or VIN): ' + skippedMissingRequired +

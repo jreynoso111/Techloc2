@@ -59,6 +59,11 @@
           <span>Login</span>
         </button>
       </form>
+      <div class="flex justify-end">
+        <button id="reset-password-btn" type="button" class="text-xs font-semibold text-blue-200 underline-offset-4 hover:text-white hover:underline">
+          Forgot password?
+        </button>
+      </div>
 
       <div id="status" class="text-sm text-slate-400">Use your administrator credentials.</div>
     </div>
@@ -68,11 +73,7 @@
     import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
     import { supabase as supabaseClient } from '../assets/js/supabaseClient.js';
     import { logAdminEvent } from '../assets/scripts/adminAudit.js';
-    import {
-      clearWebAdminSession,
-      isWebAdminCredentials,
-      setWebAdminSession,
-    } from '../assets/scripts/web-admin-session.js';
+    import { clearWebAdminSession } from '../assets/scripts/web-admin-session.js';
 
     const loginForm = document.getElementById('login-form');
     const emailInput = document.getElementById('email');
@@ -80,6 +81,7 @@
     const submitButton = loginForm.querySelector('button[type="submit"]');
     const submitLabel = submitButton.querySelector('span');
     const statusLabel = document.getElementById('status');
+    const resetPasswordButton = document.getElementById('reset-password-btn');
     const redirectToControlMap = () => window.location.replace('./control-map.html');
 
     loginForm.addEventListener('submit', async (event) => {
@@ -104,12 +106,7 @@
       }
 
       if (error) {
-        if (isWebAdminCredentials(email, password)) {
-          setWebAdminSession(email);
-          statusLabel.textContent = 'Signed in with local admin profile (limited mode). Repair History requires Supabase Auth.';
-          redirectToControlMap();
-          return;
-        }
+        clearWebAdminSession();
         statusLabel.textContent = error.message || 'Unable to sign in. Please try again.';
         submitButton.disabled = false;
         submitLabel.textContent = originalText;
@@ -128,6 +125,28 @@
 
       statusLabel.textContent = 'Login successful. Redirecting to Control Map...';
       redirectToControlMap();
+    });
+
+    resetPasswordButton?.addEventListener('click', async () => {
+      const email = emailInput.value.trim().toLowerCase();
+      if (!email) {
+        statusLabel.textContent = 'Enter your email first, then click "Forgot password?".';
+        return;
+      }
+
+      if (!supabaseClient?.auth?.resetPasswordForEmail) {
+        statusLabel.textContent = 'Password reset is unavailable right now. Try again in a moment.';
+        return;
+      }
+
+      const redirectTo = new URL('./reset-password.html', window.location.href).toString();
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) {
+        statusLabel.textContent = error.message || 'Could not send reset email.';
+        return;
+      }
+
+      statusLabel.textContent = `Password reset email sent to ${email}. Check inbox/spam and open the link.`;
     });
 
     document.addEventListener('DOMContentLoaded', () => {
