@@ -1,17 +1,17 @@
-<header class="flex-none border-b border-slate-800 bg-slate-950/90 backdrop-blur z-50" data-site-header>
-  <div class="mx-auto relative max-w-6xl px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
-    <div class="flex items-center justify-between gap-4 md:flex-none">
-      <a href="{{BASE}}index.html" class="flex items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-700 shadow-lg shadow-blue-500/30">
+<header class="tl-header-root flex-none border-b border-slate-800 bg-slate-950/90 backdrop-blur z-50" data-site-header>
+  <div class="tl-header-shell mx-auto relative max-w-6xl px-6 py-4 flex flex-col gap-4 md:flex-row md:items-center md:gap-6">
+    <div class="tl-header-brand-row flex items-center justify-between gap-4 md:flex-none">
+      <a href="{{BASE}}index.html" class="tl-header-brand flex items-center gap-3">
+        <div class="tl-header-mark flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 via-indigo-500 to-blue-700 shadow-lg shadow-blue-500/30">
           <span class="text-xs font-black uppercase tracking-[0.18em] text-white">TL</span>
         </div>
         <div>
-          <p class="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200">TechLoc Network</p>
-          <h1 class="text-base font-black leading-tight text-white" data-header-title>{{PAGE_TITLE}}</h1>
+          <p class="tl-header-eyebrow text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200">TechLoc Network</p>
+          <h1 class="tl-header-title text-base font-black leading-tight text-white" data-header-title>{{PAGE_TITLE}}</h1>
         </div>
       </a>
 
-      <button id="mobile-menu-toggle" class="inline-flex items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 p-2 text-slate-200 transition hover:border-blue-500 hover:text-white md:hidden" aria-label="Toggle navigation" aria-expanded="false">
+      <button id="mobile-menu-toggle" class="tl-header-mobile inline-flex items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/70 p-2 text-slate-200 transition hover:border-blue-500 hover:text-white md:hidden" aria-label="Toggle navigation" aria-expanded="false">
         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -20,12 +20,12 @@
       </button>
     </div>
 
-    <div id="primary-nav" class="hidden flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm font-semibold text-slate-200 shadow-lg shadow-blue-900/20 md:mt-0 md:flex md:flex-1 md:flex-row md:items-center md:gap-6 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
-      <nav class="flex flex-col gap-2 md:flex-row md:items-center md:justify-center md:flex-1 md:gap-2">
-        <a data-nav-key="home" id="nav-home" href="{{BASE}}index.html" class="rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Home</a>
-        <a data-nav-key="control-map" id="nav-control-view" href="{{BASE}}pages/control-map.html" class="hidden rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800 md:inline-flex">Control Map</a>
-        <a data-nav-key="inventory-control" id="nav-inventory-control" href="{{BASE}}pages/inventory-control.html" class="rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Inventory Control</a>
-        <a data-nav-key="services" id="nav-services" href="{{BASE}}pages/admin/services.html" class="rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Services</a>
+    <div id="primary-nav" class="tl-header-nav-shell hidden flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4 text-sm font-semibold text-slate-200 shadow-lg shadow-blue-900/20 md:mt-0 md:flex md:flex-1 md:flex-row md:items-center md:gap-6 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+      <nav class="tl-header-nav flex flex-col gap-2 md:flex-row md:items-center md:justify-center md:flex-1 md:gap-2">
+        <a data-nav-key="home" id="nav-home" href="{{BASE}}index.html" class="tl-header-link rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Home</a>
+        <a data-nav-key="control-map" id="nav-control-view" href="{{BASE}}pages/control-map.html" class="tl-header-link hidden rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800 md:inline-flex">Control Map</a>
+        <a data-nav-key="inventory-control" id="nav-inventory-control" href="{{BASE}}pages/inventory-control.html" class="tl-header-link rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Inventory Control</a>
+        <a data-nav-key="services" id="nav-services" href="{{BASE}}pages/admin/services.html" class="tl-header-link rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800">Services</a>
         <a
           data-nav-key="dashboard"
           id="nav-dashboard"
@@ -33,16 +33,16 @@
           data-dashboard-link
           aria-hidden="true"
           tabindex="-1"
-          class="hidden rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800 md:inline-flex"
+          class="tl-header-link hidden rounded-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800 md:inline-flex"
         >
           Dashboard
         </a>
-        <div class="relative inline-flex items-center" data-about-menu>
+        <div class="tl-header-about relative inline-flex items-center" data-about-menu>
           <a
             data-nav-key="about"
             id="nav-about"
             href="{{BASE}}pages/about.html"
-            class="rounded-l-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800"
+            class="tl-header-link rounded-l-full px-3 py-1 transition-colors hover:text-white hover:bg-slate-800"
           >
             About
           </a>
@@ -51,7 +51,7 @@
             id="nav-contact"
             data-nav-key="contact"
             data-contact-toggle
-            class="inline-flex items-center gap-1 rounded-r-full px-2 py-1 transition-colors hover:text-white hover:bg-slate-800"
+            class="tl-header-link inline-flex items-center gap-1 rounded-r-full px-2 py-1 transition-colors hover:text-white hover:bg-slate-800"
             aria-expanded="false"
             aria-haspopup="true"
           >
@@ -69,13 +69,13 @@
         </div>
       </nav>
 
-      <div class="flex flex-col gap-3 border-t border-slate-800 pt-3 md:flex-row md:items-center md:gap-3 md:border-0 md:pt-0 md:flex-none md:justify-end" data-admin-actions>
-        <div class="hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-semibold text-slate-200 md:flex" data-auth-visible data-account-label>
+      <div class="tl-header-actions flex flex-col gap-3 border-t border-slate-800 pt-3 md:flex-row md:items-center md:gap-3 md:border-0 md:pt-0 md:flex-none md:justify-end" data-admin-actions>
+        <div class="tl-header-account hidden items-center gap-2 rounded-full border border-slate-800 bg-slate-950/70 px-3 py-1 text-[11px] font-semibold text-slate-200 md:flex" data-auth-visible data-account-label>
           <span class="flex h-2 w-2 rounded-full bg-emerald-400"></span>
           <span data-account-name>Account</span>
         </div>
-        <a id="nav-login" href="{{BASE}}pages/login.html" class="rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100 transition hover:bg-blue-600 hover:text-white">Login</a>
-        <button id="nav-logout" type="button" data-admin-logout="true" class="hidden rounded-full border border-red-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-400 hover:text-white">Logout</button>
+        <a id="nav-login" href="{{BASE}}pages/login.html" class="tl-header-auth rounded-full border border-blue-500 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-100 transition hover:bg-blue-600 hover:text-white">Login</a>
+        <button id="nav-logout" type="button" data-admin-logout="true" class="tl-header-auth hidden rounded-full border border-red-700 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-red-100 transition hover:border-red-400 hover:text-white">Logout</button>
       </div>
     </div>
   </div>
