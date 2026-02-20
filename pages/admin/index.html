@@ -352,6 +352,13 @@
       'TAM Legacy Stock #',
       'Payment Method'
     ];
+    const FALLBACK_NS_INVOICES_COLUMNS = [
+      'Date',
+      'Document Number',
+      'Stock No',
+      'Amount',
+      'Amount Remaining',
+    ];
     const PT_PING_COLUMNS = [
       'Serial',
       'Year',
@@ -378,7 +385,7 @@
       return map;
     })();
     
-    // --- LISTA MAESTRA (Validación Local) ---
+    // Master list used for local CSV-to-column mapping.
     const KNOWN_DEALS_COLUMNS = [
       'Deal Status', 'Deal Date', 'HOLD', 'Current Stock No', 'Customer', 'Brand', 'Model',
       'Model Year', 'VIN', 'Corrected VIN', 'Vehicle Status', 'Mileage', 'Driver License #',
@@ -395,6 +402,13 @@
       'Encore Serial Number', 'Encore Serial #2', 'GPS Serial No', 'Plate Number_1', 'Current Title Number', 
       'Current Title Subsidiary', 'Current Title Physical Location', 'Title In Date', 'Title Out Date', 
       'Financing Company', 'Broker', 'Return Type', 'Actual System Return Date', 'Returned By'
+    ];
+    const FALLBACK_DEALS_COLUMNS = [
+      'Current Stock No',
+      'VIN',
+      'Sales Channel',
+      'Deal Status',
+      'Vehicle Status',
     ];
 
     const DATASETS = [
@@ -621,6 +635,24 @@
       return message.includes('row-level') || message.includes('rls') || message.includes('permission');
     };
 
+    const getSupabaseErrorText = (error) =>
+      [error?.message, error?.code, error?.details, error?.hint]
+        .filter(Boolean)
+        .join(' | ')
+        .toLowerCase();
+
+    const isSchemaMismatchError = (error) => {
+      const text = getSupabaseErrorText(error);
+      return (
+        text.includes('schema cache') ||
+        text.includes('column') && text.includes('does not exist') ||
+        text.includes('column') && text.includes('not found')
+      );
+    };
+
+    const shortSupabaseError = (error) =>
+      [error?.message, error?.details, error?.hint].filter(Boolean).join(' | ') || 'Unknown error';
+
     const getTableStats = async (dataset) => {
       if (!supabaseClient) {
         return { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: 'Client unavailable' };
@@ -741,7 +773,7 @@
       }, 4200);
     };
 
-    // --- UPLOAD DEALS: AHORA ROBUSTO Y NORMALIZADO (CON FILTRO DE DUPLICADOS) ---
+    // Deals upload with row normalization and duplicate filtering.
     const uploadDealsRows = async (rows, parseErrors = 0, rawHeaders = []) => {
       if (!supabaseClient) throw new Error('Supabase client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload deals data.');
@@ -767,16 +799,19 @@
       
       const columnMap = buildColumnMap(KNOWN_DEALS_COLUMNS);
       const tableColumns = await fetchTableColumns(DEALS_TABLE);
-      if (!tableColumns.size) {
-        showToast('No database columns detected for Deals. Upload stopped.', 'error');
-        return;
+      const usingFallbackSchema = !tableColumns.size;
+      const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_DEALS_COLUMNS) : tableColumns;
+      if (usingFallbackSchema) {
+        console.warn('Deals schema introspection unavailable. Upload will continue with core columns only.');
       }
-      const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
+      const allowedColumnMap = filterColumnMapByTable(columnMap, effectiveColumns);
       const conflictColumn = allowedColumnMap.get('current stock no');
+      const salesChannelColumn = allowedColumnMap.get('sales channel');
       const dealStatusColumn = allowedColumnMap.get('deal status');
       const vehicleStatusColumn = allowedColumnMap.get('vehicle status');
       const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
       const hasStockHeader = normalizedHeaders.has('current stock no');
+      const hasSalesChannelHeader = normalizedHeaders.has('sales channel');
       const hasDealStatusHeader = normalizedHeaders.has('deal status');
       const hasVehicleStatusHeader = normalizedHeaders.has('vehicle status');
       const normalizeAllowedSalesChannel = (value) => {
@@ -791,10 +826,14 @@
         showToast('Deals table missing required column: Current Stock No.', 'error');
         return;
       }
+      if (!salesChannelColumn || !hasSalesChannelHeader) {
+        showToast('Deals upload requires Sales Channel in both CSV and database table.', 'error');
+        return;
+      }
 
       setProgress(0, 'Preparing & deduplicating rows...');
       
-      // 1. DEDUPLICACIÓN PARA EVITAR ERROR 'ON CONFLICT'
+      // Deduplicate by stock number to avoid onConflict batch failures.
       const uniqueDealsMap = new Map();
       let skippedInvalidSalesChannel = 0;
       let skippedMissingRequired = 0;
@@ -826,6 +865,7 @@
         });
 
         mapped[conflictColumn] = stockNumber;
+        mapped[salesChannelColumn] = normalizedSalesChannel;
         if (dealStatusColumn && hasDealStatusHeader) {
           mapped[dealStatusColumn] = cleanValue(normalizedRow['deal status']) ?? null;
         }
@@ -833,13 +873,13 @@
           mapped[vehicleStatusColumn] = cleanValue(normalizedRow['vehicle status']) ?? null;
         }
 
-        // LLAVE UNICA: Current Stock No (alineado con onConflict)
+        // Unique key aligned with onConflict target.
         const uniqueKey = `${stockNumber}`;
 
         if (uniqueDealsMap.has(uniqueKey)) {
             duplicatesRemoved++;
         }
-        // Sobrescribimos (se queda el último del CSV)
+        // Keep the most recent row for each stock number from the CSV.
         uniqueDealsMap.set(uniqueKey, mapped);
       });
 
@@ -880,6 +920,10 @@
 
         if (error) {
           console.error('Supabase upsert error:', error);
+          if (isSchemaMismatchError(error)) {
+            showToast('Deals upload schema mismatch: ' + shortSupabaseError(error), 'error');
+            return;
+          }
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             return;
@@ -911,8 +955,15 @@
       const { data: syncData, error: syncError } = await supabaseClient.rpc('sync_vehicles_from_dealsjp1_lastdeal');
       if (syncError) {
         console.error('Supabase DealsJP1 sync error:', syncError);
-        showToast('DealsJP1 vehicle sync failed: ' + formatSupabaseError(syncError), 'error');
-        throw syncError;
+        if (isRlsBlocked(syncError)) {
+          showToast('Deals uploaded, but vehicle sync was blocked by database permissions: ' + shortSupabaseError(syncError), 'error');
+        } else if (isSchemaMismatchError(syncError)) {
+          showToast('Deals uploaded, but vehicle sync has a schema mismatch: ' + shortSupabaseError(syncError), 'error');
+        } else {
+          showToast('DealsJP1 vehicle sync failed: ' + shortSupabaseError(syncError), 'error');
+        }
+        setProgress(100, 'Upload completed, but vehicle sync failed.');
+        return;
       }
 
       console.info('DealsJP1 vehicle sync updated rows:', syncData);
@@ -976,16 +1027,29 @@
       };
 
       const columnMap = buildColumnMap(NS_INVOICES_COLUMNS);
-      const tableColumns = new Set(NS_INVOICES_COLUMNS);
-      const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
+      const tableColumns = await fetchTableColumns(NS_INVOICES_TABLE);
+      const usingFallbackSchema = !tableColumns.size;
+      const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_NS_INVOICES_COLUMNS) : tableColumns;
+      if (usingFallbackSchema) {
+        console.warn('NS invoices schema introspection unavailable. Upload will continue with core columns only.');
+      }
+      const allowedColumnMap = filterColumnMapByTable(columnMap, effectiveColumns);
       const conflictColumn = allowedColumnMap.get('document number');
-      const conflictColumns = 'Stock No,Document Number,Date';
+      const conflictParts = ['stock no', 'document number', 'date'];
+      const conflictMappedColumns = conflictParts
+        .map((part) => allowedColumnMap.get(part))
+        .filter(Boolean);
+      const conflictColumns = conflictMappedColumns.join(',');
       const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
       const hasDocumentNumberHeader = normalizedHeaders.has('document number');
       const hasStockNoHeader = normalizedHeaders.has('stock no');
 
       if (!conflictColumn || !hasDocumentNumberHeader) {
         showToast('Local configuration error: "Document Number" missing from invoice columns.', 'error');
+        return;
+      }
+      if (conflictMappedColumns.length !== conflictParts.length) {
+        showToast('NS invoices table is missing one or more conflict columns (Stock No, Document Number, Date).', 'error');
         return;
       }
 
@@ -1012,7 +1076,14 @@
       const { error: truncateError } = await supabaseClient.rpc('truncate_ns_invoices');
       if (truncateError) {
         console.error('Supabase truncate error:', truncateError);
-        showToast('Cannot clear previous NS invoices: ' + truncateError.message, 'error');
+        if (isRlsBlocked(truncateError)) {
+          showToast('Cannot clear previous NS invoices due to database permissions: ' + shortSupabaseError(truncateError), 'error');
+        } else if (isSchemaMismatchError(truncateError)) {
+          showToast('Cannot clear previous NS invoices due to schema mismatch: ' + shortSupabaseError(truncateError), 'error');
+        } else {
+          showToast('Cannot clear previous NS invoices: ' + shortSupabaseError(truncateError), 'error');
+        }
+        setProgress(5, 'Failed to clear previous invoice data.');
         return;
       }
 
@@ -1088,6 +1159,10 @@
 
         if (error) {
           console.error('Supabase upsert error:', error);
+          if (isSchemaMismatchError(error)) {
+            showToast('Invoices upload schema mismatch: ' + shortSupabaseError(error), 'error');
+            return;
+          }
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             return;
@@ -1117,7 +1192,13 @@
       const { error: recalcError } = await supabaseClient.rpc('recalc_open_balance_all_ns_invoices');
       if (recalcError) {
         console.error('Supabase open balance recalculation error:', recalcError);
-        showToast('Open balance recalculation failed: ' + recalcError.message, 'error');
+        if (isRlsBlocked(recalcError)) {
+          showToast('Open balance recalculation blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
+        } else if (isSchemaMismatchError(recalcError)) {
+          showToast('Open balance recalculation failed due to schema mismatch: ' + shortSupabaseError(recalcError), 'error');
+        } else {
+          showToast('Open balance recalculation failed: ' + shortSupabaseError(recalcError), 'error');
+        }
       }
 
       const summary =
@@ -1543,22 +1624,6 @@
         rejectedNoMatchVin: 0,
       };
 
-      const recalcPtMovedForSerials = async (serials = []) => {
-        if (!serials.length) return;
-        try {
-          const { error } = await supabaseClient.rpc('recalc_pt_lastping_moved_2d_for_serials', { serials });
-          if (error) {
-            if (error.code === '42883') {
-              console.warn('RPC recalc_pt_lastping_moved_2d_for_serials unavailable; continuing upload.', error);
-              return;
-            }
-            console.warn('RPC recalc_pt_lastping_moved_2d_for_serials failed; continuing upload.', error);
-          }
-        } catch (err) {
-          console.warn('RPC recalc_pt_lastping_moved_2d_for_serials threw; continuing upload.', err);
-        }
-      };
-
       const derivePtDayParts = (dateVal) => {
         const parsedDate = new Date(dateVal);
         if (Number.isNaN(parsedDate.getTime())) return { readDay: null, dayHalf: null };
@@ -1683,14 +1748,6 @@
 
       const dedupedRows = deduplicateValidRows(validRows);
       const totalBatches = Math.ceil(dedupedRows.length / PT_PING_BATCH_SIZE);
-      const serialsForRecalc = Array.from(
-        new Set(
-          dedupedRows
-            .map((row) => row?.['Serial'])
-            .filter((serial) => serial !== undefined && serial !== null && `${serial}`.trim() !== '')
-        )
-      );
-
       for (let i = 0; i < dedupedRows.length; i += PT_PING_BATCH_SIZE) {
         const batchNumber = Math.floor(i / PT_PING_BATCH_SIZE) + 1;
         const sliceEnd = i + PT_PING_BATCH_SIZE;
@@ -1731,9 +1788,6 @@
         await new Promise((resolve) => setTimeout(resolve, PT_PING_BATCH_DELAY_MS));
       }
 
-      setStatus(`Running PT recalc for ${serialsForRecalc.length} serials...`);
-      setProgress(95, `Running recalc RPC (${serialsForRecalc.length} serials)`);
-      await recalcPtMovedForSerials(serialsForRecalc);
       setProgress(100, 'Done');
 
       const summary =

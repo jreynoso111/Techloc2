@@ -99,19 +99,32 @@ const createGpsHistoryManager = ({
     try {
       await ensureSupabaseSession?.();
       const sourceTable = tableName || 'PT-LastPing';
-      const baseQuery = supabaseClient
-        .from(sourceTable)
-        .select('*');
-      const query = normalizedVin
-        ? baseQuery.eq('VIN', normalizedVin)
-        : baseQuery.eq('vehicle_id', normalizedVehicleId);
-      const { data, error } = await runWithTimeout(
-        query,
-        timeoutMs,
-        'GPS history request timed out.'
-      );
-      if (error) throw error;
-      const records = Array.isArray(data) ? data : [];
+      const records = [];
+      const pageSize = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const pageBaseQuery = supabaseClient
+          .from(sourceTable)
+          .select('*')
+          .range(offset, offset + pageSize - 1);
+        const pageQuery = normalizedVin
+          ? pageBaseQuery.eq('VIN', normalizedVin)
+          : pageBaseQuery.eq('vehicle_id', normalizedVehicleId);
+        const { data, error } = await runWithTimeout(
+          pageQuery,
+          timeoutMs,
+          'GPS history request timed out.'
+        );
+        if (error) throw error;
+        const pageRows = Array.isArray(data) ? data : [];
+        if (!pageRows.length) break;
+        records.push(...pageRows);
+        hasMore = pageRows.length === pageSize;
+        offset += pageSize;
+      }
+
       records.sort((a, b) => {
         const idA = a?.id;
         const idB = b?.id;

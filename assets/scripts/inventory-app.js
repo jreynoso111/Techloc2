@@ -736,11 +736,33 @@ const loadDashboardPreferences = async () => {
   }
 };
 
+const DESKTOP_BREAKPOINT = 1024;
+const MIN_PANEL_SIZE = 220;
+const MIN_CHART_HEIGHT = 220;
+
+const clampNumber = (value, min, max) => {
+  if (!Number.isFinite(value)) return min;
+  if (!Number.isFinite(max) || max < min) return min;
+  return Math.min(max, Math.max(min, value));
+};
+
+const getMaxSplitWidth = (container, handle, minSize = MIN_PANEL_SIZE) => {
+  if (!container) return minSize;
+  const containerWidth = container.getBoundingClientRect().width;
+  const handleWidth = handle?.getBoundingClientRect?.().width || 0;
+  return Math.max(minSize, containerWidth - minSize - handleWidth);
+};
+
 const applyLayoutPreferencesToDom = () => {
+  const isDesktop = window.innerWidth >= DESKTOP_BREAKPOINT;
   const alertsPanel = document.getElementById('alerts-panel');
   const dealPanel = document.getElementById('deal-status-panel');
+  const dealAlertsLayout = document.getElementById('deal-alerts-layout');
+  const panelResizer = document.getElementById('panel-resizer');
   const primaryChart = document.getElementById('status-primary-card');
   const secondaryChart = document.getElementById('status-secondary-card');
+  const chartsLayout = document.getElementById('deal-charts-layout');
+  const chartResizer = document.getElementById('chart-resizer');
   const tertiaryChartsLayout = document.getElementById('status-tertiary-layout');
   const tertiaryChartResizer = document.getElementById('tertiary-chart-resizer');
   const tertiaryChart = document.getElementById('status-tertiary-card');
@@ -750,22 +772,39 @@ const applyLayoutPreferencesToDom = () => {
   const fullWidthChartToggles = document.querySelectorAll('[data-full-chart-toggle]');
   const fullWidthChartHandles = document.querySelectorAll('[data-full-chart-resizer]');
   if (!alertsPanel || !dealPanel) return;
-  if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= 1024) {
-    alertsPanel.style.flex = `0 0 ${DashboardState.layout.alertsPanelWidth}px`;
+
+  if (isDesktop && typeof DashboardState.layout.alertsPanelWidth === 'number' && dealAlertsLayout) {
+    const maxAlertsWidth = getMaxSplitWidth(dealAlertsLayout, panelResizer);
+    const safeAlertsWidth = clampNumber(DashboardState.layout.alertsPanelWidth, MIN_PANEL_SIZE, maxAlertsWidth);
+    alertsPanel.style.flex = `0 0 ${safeAlertsWidth}px`;
     dealPanel.style.flex = '1 1 auto';
+  } else {
+    alertsPanel.style.flex = '';
+    dealPanel.style.flex = '';
   }
-  if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= 1024 && primaryChart && secondaryChart) {
-    primaryChart.style.flex = `0 0 ${DashboardState.layout.chartSplitWidth}px`;
+  if (isDesktop && typeof DashboardState.layout.chartSplitWidth === 'number' && primaryChart && secondaryChart && chartsLayout) {
+    const maxPrimaryWidth = getMaxSplitWidth(chartsLayout, chartResizer);
+    const safePrimaryWidth = clampNumber(DashboardState.layout.chartSplitWidth, MIN_PANEL_SIZE, maxPrimaryWidth);
+    primaryChart.style.flex = `0 0 ${safePrimaryWidth}px`;
     secondaryChart.style.flex = '1 1 auto';
+  } else if (primaryChart && secondaryChart) {
+    primaryChart.style.flex = '';
+    secondaryChart.style.flex = '';
   }
   if (tertiaryChartsLayout && tertiaryChartResizer && tertiaryChart && tertiarySecondaryChart) {
-    if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= 1024) {
-      tertiaryChart.style.flex = `0 0 ${DashboardState.layout.tertiarySplitWidth}px`;
+    if (isDesktop && typeof DashboardState.layout.tertiarySplitWidth === 'number') {
+      const maxTertiaryWidth = getMaxSplitWidth(tertiaryChartsLayout, tertiaryChartResizer);
+      const safeTertiaryWidth = clampNumber(DashboardState.layout.tertiarySplitWidth, MIN_PANEL_SIZE, maxTertiaryWidth);
+      tertiaryChart.style.flex = `0 0 ${safeTertiaryWidth}px`;
       tertiarySecondaryChart.style.flex = '1 1 auto';
+    } else {
+      tertiaryChart.style.flex = '';
+      tertiarySecondaryChart.style.flex = '';
     }
   }
   if (fullWidthCharts.length && fullWidthChartBodies.length && fullWidthChartToggles.length) {
-    const fullChartMinHeight = '220px';
+    const fullChartMinHeight = `${MIN_CHART_HEIGHT}px`;
+    const maxDesktopChartHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.72));
     const isCollapsed = Boolean(DashboardState.layout.fullChartCollapsed);
     fullWidthCharts.forEach((chart) => {
       chart.dataset.collapsed = String(isCollapsed);
@@ -786,18 +825,36 @@ const applyLayoutPreferencesToDom = () => {
     if (!isCollapsed) {
       fullWidthCharts.forEach((chart) => {
         chart.style.minHeight = fullChartMinHeight;
-        if (typeof DashboardState.layout.fullChartHeight === 'number') {
-          chart.style.height = `${DashboardState.layout.fullChartHeight}px`;
+        if (!isDesktop) {
+          chart.style.height = '';
+          return;
+        }
+        const chartId = chart.dataset.chartId;
+        const preferredHeight = chartId && typeof DashboardState.layout.fullChartHeights?.[chartId] === 'number'
+          ? DashboardState.layout.fullChartHeights[chartId]
+          : DashboardState.layout.fullChartHeight;
+        if (typeof preferredHeight === 'number') {
+          const safeHeight = clampNumber(preferredHeight, MIN_CHART_HEIGHT, maxDesktopChartHeight);
+          chart.style.height = `${safeHeight}px`;
+        } else {
+          chart.style.height = '';
         }
       });
     }
   }
-  if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= 1024) {
-    const heightValue = `${DashboardState.layout.dealPanelHeight}px`;
+  if (isDesktop && typeof DashboardState.layout.dealPanelHeight === 'number') {
+    const maxPanelHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.78));
+    const safePanelHeight = clampNumber(DashboardState.layout.dealPanelHeight, MIN_CHART_HEIGHT, maxPanelHeight);
+    const heightValue = `${safePanelHeight}px`;
     dealPanel.style.height = heightValue;
     alertsPanel.style.height = heightValue;
     if (primaryChart) primaryChart.style.height = heightValue;
     if (secondaryChart) secondaryChart.style.height = heightValue;
+  } else {
+    dealPanel.style.height = '';
+    alertsPanel.style.height = '';
+    if (primaryChart) primaryChart.style.height = '';
+    if (secondaryChart) secondaryChart.style.height = '';
   }
 };
 
@@ -2004,13 +2061,15 @@ const initializeResizablePanels = () => {
     schedulePersistPreferences();
   };
 
-  if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= 1024) {
-    alertsPanel.style.flex = `0 0 ${DashboardState.layout.alertsPanelWidth}px`;
+  if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
+    const maxAlertsWidth = getMaxSplitWidth(container, handle);
+    const safeAlertsWidth = clampNumber(DashboardState.layout.alertsPanelWidth, MIN_PANEL_SIZE, maxAlertsWidth);
+    alertsPanel.style.flex = `0 0 ${safeAlertsWidth}px`;
     dealPanel.style.flex = '1 1 auto';
   }
 
   handle.addEventListener('pointerdown', (event) => {
-    if (window.innerWidth < 1024) return;
+    if (window.innerWidth < DESKTOP_BREAKPOINT) return;
     isDragging = true;
     startX = event.clientX;
     startAlertsWidth = alertsPanel.getBoundingClientRect().width;
@@ -2046,13 +2105,15 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-    if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= 1024) {
-      primaryChart.style.flex = `0 0 ${DashboardState.layout.chartSplitWidth}px`;
+    if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
+      const maxPrimaryWidth = getMaxSplitWidth(chartsLayout, chartHandle);
+      const safePrimaryWidth = clampNumber(DashboardState.layout.chartSplitWidth, MIN_PANEL_SIZE, maxPrimaryWidth);
+      primaryChart.style.flex = `0 0 ${safePrimaryWidth}px`;
       secondaryChart.style.flex = '1 1 auto';
     }
 
     chartHandle.addEventListener('pointerdown', (event) => {
-      if (window.innerWidth < 1024) return;
+      if (window.innerWidth < DESKTOP_BREAKPOINT) return;
       isChartDragging = true;
       chartStartX = event.clientX;
       startPrimaryWidth = primaryChart.getBoundingClientRect().width;
@@ -2089,13 +2150,15 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-    if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= 1024) {
-      tertiaryChart.style.flex = `0 0 ${DashboardState.layout.tertiarySplitWidth}px`;
+    if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
+      const maxTertiaryWidth = getMaxSplitWidth(tertiaryChartsLayout, tertiaryChartHandle);
+      const safeTertiaryWidth = clampNumber(DashboardState.layout.tertiarySplitWidth, MIN_PANEL_SIZE, maxTertiaryWidth);
+      tertiaryChart.style.flex = `0 0 ${safeTertiaryWidth}px`;
       tertiarySecondaryChart.style.flex = '1 1 auto';
     }
 
     tertiaryChartHandle.addEventListener('pointerdown', (event) => {
-      if (window.innerWidth < 1024) return;
+      if (window.innerWidth < DESKTOP_BREAKPOINT) return;
       isChartDragging = true;
       chartStartX = event.clientX;
       startPrimaryWidth = tertiaryChart.getBoundingClientRect().width;
@@ -2132,8 +2195,10 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-    if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= 1024) {
-      const heightValue = `${DashboardState.layout.dealPanelHeight}px`;
+    if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
+      const maxPanelHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.78));
+      const safePanelHeight = clampNumber(DashboardState.layout.dealPanelHeight, MIN_CHART_HEIGHT, maxPanelHeight);
+      const heightValue = `${safePanelHeight}px`;
       dealPanel.style.height = heightValue;
       alertsPanel.style.height = heightValue;
       if (primaryChart) primaryChart.style.height = heightValue;
@@ -2141,7 +2206,7 @@ const initializeResizablePanels = () => {
     }
 
     heightHandle.addEventListener('pointerdown', (event) => {
-      if (window.innerWidth < 1024) return;
+      if (window.innerWidth < DESKTOP_BREAKPOINT) return;
       isHeightDragging = true;
       heightStartY = event.clientY;
       startHeight = dealPanel.getBoundingClientRect().height;
@@ -2187,7 +2252,7 @@ const initializeResizablePanels = () => {
       };
 
       handle.addEventListener('pointerdown', (event) => {
-        if (window.innerWidth < 1024) return;
+        if (window.innerWidth < DESKTOP_BREAKPOINT) return;
         if (chart.dataset.collapsed === 'true') return;
         isFullDragging = true;
         fullStartY = event.clientY;
@@ -2307,6 +2372,15 @@ renderDashboard = () => {
 };
 bindFilterEvents();
 initializeResizablePanels();
+
+let layoutResizeRaf = null;
+window.addEventListener('resize', () => {
+  if (layoutResizeRaf) window.cancelAnimationFrame(layoutResizeRaf);
+  layoutResizeRaf = window.requestAnimationFrame(() => {
+    applyLayoutPreferencesToDom();
+    syncTopScrollbar();
+  });
+});
 
 // Mobile nav
 const mobileToggle = document.getElementById('mobile-menu-toggle');

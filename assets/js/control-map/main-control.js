@@ -321,7 +321,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             .select('"Current Stock No","Regular Amount","Open Balance","Vehicle Status"')
             .in(stockNoColumn, chunk),
           8000,
-          'Error de comunicación con la base de datos.'
+          'Database communication error.'
         );
         if (error) throw error;
         (data || []).forEach((row) => {
@@ -725,17 +725,35 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const GPS_TRAIL_POINT_LIMIT = 5;
+    const GPS_HISTORY_HOTSPOT_MAX = 6;
+    const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
+    const GPS_HISTORY_HOTSPOT_VISIT_GAP_MS = 45 * 60 * 1000;
+    const GPS_HISTORY_HOTSPOT_MIN_VISITS = 2;
+    const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
     let gpsTrailRequestCounter = 0;
 
-    const parseGpsTrailCoordinate = (record = {}, key = 'lat') => {
-      const lowerKey = key.toLowerCase();
-      const upperKey = `${key}`.charAt(0).toUpperCase() + `${key}`.slice(1);
-      const rawValue = record?.[lowerKey] ?? record?.[upperKey];
-      const parsed = Number.parseFloat(`${rawValue ?? ''}`.trim());
+    const parseGpsNumericValue = (value) => {
+      if (value === null || value === undefined) return null;
+      const normalized = `${value}`.replace(/[^\d.\-]/g, '').trim();
+      if (!normalized) return null;
+      const parsed = Number.parseFloat(normalized);
       return Number.isFinite(parsed) ? parsed : null;
     };
 
-    const parseGpsTrailTimestamp = (record = {}) => {
+    const parseGpsTrailCoordinate = (record = {}, key = 'lat') => {
+      const candidates = key === 'lat'
+        ? ['lat', 'Lat', 'latitude', 'Latitude']
+        : ['long', 'Long', 'lng', 'Lng', 'longitude', 'Longitude', 'lon', 'Lon'];
+
+      for (const candidate of candidates) {
+        const parsed = parseGpsNumericValue(record?.[candidate]);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+
+      return null;
+    };
+
+    const parseGpsTrailTimeMs = (record = {}) => {
       const dateCandidates = [
         record?.['PT-LastPing'],
         record?.gps_time,
@@ -750,6 +768,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (!Number.isNaN(parsed)) return parsed;
       }
 
+      return null;
+    };
+
+    const parseGpsTrailTimestamp = (record = {}) => {
+      const timeMs = parseGpsTrailTimeMs(record);
+      if (Number.isFinite(timeMs)) return timeMs;
+
       const numericId = Number(record?.id);
       if (Number.isFinite(numericId)) return numericId;
       return 0;
@@ -760,11 +785,286 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const lat = parseGpsTrailCoordinate(record, 'lat');
       const lng = parseGpsTrailCoordinate(record, 'long');
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+      const timeMs = parseGpsTrailTimeMs(record);
       return {
         lat,
         lng,
-        timestamp: parseGpsTrailTimestamp(record)
+        timestamp: Number.isFinite(timeMs) ? timeMs : parseGpsTrailTimestamp(record),
+        timeMs
       };
+    };
+
+    const parseGpsRecordMovingStatus = (record = {}) => {
+      const movementCandidates = [
+        record?.moved,
+        record?.Moved,
+        record?.moving,
+        record?.Moving,
+        record?.moving_calc,
+        record?.['Moving (Calc)'],
+        record?.gps_moving,
+        record?.['GPS Moving']
+      ];
+
+      for (const candidate of movementCandidates) {
+        if (candidate === null || candidate === undefined) continue;
+        const raw = `${candidate}`.trim();
+        if (!raw) continue;
+        const numeric = Number.parseInt(raw, 10);
+        if (Number.isFinite(numeric)) {
+          if (numeric === 1) return 'moving';
+          if (numeric === -1 || numeric === 0) return 'stopped';
+        }
+        const normalized = raw.toLowerCase();
+        if (normalized === 'moving' || normalized === 'move' || normalized === 'true' || normalized === 'yes') {
+          return 'moving';
+        }
+        if (
+          normalized === 'stopped' ||
+          normalized === 'not moving' ||
+          normalized === 'stop' ||
+          normalized === 'false' ||
+          normalized === 'no' ||
+          normalized === 'parked'
+        ) {
+          return 'stopped';
+        }
+      }
+
+      const speedCandidates = [
+        record?.speed,
+        record?.Speed,
+        record?.gps_speed,
+        record?.['GPS Speed'],
+        record?.mph
+      ];
+
+      for (const speedCandidate of speedCandidates) {
+        const speed = parseGpsNumericValue(speedCandidate);
+        if (!Number.isFinite(speed)) continue;
+        return speed <= 1.5 ? 'stopped' : 'moving';
+      }
+
+      return null;
+    };
+
+    const getGpsPointDistanceMeters = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
+      const toRadians = (value) => value * (Math.PI / 180);
+      const earthRadiusMeters = 6371000;
+      const deltaLat = toRadians(toPoint.lat - fromPoint.lat);
+      const deltaLng = toRadians(toPoint.lng - fromPoint.lng);
+      const lat1 = toRadians(fromPoint.lat);
+      const lat2 = toRadians(toPoint.lat);
+
+      const a = (Math.sin(deltaLat / 2) ** 2)
+        + (Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2));
+      const boundedA = Math.min(1, Math.max(0, a));
+      const c = 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+      return earthRadiusMeters * c;
+    };
+
+    const buildHotspotSessions = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const sessions = [];
+      let activeSession = null;
+
+      const pushSession = () => {
+        if (!activeSession) return;
+        const startMs = Number.isFinite(activeSession.startMs) ? activeSession.startMs : null;
+        const endMs = Number.isFinite(activeSession.endMs) ? activeSession.endMs : null;
+        const durationMs = startMs !== null && endMs !== null && endMs >= startMs
+          ? endMs - startMs
+          : 0;
+        sessions.push({
+          points: activeSession.points,
+          startMs,
+          endMs,
+          durationMs
+        });
+        activeSession = null;
+      };
+
+      const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
+      sortedPoints.forEach((point) => {
+        const pointTimeMs = Number.isFinite(point.timeMs) ? point.timeMs : null;
+        if (!activeSession) {
+          activeSession = {
+            points: 1,
+            startMs: pointTimeMs,
+            endMs: pointTimeMs,
+            lastTimeMs: pointTimeMs,
+            lastPoint: point
+          };
+          return;
+        }
+
+        const hasComparableTime = pointTimeMs !== null && activeSession.lastTimeMs !== null;
+        const gapMs = hasComparableTime
+          ? Math.abs(pointTimeMs - activeSession.lastTimeMs)
+          : 0;
+        const jumpMeters = getGpsPointDistanceMeters(point, activeSession.lastPoint);
+        const shouldSplit = (hasComparableTime && gapMs > GPS_HISTORY_HOTSPOT_VISIT_GAP_MS)
+          || jumpMeters > GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 1.25;
+
+        if (shouldSplit) {
+          pushSession();
+          activeSession = {
+            points: 1,
+            startMs: pointTimeMs,
+            endMs: pointTimeMs,
+            lastTimeMs: pointTimeMs,
+            lastPoint: point
+          };
+          return;
+        }
+
+        activeSession.points += 1;
+        activeSession.lastPoint = point;
+        if (pointTimeMs !== null) {
+          if (activeSession.startMs === null) activeSession.startMs = pointTimeMs;
+          activeSession.endMs = pointTimeMs;
+          activeSession.lastTimeMs = pointTimeMs;
+        }
+      });
+
+      pushSession();
+      return sessions;
+    };
+
+    const buildVehicleHistoryHotspots = (records = []) => {
+      if (!Array.isArray(records) || !records.length) return [];
+
+      // Hotspot analysis must use the full winner-serial history available.
+      const sortedRecords = [...records]
+        .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+
+      const points = sortedRecords
+        .map((record) => {
+          const trailPoint = toGpsTrailPoint(record);
+          if (!trailPoint) return null;
+          return {
+            ...trailPoint,
+            movingStatus: parseGpsRecordMovingStatus(record)
+          };
+        })
+        .filter(Boolean);
+
+      if (!points.length) return [];
+
+      // Parking spots must consider both: long parked stays and frequent recurring pings.
+      const sourcePoints = points;
+
+      if (!sourcePoints.length) return [];
+
+      const clusters = [];
+
+      sourcePoints.forEach((point) => {
+        let selectedCluster = null;
+        let selectedDistance = Number.POSITIVE_INFINITY;
+
+        clusters.forEach((cluster) => {
+          const distance = getGpsPointDistanceMeters(point, cluster.center);
+          if (distance < selectedDistance) {
+            selectedDistance = distance;
+            selectedCluster = cluster;
+          }
+        });
+
+        if (!selectedCluster || selectedDistance > GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS) {
+          clusters.push({
+            center: { lat: point.lat, lng: point.lng },
+            points: [point],
+            firstSeen: point.timestamp,
+            lastSeen: point.timestamp
+          });
+          return;
+        }
+
+        const previousCount = selectedCluster.points.length;
+        selectedCluster.points.push(point);
+        const nextCount = previousCount + 1;
+        selectedCluster.center.lat = ((selectedCluster.center.lat * previousCount) + point.lat) / nextCount;
+        selectedCluster.center.lng = ((selectedCluster.center.lng * previousCount) + point.lng) / nextCount;
+        selectedCluster.firstSeen = Math.min(selectedCluster.firstSeen, point.timestamp);
+        selectedCluster.lastSeen = Math.max(selectedCluster.lastSeen, point.timestamp);
+      });
+
+      const normalizedHotspots = clusters
+        .map((cluster, index) => {
+          const sessions = buildHotspotSessions(cluster.points);
+          const sessionDurations = sessions.map((session) => session.durationMs).filter((value) => Number.isFinite(value) && value >= 0);
+          const totalDurationMs = sessionDurations.reduce((sum, durationMs) => sum + durationMs, 0);
+          const avgDurationMs = sessionDurations.length ? totalDurationMs / sessionDurations.length : 0;
+          const longestDurationMs = sessionDurations.length ? Math.max(...sessionDurations) : 0;
+          const latestSession = sessions[sessions.length - 1] || null;
+          const firstSeenTimeMs = Number.isFinite(sessions[0]?.startMs) ? sessions[0].startMs : cluster.firstSeen;
+          const lastSeenTimeMs = Number.isFinite(latestSession?.endMs) ? latestSession.endMs : cluster.lastSeen;
+          const lastStayDurationMs = Number.isFinite(latestSession?.durationMs) ? latestSession.durationMs : 0;
+          const spreadMeters = cluster.points.reduce((maxDistance, point) => {
+            const pointDistance = getGpsPointDistanceMeters(point, cluster.center);
+            return Math.max(maxDistance, pointDistance);
+          }, 0);
+          const radiusMeters = Math.max(80, Math.min(280, Math.round((spreadMeters * 2.2) + 70)));
+          const stoppedCount = cluster.points.filter((point) => point.movingStatus === 'stopped').length;
+          const visits = sessions.length || 1;
+          const uniqueDayKeys = new Set(
+            cluster.points
+              .map((point) => {
+                if (!Number.isFinite(point?.timeMs) || point.timeMs <= 0) return '';
+                return new Date(point.timeMs).toISOString().slice(0, 10);
+              })
+              .filter(Boolean)
+          );
+          const uniqueDays = uniqueDayKeys.size;
+          const pingCount = cluster.points.length;
+          const totalDurationHours = totalDurationMs / (1000 * 60 * 60);
+          const score = (uniqueDays * 7)
+            + (visits * 4)
+            + (Math.min(pingCount, 250) * 1.35)
+            + (stoppedCount * 1.5)
+            + (Math.min(totalDurationHours, 240) * 1.2);
+
+          return {
+            id: `vehicle-history-hotspot-${index + 1}`,
+            lat: cluster.center.lat,
+            lng: cluster.center.lng,
+            points: cluster.points.length,
+            pingCount,
+            uniqueDays,
+            visits,
+            stoppedCount,
+            firstSeen: firstSeenTimeMs,
+            lastSeen: lastSeenTimeMs,
+            radiusMeters,
+            totalDurationMs,
+            avgDurationMs,
+            longestDurationMs,
+            lastStayDurationMs,
+            score
+          };
+        });
+
+      const strictHotspots = normalizedHotspots.filter((hotspot) =>
+        hotspot.points >= 2
+        && (
+          hotspot.visits >= GPS_HISTORY_HOTSPOT_MIN_VISITS
+          || hotspot.uniqueDays >= 2
+          || hotspot.pingCount >= 8
+          || hotspot.totalDurationMs >= 30 * 60 * 1000
+        )
+      );
+
+      const fallbackHotspots = normalizedHotspots.filter((hotspot) => hotspot.points >= 1);
+      const candidates = strictHotspots.length ? strictHotspots : fallbackHotspots;
+
+      return candidates
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (b.lastSeen !== a.lastSeen) return b.lastSeen - a.lastSeen;
+          return b.points - a.points;
+        })
+        .slice(0, GPS_HISTORY_HOTSPOT_MAX);
     };
 
     const getGpsTrailBearingDegrees = (fromPoint, toPoint) => {
@@ -781,15 +1081,78 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return bearing;
     };
 
-    const drawVehicleGpsTrail = (points = [], markerColor = '#38bdf8') => {
+    const isGpsRecordDateField = (key = '') => {
+      const normalized = `${key}`.toLowerCase();
+      return (
+        normalized.includes('date')
+        || normalized.includes('time')
+        || normalized.includes('ping')
+        || normalized.endsWith('_at')
+      );
+    };
+
+    const formatGpsRecordFieldValue = (key, value) => {
+      if (value === null || value === undefined || value === '') return '—';
+      if (typeof value === 'object') return escapeHTML(JSON.stringify(value));
+
+      if (isGpsRecordDateField(key)) {
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) return escapeHTML(formatDateTime(value));
+      }
+
+      return escapeHTML(`${value}`);
+    };
+
+    const buildGpsTrailRecordPopup = (point, index, total) => {
+      const record = point?.record && typeof point.record === 'object' ? point.record : {};
+      const entries = Object.entries(record);
+      const coordText = `${Number(point?.lat || 0).toFixed(5)}, ${Number(point?.lng || 0).toFixed(5)}`;
+      const timestampText = Number.isFinite(point?.timeMs) ? formatDateTime(point.timeMs) : 'Insufficient data';
+
+      if (!entries.length) {
+        return `
+          <div class="gps-record-card">
+            <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
+            <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
+            <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+            <p class="gps-record-empty">No columns available for this point.</p>
+          </div>
+        `;
+      }
+
+      const rows = entries.map(([key, value]) => `
+        <tr>
+          <th>${escapeHTML(key)}</th>
+          <td>${formatGpsRecordFieldValue(key, value)}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <div class="gps-record-card">
+          <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
+          <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
+          <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+          <div class="gps-record-table-wrap">
+            <table class="gps-record-table">
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    };
+
+    const drawVehicleGpsTrail = (points = []) => {
       if (!highlightLayer || !Array.isArray(points) || !points.length) return;
+      const trailStrokeColor = '#14532d';
+      const trailFillColor = '#166534';
+      const trailArrowColor = 'rgba(20,83,45,0.76)';
       const pathPoints = points.map((point) => [point.lat, point.lng]);
 
       if (pathPoints.length > 1) {
         const trailLine = L.polyline(pathPoints, {
-          color: markerColor,
+          color: trailStrokeColor,
           weight: 2.4,
-          opacity: 0.9,
+          opacity: 0.58,
           dashArray: '4 6',
           lineCap: 'round',
           lineJoin: 'round',
@@ -800,15 +1163,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       points.forEach((point, index) => {
         const isLatestPoint = index === points.length - 1;
-        L.circleMarker([point.lat, point.lng], {
+        const pointMarker = L.circleMarker([point.lat, point.lng], {
           radius: isLatestPoint ? 5.5 : 4,
-          color: isLatestPoint ? '#e2e8f0' : markerColor,
-          weight: 1.4,
-          fillColor: markerColor,
-          fillOpacity: isLatestPoint ? 0.95 : 0.7,
-          opacity: 0.95,
-          interactive: false
+          color: trailStrokeColor,
+          weight: isLatestPoint ? 1.45 : 1.25,
+          fillColor: trailFillColor,
+          fillOpacity: isLatestPoint ? 0.42 : 0.3,
+          opacity: isLatestPoint ? 0.68 : 0.56,
+          interactive: true
         }).addTo(highlightLayer);
+
+        pointMarker.on('click', (event) => {
+          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+        });
+        pointMarker.bindPopup(buildGpsTrailRecordPopup(point, index, points.length), {
+          className: 'gps-record-popup',
+          autoPan: true,
+          maxWidth: 430
+        });
       });
 
       for (let index = 0; index < points.length - 1; index += 1) {
@@ -822,7 +1194,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         L.marker([midpoint.lat, midpoint.lng], {
           icon: L.divIcon({
             className: 'gps-trail-arrow',
-            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${markerColor};font-size:12px;line-height:12px;text-shadow:0 0 3px rgba(2,6,23,0.9)">▲</span>`,
+            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${trailArrowColor};font-size:12px;line-height:12px;text-shadow:0 0 2px rgba(2,6,23,0.72)">▲</span>`,
             iconSize: [12, 12],
             iconAnchor: [6, 6]
           }),
@@ -830,6 +1202,126 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           zIndexOffset: 420
         }).addTo(highlightLayer);
       }
+    };
+
+    const formatHotspotDuration = (durationMs) => {
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return 'Insufficient data';
+      const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      const parts = [];
+      if (days) parts.push(`${days}d`);
+      if (hours) parts.push(`${hours}h`);
+      if (minutes || !parts.length) parts.push(`${minutes}m`);
+      return parts.join(' ');
+    };
+
+    const formatHotspotDateTime = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return 'Insufficient data';
+      return formatDateTime(value);
+    };
+
+    const buildVehicleHistoryHotspotPopup = (hotspot, index = 0) => {
+      const rank = index + 1;
+      const coords = `${Number(hotspot.lat).toFixed(5)}, ${Number(hotspot.lng).toFixed(5)}`;
+      const pingPerDay = hotspot.uniqueDays
+        ? `${(hotspot.pingCount / hotspot.uniqueDays).toFixed(1)}`
+        : `${hotspot.pingCount || hotspot.points || 0}`;
+      return `
+        <div class="text-xs text-slate-100 space-y-1.5">
+          <p class="font-bold text-blue-200 text-sm">Parking Spot #${rank}</p>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-tight">
+            <p><span class="text-slate-400">GPS pings:</span> <span class="text-slate-100">${hotspot.pingCount || hotspot.points}</span></p>
+            <p><span class="text-slate-400">Active days:</span> <span class="text-slate-100">${hotspot.uniqueDays || 0}</span></p>
+            <p><span class="text-slate-400">Visits:</span> <span class="text-slate-100">${hotspot.visits}</span></p>
+            <p><span class="text-slate-400">Avg pings/day:</span> <span class="text-blue-200">${pingPerDay}</span></p>
+            <p><span class="text-slate-400">Total dwell time:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.totalDurationMs)}</span></p>
+            <p><span class="text-slate-400">Average per visit:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.avgDurationMs)}</span></p>
+            <p><span class="text-slate-400">Longest stay:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
+            <p><span class="text-slate-400">Latest stay:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.lastStayDurationMs)}</span></p>
+          </div>
+          <p class="text-[11px] text-slate-300"><span class="text-slate-400">First seen:</span> ${formatHotspotDateTime(hotspot.firstSeen)}</p>
+          <p class="text-[11px] text-slate-300"><span class="text-slate-400">Last seen:</span> ${formatHotspotDateTime(hotspot.lastSeen)}</p>
+          <p class="text-[11px] text-slate-400">Coordinates: ${coords}</p>
+        </div>
+      `;
+    };
+
+    const drawVehicleHistoryHotspots = (hotspots = []) => {
+      if (!highlightLayer || !Array.isArray(hotspots) || !hotspots.length) return;
+
+      hotspots.forEach((hotspot, index) => {
+        const hotspotStrength = Math.min(1, hotspot.points / 12);
+        const visualRadiusMeters = Math.max(320, Math.round(hotspot.radiusMeters * 1.9));
+        const popupHtml = buildVehicleHistoryHotspotPopup(hotspot, index);
+
+        const halo = L.circle([hotspot.lat, hotspot.lng], {
+          radius: Math.round(visualRadiusMeters * 1.35),
+          color: GPS_HISTORY_HOTSPOT_COLOR,
+          weight: 0.9,
+          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillOpacity: 0.02 + (hotspotStrength * 0.03),
+          opacity: 0.18 + (hotspotStrength * 0.08),
+          interactive: false,
+          className: 'vehicle-history-hotspot-glass-halo'
+        }).addTo(highlightLayer);
+        halo.bringToBack();
+
+        const ring = L.circle([hotspot.lat, hotspot.lng], {
+          radius: visualRadiusMeters,
+          color: GPS_HISTORY_HOTSPOT_COLOR,
+          weight: 1.2 + (hotspotStrength * 0.6),
+          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillOpacity: 0.05 + (hotspotStrength * 0.06),
+          opacity: 0.42 + (hotspotStrength * 0.14),
+          interactive: true,
+          className: 'vehicle-history-hotspot-ring'
+        }).addTo(highlightLayer);
+
+        ring.on('click', (event) => {
+          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+        });
+
+        ring.bindPopup(popupHtml, {
+          className: 'vehicle-history-hotspot-popup',
+          autoPan: true
+        });
+
+        const coreHalo = L.circleMarker([hotspot.lat, hotspot.lng], {
+          radius: 11 + (hotspotStrength * 2),
+          color: '#64748b',
+          weight: 1.2,
+          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillOpacity: 0.14,
+          opacity: 0.45,
+          interactive: false,
+          className: 'vehicle-history-hotspot-core-halo'
+        }).addTo(highlightLayer);
+
+        const core = L.circleMarker([hotspot.lat, hotspot.lng], {
+          radius: 7.8 + (hotspotStrength * 1.8),
+          color: '#cbd5e1',
+          weight: 1.8,
+          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillOpacity: 0.45,
+          opacity: 0.72,
+          interactive: true,
+          className: 'vehicle-history-hotspot-core'
+        }).addTo(highlightLayer);
+
+        core.on('click', (event) => {
+          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+        });
+
+        core.bindPopup(popupHtml, {
+          className: 'vehicle-history-hotspot-popup',
+          autoPan: true
+        });
+
+        coreHalo.bringToFront();
+        core.bringToFront();
+      });
     };
 
     const renderVehicleGpsTrail = async (vehicle, requestId) => {
@@ -856,12 +1348,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .slice(0, GPS_TRAIL_POINT_LIMIT);
 
       const trailPoints = latestRecords
-        .map((record) => toGpsTrailPoint(record))
+        .map((record) => {
+          const point = toGpsTrailPoint(record);
+          if (!point) return null;
+          return { ...point, record };
+        })
         .filter((point) => point !== null)
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      if (requestId !== gpsTrailRequestCounter || !trailPoints.length) return;
-      drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle));
+      const historyHotspots = buildVehicleHistoryHotspots(winnerScopedRecords);
+
+      if (requestId !== gpsTrailRequestCounter) return;
+      if (!trailPoints.length && !historyHotspots.length) return;
+      drawVehicleHistoryHotspots(historyHotspots);
+      if (trailPoints.length) {
+        drawVehicleGpsTrail(trailPoints);
+      }
     };
 
     const ICON_PATHS = {
@@ -3523,7 +4025,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             const { error } = await runWithTimeout(
               updateRequest,
               8000,
-              'Error de comunicación con la base de datos.'
+              'Database communication error.'
             );
 
             if (error) throw error;
@@ -3550,8 +4052,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             } else {
               console.warn('Failed to update vehicle field:', error);
             }
-            if (message.includes('comunicación')) {
-              alert('Error de comunicación con la base de datos.');
+            if (message.includes('communication')) {
+              alert('Database communication error.');
             } else {
               alert(message || 'Failed to save vehicle update.');
             }
