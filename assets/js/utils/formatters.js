@@ -148,6 +148,13 @@ const parseMovingIndicator = (...candidates) => {
 };
 
 export const getMovingStatus = (vehicle = {}) => {
+  const historyOverride = `${vehicle?.historyMovingOverride || vehicle?.details?.historyMovingOverride || ''}`
+    .trim()
+    .toLowerCase();
+  if (historyOverride === 'moving' || historyOverride === 'stopped' || historyOverride === 'unknown') {
+    return historyOverride;
+  }
+
   const explicitStatus = parseMovingIndicator(
     vehicle?.moving,
     vehicle?.movingCalc,

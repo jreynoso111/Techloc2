@@ -950,9 +950,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
-    const GPS_HISTORY_HOTSPOT_VISIT_GAP_MS = 45 * 60 * 1000;
     const GPS_HISTORY_HOTSPOT_MIN_VISITS = 2;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
+    const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
     let gpsTrailRequestCounter = 0;
 
     const parseGpsNumericValue = (value) => {
@@ -1072,6 +1072,59 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return latestSerial;
     };
 
+    const countGpsHistoryRecordsBySerial = (records = [], getRecordSerial = () => '') => {
+      const counts = new Map();
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return counts;
+      records.forEach((record) => {
+        const serial = `${getRecordSerial(record) || ''}`.trim();
+        if (!serial) return;
+        counts.set(serial, (counts.get(serial) || 0) + 1);
+      });
+      return counts;
+    };
+
+    const resolveVehicleMovingHistoryOverride = ({
+      records = [],
+      winnerSerial = '',
+      latestSerial = '',
+      serialCountsBySerial = new Map(),
+    } = {}) => {
+      const readCount = (serial = '') => {
+        const normalizedSerial = `${serial || ''}`.trim();
+        if (!normalizedSerial) return 0;
+        return Number(serialCountsBySerial.get(normalizedSerial) || 0);
+      };
+
+      const winnerCount = readCount(winnerSerial);
+      if (winnerCount > 0) return winnerCount <= 1 ? 'unknown' : '';
+
+      const latestCount = readCount(latestSerial);
+      if (latestCount > 0) return latestCount <= 1 ? 'unknown' : '';
+
+      return Array.isArray(records) && records.length <= 1 ? 'unknown' : '';
+    };
+
+    const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(`${serial}`.trim());
+
+    const getWiredGpsHistoryRecords = (records = [], getRecordSerial = () => '') => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
+      return records.filter((record) => isWiredGpsSerial(getRecordSerial(record)));
+    };
+
+    const mergeGpsHistoryRecordSets = (...recordSets) => {
+      const merged = [];
+      const seen = new Set();
+      recordSets.forEach((recordSet) => {
+        if (!Array.isArray(recordSet)) return;
+        recordSet.forEach((record) => {
+          if (!record || seen.has(record)) return;
+          seen.add(record);
+          merged.push(record);
+        });
+      });
+      return merged;
+    };
+
     const parseGpsRecordMovingStatus = (record = {}) => {
       const movementCandidates = [
         record?.moved,
@@ -1142,8 +1195,49 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return earthRadiusMeters * c;
     };
 
+    const toUtcDayStartMs = (timeMs) => {
+      if (!Number.isFinite(timeMs) || timeMs <= 0) return null;
+      const date = new Date(timeMs);
+      if (Number.isNaN(date.getTime())) return null;
+      return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    };
+
     const buildHotspotSessions = (points = []) => {
       if (!Array.isArray(points) || !points.length) return [];
+      const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
+      const dayBuckets = new Map();
+
+      sortedPoints.forEach((point) => {
+        const pointTimeMs = Number.isFinite(point.timeMs) ? point.timeMs : null;
+        const dayStartMs = toUtcDayStartMs(pointTimeMs);
+        if (!Number.isFinite(dayStartMs)) return;
+        const existing = dayBuckets.get(dayStartMs) || {
+          dayStartMs,
+          points: 0,
+          firstMs: pointTimeMs,
+          lastMs: pointTimeMs
+        };
+        existing.points += 1;
+        if (!Number.isFinite(existing.firstMs) || pointTimeMs < existing.firstMs) existing.firstMs = pointTimeMs;
+        if (!Number.isFinite(existing.lastMs) || pointTimeMs > existing.lastMs) existing.lastMs = pointTimeMs;
+        dayBuckets.set(dayStartMs, existing);
+      });
+
+      // If timestamps are missing, keep a conservative fallback: one 1-day visit per point.
+      if (!dayBuckets.size) {
+        return sortedPoints.map((point) => {
+          const pointTimeMs = Number.isFinite(point.timeMs) ? point.timeMs : null;
+          return {
+            points: 1,
+            activeDays: 1,
+            startMs: pointTimeMs,
+            endMs: pointTimeMs,
+            durationMs: GPS_HISTORY_DAY_MS
+          };
+        });
+      }
+
+      const sortedDays = [...dayBuckets.values()].sort((a, b) => a.dayStartMs - b.dayStartMs);
       const sessions = [];
       let activeSession = null;
 
@@ -1151,79 +1245,91 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (!activeSession) return;
         const startMs = Number.isFinite(activeSession.startMs) ? activeSession.startMs : null;
         const endMs = Number.isFinite(activeSession.endMs) ? activeSession.endMs : null;
-        const durationMs = startMs !== null && endMs !== null && endMs >= startMs
+        const observedDurationMs = startMs !== null && endMs !== null && endMs >= startMs
           ? endMs - startMs
           : 0;
+        const activeDays = Math.max(1, activeSession.activeDays);
+        const inferredDurationMs = activeDays * GPS_HISTORY_DAY_MS;
         sessions.push({
           points: activeSession.points,
+          activeDays,
           startMs,
           endMs,
-          durationMs
+          durationMs: Math.max(observedDurationMs, inferredDurationMs)
         });
         activeSession = null;
       };
 
-      const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
-      sortedPoints.forEach((point) => {
-        const pointTimeMs = Number.isFinite(point.timeMs) ? point.timeMs : null;
+      sortedDays.forEach((dayBucket) => {
         if (!activeSession) {
           activeSession = {
-            points: 1,
-            startMs: pointTimeMs,
-            endMs: pointTimeMs,
-            lastTimeMs: pointTimeMs,
-            lastPoint: point
+            points: dayBucket.points,
+            activeDays: 1,
+            startMs: dayBucket.firstMs,
+            endMs: dayBucket.lastMs,
+            lastDayStartMs: dayBucket.dayStartMs
           };
           return;
         }
 
-        const hasComparableTime = pointTimeMs !== null && activeSession.lastTimeMs !== null;
-        const gapMs = hasComparableTime
-          ? Math.abs(pointTimeMs - activeSession.lastTimeMs)
-          : 0;
-        const jumpMeters = getGpsPointDistanceMeters(point, activeSession.lastPoint);
-        const shouldSplit = (hasComparableTime && gapMs > GPS_HISTORY_HOTSPOT_VISIT_GAP_MS)
-          || jumpMeters > GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 1.25;
-
-        if (shouldSplit) {
+        const dayGap = Math.round((dayBucket.dayStartMs - activeSession.lastDayStartMs) / GPS_HISTORY_DAY_MS);
+        const isConsecutiveDay = dayGap <= 1;
+        if (!isConsecutiveDay) {
           pushSession();
           activeSession = {
-            points: 1,
-            startMs: pointTimeMs,
-            endMs: pointTimeMs,
-            lastTimeMs: pointTimeMs,
-            lastPoint: point
+            points: dayBucket.points,
+            activeDays: 1,
+            startMs: dayBucket.firstMs,
+            endMs: dayBucket.lastMs,
+            lastDayStartMs: dayBucket.dayStartMs
           };
           return;
         }
 
-        activeSession.points += 1;
-        activeSession.lastPoint = point;
-        if (pointTimeMs !== null) {
-          if (activeSession.startMs === null) activeSession.startMs = pointTimeMs;
-          activeSession.endMs = pointTimeMs;
-          activeSession.lastTimeMs = pointTimeMs;
-        }
+        activeSession.points += dayBucket.points;
+        activeSession.activeDays += 1;
+        activeSession.startMs = Number.isFinite(activeSession.startMs)
+          ? Math.min(activeSession.startMs, dayBucket.firstMs)
+          : dayBucket.firstMs;
+        activeSession.endMs = Number.isFinite(activeSession.endMs)
+          ? Math.max(activeSession.endMs, dayBucket.lastMs)
+          : dayBucket.lastMs;
+        activeSession.lastDayStartMs = dayBucket.dayStartMs;
       });
 
       pushSession();
       return sessions;
     };
 
-    const buildVehicleHistoryHotspots = (records = []) => {
+    const buildVehicleHistoryHotspots = (
+      records = [],
+      {
+        getRecordSerial = () => '',
+        serialCountsBySerial = null
+      } = {}
+    ) => {
       if (!Array.isArray(records) || !records.length) return [];
 
-      // Hotspot analysis must use the full winner-serial history available.
+      // Hotspot analysis consumes the scoped record set chosen by the caller.
       const sortedRecords = [...records]
         .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+      const resolvedSerialCounts = serialCountsBySerial instanceof Map
+        ? serialCountsBySerial
+        : countGpsHistoryRecordsBySerial(sortedRecords, getRecordSerial);
 
       const points = sortedRecords
         .map((record) => {
           const trailPoint = toGpsTrailPoint(record);
           if (!trailPoint) return null;
+          const recordSerial = `${getRecordSerial(record) || ''}`.trim();
+          const readingCountForSerial = recordSerial
+            ? Number(resolvedSerialCounts.get(recordSerial) || 0)
+            : 0;
           return {
             ...trailPoint,
-            movingStatus: parseGpsRecordMovingStatus(record)
+            movingStatus: readingCountForSerial <= 1
+              ? 'unknown'
+              : parseGpsRecordMovingStatus(record)
           };
         })
         .filter(Boolean);
@@ -1593,13 +1699,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-tight">
             <p><span class="text-slate-400">GPS pings:</span> <span class="text-slate-100">${hotspot.pingCount || hotspot.points}</span></p>
             <p><span class="text-slate-400">Active days:</span> <span class="text-slate-100">${hotspot.uniqueDays || 0}</span></p>
-            <p><span class="text-slate-400">Visits:</span> <span class="text-slate-100">${hotspot.visits}</span></p>
+            <p><span class="text-slate-400">Visits (stays):</span> <span class="text-slate-100">${hotspot.visits}</span></p>
             <p><span class="text-slate-400">Avg pings/day:</span> <span class="text-blue-200">${pingPerDay}</span></p>
             <p><span class="text-slate-400">Total dwell time:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.totalDurationMs)}</span></p>
             <p><span class="text-slate-400">Average per visit:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.avgDurationMs)}</span></p>
             <p><span class="text-slate-400">Longest stay:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
             <p><span class="text-slate-400">Latest stay:</span> <span class="text-blue-200">${formatHotspotDuration(hotspot.lastStayDurationMs)}</span></p>
           </div>
+          <p class="text-[11px] text-slate-400">Visits group consecutive active days into one stay.</p>
           <p class="text-[11px] text-slate-300"><span class="text-slate-400">First seen:</span> ${formatHotspotDateTime(hotspot.firstSeen)}</p>
           <p class="text-[11px] text-slate-300"><span class="text-slate-400">Last seen:</span> ${formatHotspotDateTime(hotspot.lastSeen)}</p>
           <p class="text-[11px] text-slate-400">Coordinates: ${coords}</p>
@@ -1695,6 +1802,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     };
 
+    const syncFocusedVehicleNotMovingBadge = (vehicle) => {
+      if (!highlightLayer) return;
+
+      const staleBadgeLayers = [];
+      highlightLayer.eachLayer((layer) => {
+        const layerIconClass = `${layer?.options?.icon?.options?.className || ''}`.trim();
+        if (layerIconClass === 'vehicle-cross') staleBadgeLayers.push(layer);
+      });
+      staleBadgeLayers.forEach((layer) => highlightLayer.removeLayer(layer));
+
+      if (!vehicle || !hasValidCoords(vehicle) || !isVehicleNotMoving(vehicle)) return;
+      L.marker([vehicle.lat, vehicle.lng], {
+        icon: L.divIcon({ className: 'vehicle-cross', html: '<div class="vehicle-cross-badge">✕</div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+        interactive: false,
+        zIndexOffset: 500
+      }).addTo(highlightLayer);
+    };
+
     const renderVehicleGpsTrail = async (vehicle, requestId) => {
       if (!vehicle || !highlightLayer || requestId !== gpsTrailRequestCounter) return;
 
@@ -1710,11 +1835,33 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
         ? gpsHistoryManager.getRecordSerial
         : () => '';
+      const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
       const winnerScopedRecords = winnerSerial
         ? records.filter((record) => getRecordSerial(record) === winnerSerial)
         : records;
+      const wiredScopedRecords = getWiredGpsHistoryRecords(records, getRecordSerial);
 
       const latestSerial = getMostRecentRecordSerial(records, getRecordSerial);
+      const movingHistoryOverride = resolveVehicleMovingHistoryOverride({
+        records,
+        winnerSerial,
+        latestSerial,
+        serialCountsBySerial
+      });
+      const currentMovingOverride = `${vehicle?.historyMovingOverride || ''}`.trim().toLowerCase();
+      const normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
+      const movingOverrideChanged = currentMovingOverride !== normalizedOverride;
+      if (normalizedOverride) {
+        vehicle.historyMovingOverride = normalizedOverride;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          vehicle.details.historyMovingOverride = normalizedOverride;
+        }
+      } else {
+        delete vehicle.historyMovingOverride;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          delete vehicle.details.historyMovingOverride;
+        }
+      }
       const latestSerialRecords = latestSerial
         ? records.filter((record) => getRecordSerial(record) === latestSerial)
         : [];
@@ -1760,9 +1907,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .filter((point) => point !== null)
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      const historyHotspots = buildVehicleHistoryHotspots(winnerScopedRecords);
+      // Parking spots include winner serial + any wired serial (serial starts with 0-7).
+      let hotspotSourceRecords = mergeGpsHistoryRecordSets(winnerScopedRecords, wiredScopedRecords);
+      if (!hotspotSourceRecords.length) {
+        hotspotSourceRecords = records;
+      }
+      const historyHotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
+        getRecordSerial,
+        serialCountsBySerial
+      });
 
       if (requestId !== gpsTrailRequestCounter) return;
+      if (movingOverrideChanged && `${selectedVehicleId ?? ''}` === `${vehicle?.id ?? ''}`) {
+        syncFocusedVehicleNotMovingBadge(vehicle);
+      }
       if (!trailPoints.length && !historyHotspots.length) return;
       drawVehicleHistoryHotspots(historyHotspots);
       if (trailPoints.length) {
@@ -3402,13 +3560,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const halo = L.circleMarker([vehicle.lat, vehicle.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
       halo.bringToBack();
 
-      if (isVehicleNotMoving(vehicle)) {
-        L.marker([vehicle.lat, vehicle.lng], {
-          icon: L.divIcon({ className: 'vehicle-cross', html: '<div class="vehicle-cross-badge">✕</div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
-          interactive: false,
-          zIndexOffset: 500
-        }).addTo(highlightLayer);
-      }
+      syncFocusedVehicleNotMovingBadge(vehicle);
 
       anchorMarker.bindPopup(vehicleCard(vehicle), {
         className: 'vehicle-popup',
