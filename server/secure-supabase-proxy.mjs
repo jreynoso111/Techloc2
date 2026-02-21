@@ -290,6 +290,141 @@ const requireAuthorizedRole = async (req, res) => {
   return { user, profile };
 };
 
+const requireActiveAdministrator = async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    json(res, 500, {
+      error: {
+        message: 'Secure Supabase proxy is not configured.',
+      },
+    });
+    return null;
+  }
+
+  const accessToken = getBearerToken(req);
+  if (!accessToken) {
+    json(res, 401, {
+      error: {
+        message: 'Missing bearer token.',
+      },
+    });
+    return null;
+  }
+
+  const user = await getUserFromAccessToken(accessToken);
+  if (!user?.id) {
+    json(res, 401, {
+      error: {
+        message: 'Invalid or expired access token.',
+      },
+    });
+    return null;
+  }
+
+  const profile = await getUserProfile(user.id);
+  const role = String(profile?.role || 'user').toLowerCase();
+  const status = String(profile?.status || 'active').toLowerCase();
+  if (role !== 'administrator' || status === 'suspended') {
+    json(res, 403, {
+      error: {
+        message: 'Administrator role is required.',
+        details: { role, status },
+      },
+    });
+    return null;
+  }
+
+  return { user, profile };
+};
+
+const resolveUserEmailForReset = async ({ userId, email }) => {
+  if (email) {
+    return String(email).trim().toLowerCase();
+  }
+
+  if (userId) {
+    const response = await supabaseRequest(
+      `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email&limit=1`
+    );
+    if (!response.ok) {
+      const parsed = await parseSupabaseError(response);
+      throw new Error(parsed.message || 'Could not resolve target profile email.');
+    }
+    const rows = await response.json();
+    const resolvedEmail = Array.isArray(rows) && rows.length ? rows[0]?.email : '';
+    return String(resolvedEmail || '').trim().toLowerCase();
+  }
+
+  return '';
+};
+
+const handleAdminApi = async (req, res, pathname) => {
+  if (req.method !== 'POST' || pathname !== '/api/admin/password-reset') {
+    json(res, 404, { error: { message: 'Not found.' } });
+    return;
+  }
+
+  const auth = await requireActiveAdministrator(req, res);
+  if (!auth) return;
+
+  let body;
+  try {
+    body = await parseJsonBody(req);
+  } catch (error) {
+    json(res, 400, { error: { message: error?.message || 'Invalid JSON payload.' } });
+    return;
+  }
+
+  const targetUserId = String(body?.userId || '').trim();
+  const targetEmailRaw = String(body?.email || '').trim();
+  let targetEmail = '';
+
+  try {
+    targetEmail = await resolveUserEmailForReset({
+      userId: targetUserId,
+      email: targetEmailRaw,
+    });
+  } catch (error) {
+    json(res, 400, { error: { message: error?.message || 'Invalid target account.' } });
+    return;
+  }
+
+  if (!targetEmail) {
+    json(res, 400, {
+      error: {
+        message: 'Target profile email is required.',
+      },
+    });
+    return;
+  }
+
+  const redirectTo = new URL('/pages/reset-password.html', `http://${req.headers.host || '127.0.0.1'}`).toString();
+
+  const response = await supabaseRequest('/auth/v1/admin/generate_link', {
+    method: 'POST',
+    body: {
+      type: 'recovery',
+      email: targetEmail,
+      options: { redirectTo },
+    },
+  });
+
+  if (!response.ok) {
+    const parsed = await parseSupabaseError(response);
+    json(res, response.status, { error: parsed });
+    return;
+  }
+
+  const payload = await response.json();
+  json(res, 200, {
+    data: {
+      ok: true,
+      email: targetEmail,
+      userId: targetUserId || null,
+      generated: Boolean(payload?.properties?.action_link || payload?.action_link),
+    },
+  });
+};
+
 const handleRepairHistoryApi = async (req, res, pathname, searchParams) => {
   const auth = await requireAuthorizedRole(req, res);
   if (!auth) return;
@@ -471,6 +606,11 @@ const start = () => {
 
       if (pathname === '/api/repair-history' || pathname.startsWith('/api/repair-history/')) {
         await handleRepairHistoryApi(req, res, pathname, searchParams);
+        return;
+      }
+
+      if (pathname === '/api/admin/password-reset') {
+        await handleAdminApi(req, res, pathname);
         return;
       }
 

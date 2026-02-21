@@ -43,3 +43,28 @@ http://127.0.0.1:8080
 - Do not commit `SUPABASE_SERVICE_ROLE_KEY` to git.
 - Do not place `SUPABASE_SERVICE_ROLE_KEY` in frontend files.
 - If the key was shared in chat, rotate it in Supabase Dashboard.
+
+## 4) Admin password reset endpoint
+
+The proxy now exposes:
+
+```text
+POST /api/admin/password-reset
+```
+
+Requirements:
+
+- `Authorization: Bearer <admin-access-token>`
+- Caller must be an active administrator in `profiles`.
+- JSON body with `userId` and/or `email`.
+
+Example:
+
+```bash
+curl -X POST "http://127.0.0.1:8080/api/admin/password-reset" \
+  -H "Authorization: Bearer <ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"userId":"<profile-id>","email":"user@techloc.io"}'
+```
+
+This triggers Supabase recovery link generation for the target user without exposing passwords.
