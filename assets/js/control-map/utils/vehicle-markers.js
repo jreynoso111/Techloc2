@@ -42,14 +42,28 @@ export const syncVehicleMarkers = ({
       marker.options.vehicleData = vehicle;
       marker.options.markerColor = markerColor;
       marker.options.isStopped = isStopped;
+      marker.options.cycleRole = 'vehicle';
+      marker.options.cycleKey = `vehicle-${vehicle.id}`;
     } else {
       marker = L.marker(
         [coords.lat, coords.lng],
-        { icon, zIndexOffset: isStopped ? 500 : 0, vehicleData: vehicle, markerColor, isStopped }
+        {
+          icon,
+          zIndexOffset: isStopped ? 500 : 0,
+          vehicleData: vehicle,
+          markerColor,
+          isStopped,
+          cycleRole: 'vehicle',
+          cycleKey: `vehicle-${vehicle.id}`
+        }
       ).addTo(vehicleLayer);
       marker.on('click', (event) => {
-        event.originalEvent.handledByMarker = true;
-        focusHandler();
+        if (event?.originalEvent) {
+          event.originalEvent.handledByMarker = true;
+          event.originalEvent.cycleRole = 'vehicle';
+          event.originalEvent.cycleKey = `vehicle-${vehicle.id}`;
+        }
+        focusHandler({ event, marker, vehicle });
       });
     }
 
