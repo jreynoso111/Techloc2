@@ -275,7 +275,7 @@
                     <div id="pt-ping-progress-bar" class="h-2 w-0 bg-indigo-500 transition-all duration-200"></div>
                   </div>
                 </div>
-                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to Supabase (no VIN check). Conflicts resolved by VIN + Serial.</p>
+                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to Supabase after VIN validation. Conflict handling uses Serial + day bucket with automatic fallback.</p>
                 <details id="pt-error-box" class="hidden overflow-hidden rounded-xl border border-rose-900/60 bg-rose-950/60 text-xs text-rose-100 shadow-inner shadow-rose-950/50">
                   <summary class="cursor-pointer px-3 py-2 font-semibold text-rose-200">Error details</summary>
                   <pre id="pt-error-pre" class="max-h-64 overflow-auto whitespace-pre-wrap px-3 pb-3 pt-1 font-mono text-[11px] leading-relaxed text-rose-100"></pre>
@@ -373,9 +373,13 @@
       'Lat',
       'Long',
     ];
-    const PT_PING_INITIAL_BATCH_SIZE = 500;
-    const PT_PING_MIN_BATCH_SIZE = 50;
-    const PT_PING_BATCH_DELAY_MS = 0;
+    const PT_PING_INITIAL_BATCH_SIZE = 150;
+    const PT_PING_MIN_BATCH_SIZE = 10;
+    const PT_PING_BATCH_DELAY_MS = 25;
+    const PT_PING_MAX_RETRIES_PER_BATCH = 3;
+    const PT_PING_RETRY_BASE_DELAY_MS = 500;
+    const PT_PING_PRIMARY_CONFLICT_TARGET = 'Serial,read_day,day_half';
+    const PT_PING_FALLBACK_CONFLICT_TARGET = 'Serial,Date';
     const PT_PING_HEADER_MAP = (() => {
       const map = new Map();
       PT_PING_COLUMNS.forEach((col) => {
@@ -939,6 +943,22 @@
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
+      setProgress(98, 'Recalculating DealsJP1 last-deal flags...');
+
+      const { data: recalcData, error: recalcError } = await supabaseClient.rpc('recalc_dealsjp1_last_deal');
+      if (recalcError) {
+        console.error('Supabase DealsJP1 last-deal recalculation error:', recalcError);
+        if (isRlsBlocked(recalcError)) {
+          showToast('Deals uploaded, but last-deal recalculation was blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
+        } else if (isSchemaMismatchError(recalcError)) {
+          showToast('Deals uploaded, but last-deal recalculation has a schema mismatch: ' + shortSupabaseError(recalcError), 'error');
+        } else {
+          showToast('DealsJP1 last-deal recalculation failed: ' + shortSupabaseError(recalcError), 'error');
+        }
+        setProgress(100, 'Upload completed, but last-deal recalculation failed.');
+        return;
+      }
+
       setProgress(100, 'Running DealsJP1 vehicle sync...');
 
       const { data: syncData, error: syncError } = await supabaseClient.rpc('sync_vehicles_from_dealsjp1_lastdeal');
@@ -955,6 +975,7 @@
         return;
       }
 
+      console.info('DealsJP1 last-deal recalculation updated rows:', recalcData);
       console.info('DealsJP1 vehicle sync updated rows:', syncData);
 
       const summary =
@@ -962,6 +983,7 @@
         '\nTotal rows processed: ' + rows.length +
         '\nProcessed (Unique by Stock No): ' + filteredRows.length +
         '\nUpserted: ' + totalUpserted +
+        '\nLast Deal recalculated rows: ' + (recalcData ?? 0) +
         '\nSkipped (Invalid Sales Channel): ' + skippedInvalidSalesChannel +
         '\nSkipped (Missing Stock No or VIN): ' + skippedMissingRequired +
         '\nDuplicates Removed: ' + duplicatesRemoved + 
@@ -1735,56 +1757,110 @@
         return;
       }
 
-      const isPtBatchRetryable = (error) => {
-        const text = [error?.message, error?.details, error?.hint]
+      const getPtBatchErrorText = (error) =>
+        [error?.message, error?.details, error?.hint, error?.code, error?.status, error?.statusCode]
           .filter(Boolean)
           .join(' | ')
           .toLowerCase();
+
+      const isPtBatchRetryable = (error) => {
+        const text = getPtBatchErrorText(error);
         const code = (error?.code || '').toLowerCase();
+        const statusCode = Number(error?.status ?? error?.statusCode);
         return (
           code === '57014' ||
           code === '53300' ||
+          (Number.isFinite(statusCode) && statusCode >= 500) ||
           text.includes('statement timeout') ||
           text.includes('timeout') ||
           text.includes('timed out') ||
+          text.includes('http error 500') ||
+          text.includes('http error 502') ||
+          text.includes('http error 503') ||
+          text.includes('http error 504') ||
           text.includes('gateway timeout') ||
+          text.includes('failed to fetch') ||
+          text.includes('network') ||
+          text.includes('aborterror') ||
           text.includes('payload too large') ||
           text.includes('request body too large')
         );
       };
 
+      const isPtOnConflictConfigError = (error) => {
+        const text = getPtBatchErrorText(error);
+        return (
+          text.includes('on conflict') ||
+          text.includes('on_conflict') ||
+          text.includes('schema cache') ||
+          text.includes('read_day') ||
+          text.includes('day_half') ||
+          text.includes('no unique or exclusion constraint')
+        );
+      };
+
+      const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
       const dedupedRows = deduplicateValidRows(validRows);
       let nextIndex = 0;
-      let batchNumber = 0;
       let targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, dedupedRows.length);
+      let ptConflictTarget = PT_PING_PRIMARY_CONFLICT_TARGET;
 
       while (nextIndex < dedupedRows.length) {
         const remaining = dedupedRows.length - nextIndex;
-        const batchSize = Math.min(targetBatchSize, remaining);
-        const sliceEnd = nextIndex + batchSize;
-        const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
-        const batch = batchRows.map(buildSlimPtPayload);
+        let batchSize = Math.min(targetBatchSize, remaining);
+        let retryAttempt = 0;
+        let uploaded = false;
 
-        batchNumber += 1;
-        setStatus(
-          `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
-          `(batch ${batchNumber}, size ${batchSize})...`
-        );
-        setProgress(
-          (nextIndex / dedupedRows.length) * 90,
-          `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
-        );
+        while (!uploaded) {
+          const sliceEnd = nextIndex + batchSize;
+          const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
+          const batch = batchRows.map(buildSlimPtPayload);
+          const batchNumber = aggregated.batches + 1;
+          const retryLabel = retryAttempt > 0 ? `, retry ${retryAttempt}` : '';
 
-        const { error, count } = await supabaseClient
-          .from('PT-LastPing')
-          .upsert(batch, {
-            onConflict: '"Serial",read_day,day_half',
-            ignoreDuplicates: true,
-            count: 'exact',
+          setStatus(
+            `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
+            `(batch ${batchNumber}, size ${batchSize}${retryLabel})...`
+          );
+          setProgress(
+            (nextIndex / dedupedRows.length) * 90,
+            `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
+          );
+
+          const { error } = await supabaseClient
+            .from('PT-LastPing')
+            .upsert(batch, {
+              onConflict: ptConflictTarget,
+              ignoreDuplicates: true,
+            });
+
+          if (!error) {
+            aggregated.batches += 1;
+            aggregated.inserted += batch.length;
+            nextIndex = sliceEnd;
+            uploaded = true;
+            setProgress(
+              (nextIndex / dedupedRows.length) * 90,
+              `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
+            );
+            if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
+              targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, Math.floor(targetBatchSize * 1.5));
+            }
+            if (PT_PING_BATCH_DELAY_MS > 0) {
+              await waitMs(PT_PING_BATCH_DELAY_MS);
+            }
+            continue;
+          }
+
+          console.error('Supabase PT upload error:', {
+            error,
+            nextIndex,
+            batchSize,
+            retryAttempt,
+            ptConflictTarget,
           });
 
-        if (error) {
-          console.error('Supabase insert error:', { error, batchNumber, batchSize, nextIndex });
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             setStatus('Upload blocked by security policy (RLS).');
@@ -1792,34 +1868,46 @@
             showPtError(error, `Batch ${batchNumber} blocked`);
             return;
           }
-          if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
-            targetBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
-            batchNumber -= 1;
-            setStatus(`Batch too large. Retrying with smaller batch size (${targetBatchSize})...`);
+
+          if (isPtOnConflictConfigError(error) && ptConflictTarget !== PT_PING_FALLBACK_CONFLICT_TARGET) {
+            ptConflictTarget = PT_PING_FALLBACK_CONFLICT_TARGET;
+            retryAttempt = 0;
+            setStatus('Conflict key read_day/day_half unavailable. Switching to Serial + Date and retrying...');
+            await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
             continue;
           }
+
+          if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
+            const nextBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+            if (nextBatchSize < batchSize) {
+              batchSize = nextBatchSize;
+              targetBatchSize = nextBatchSize;
+              retryAttempt = 0;
+              setStatus(`Batch timed out. Reducing batch size to ${batchSize} and retrying...`);
+              await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
+              continue;
+            }
+          }
+
+          if (isPtBatchRetryable(error) && retryAttempt < PT_PING_MAX_RETRIES_PER_BATCH) {
+            retryAttempt += 1;
+            const retryDelayMs = PT_PING_RETRY_BASE_DELAY_MS * retryAttempt;
+            setStatus(
+              `Temporary upload error on batch ${batchNumber}. ` +
+              `Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`
+            );
+            await waitMs(retryDelayMs);
+            continue;
+          }
+
           showToast('Upload failed', 'error');
           setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
           setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} failed`);
-          showPtError(error, `Batch ${batchNumber} failed`);
+          showPtError(
+            error,
+            `Batch ${batchNumber} failed (batch size ${batchSize}, conflict target ${ptConflictTarget}).`
+          );
           throw error;
-        }
-
-        const insertedCount = typeof count === 'number' ? count : batch.length;
-        aggregated.batches += 1;
-        aggregated.inserted += insertedCount;
-        aggregated.skippedSupabaseDuplicates += Math.max(0, batch.length - insertedCount);
-        nextIndex = sliceEnd;
-        setProgress(
-          (nextIndex / dedupedRows.length) * 90,
-          `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
-        );
-
-        if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
-          targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, targetBatchSize * 2);
-        }
-        if (PT_PING_BATCH_DELAY_MS > 0) {
-          await new Promise((resolve) => setTimeout(resolve, PT_PING_BATCH_DELAY_MS));
         }
       }
 
@@ -1828,14 +1916,14 @@
       const summary =
         'Completed.' +
         '\nBatches: ' + aggregated.batches +
-        '\nInserted: ' + aggregated.inserted +
+        '\nSent to Supabase: ' + aggregated.inserted +
         '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
         '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
         '\nSkipped duplicates (client half-day bucket): ' + aggregated.skippedDeduplication +
-        '\nSkipped duplicates (Supabase conflicts): ' + aggregated.skippedSupabaseDuplicates +
+        '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
         '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
         '\nErrors: ' + parseErrors;
-      setStatus(`Upload complete. Inserted: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Skipped (Supabase): ${aggregated.skippedSupabaseDuplicates} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
+      setStatus(`Upload complete. Sent: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
       showToast(summary, 'success');
       if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
       lucide.createIcons();

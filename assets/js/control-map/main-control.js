@@ -158,6 +158,226 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       tech: { originKey: null, distances: new Map() },
       partners: { originKey: null, distances: new Map() }
     };
+    const OVERLAP_CYCLE_HIT_RADIUS_PX = 18;
+    const OVERLAP_CYCLE_MAX_AGE_MS = 7000;
+    let overlapCycleState = null;
+
+    const resetOverlapCycleState = () => {
+      overlapCycleState = null;
+    };
+
+    const getOverlapHitRadiusMeters = (latlng) => {
+      if (!map || !latlng) return 45;
+      const centerPoint = map.latLngToContainerPoint(latlng);
+      const edgePoint = L.point(centerPoint.x + OVERLAP_CYCLE_HIT_RADIUS_PX, centerPoint.y);
+      const edgeLatLng = map.containerPointToLatLng(edgePoint);
+      return Math.max(12, map.distance(latlng, edgeLatLng));
+    };
+
+    const getCycleRolePriority = (role = 'other') => {
+      if (role === 'vehicle') return 0;
+      if (role === 'parking-spot') return 1;
+      if (role === 'route-point') return 2;
+      return 3;
+    };
+
+    const getLayerCycleRole = (layer) => {
+      const explicitRole = `${layer?.options?.cycleRole || ''}`.trim();
+      if (explicitRole) return explicitRole;
+
+      if (layer?.options?.vehicleData) return 'vehicle';
+
+      const popupClassName = `${layer?.getPopup?.()?.options?.className || ''}`.toLowerCase();
+      if (popupClassName.includes('vehicle-popup')) return 'vehicle';
+      if (popupClassName.includes('vehicle-history-hotspot-popup')) return 'parking-spot';
+      if (popupClassName.includes('gps-record-popup')) return 'route-point';
+
+      const layerClassName = `${layer?.options?.className || ''}`.toLowerCase();
+      if (layerClassName.includes('vehicle-history-hotspot')) return 'parking-spot';
+      if (layerClassName.includes('gps-trail-point')) return 'route-point';
+
+      return 'other';
+    };
+
+    const getLayerCycleKey = (layer, role) => {
+      const explicitKey = `${layer?.options?.cycleKey || ''}`.trim();
+      if (explicitKey) return explicitKey;
+
+      const latlng = typeof layer?.getLatLng === 'function' ? layer.getLatLng() : null;
+      const coordKey = latlng ? `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}` : '';
+
+      if (role === 'vehicle') {
+        const vehicleId = layer?.options?.vehicleData?.id;
+        if (vehicleId !== undefined && vehicleId !== null) return `vehicle-${vehicleId}`;
+      }
+
+      if (role === 'parking-spot') return `parking-${coordKey}`;
+      if (role === 'route-point') return `route-${coordKey}`;
+      return `layer-${L.stamp(layer)}-${coordKey}`;
+    };
+
+    const collectOverlapCycleCandidates = (latlng) => {
+      if (!map || !latlng) return [];
+      const hitRadiusMeters = getOverlapHitRadiusMeters(latlng);
+      const candidateMap = new Map();
+
+      const registerCandidate = (candidate) => {
+        if (!candidate?.key) return;
+        const existing = candidateMap.get(candidate.key);
+        if (!existing) {
+          candidateMap.set(candidate.key, candidate);
+          return;
+        }
+
+        if (candidate.priority < existing.priority) {
+          candidateMap.set(candidate.key, candidate);
+          return;
+        }
+
+        if (candidate.priority === existing.priority && candidate.distanceMeters < existing.distanceMeters) {
+          candidateMap.set(candidate.key, candidate);
+        }
+      };
+
+      vehicleMarkers.forEach(({ marker }) => {
+        if (!marker || typeof marker.getLatLng !== 'function') return;
+        const markerLatLng = marker.getLatLng();
+        const distanceMeters = map.distance(latlng, markerLatLng);
+        if (!Number.isFinite(distanceMeters) || distanceMeters > hitRadiusMeters) return;
+        const role = 'vehicle';
+        const key = `${marker?.options?.cycleKey || getLayerCycleKey(marker, role)}`;
+        const vehicle = marker?.options?.vehicleData || null;
+        registerCandidate({
+          key,
+          role,
+          priority: getCycleRolePriority(role),
+          distanceMeters,
+          layer: marker,
+          vehicle,
+          vehicleId: vehicle?.id ?? null
+        });
+      });
+
+      if (highlightLayer?.eachLayer) {
+        highlightLayer.eachLayer((layer) => {
+          if (!layer || typeof layer.getLatLng !== 'function') return;
+          if (layer?.options?.interactive === false) return;
+          const hasPopup = !!layer.getPopup?.();
+          if (!hasPopup && !layer?.options?.vehicleData) return;
+
+          const layerLatLng = layer.getLatLng();
+          const distanceMeters = map.distance(latlng, layerLatLng);
+          if (!Number.isFinite(distanceMeters) || distanceMeters > hitRadiusMeters) return;
+
+          const role = getLayerCycleRole(layer);
+          const key = getLayerCycleKey(layer, role);
+          registerCandidate({
+            key,
+            role,
+            priority: getCycleRolePriority(role),
+            distanceMeters,
+            layer,
+            vehicle: layer?.options?.vehicleData || null,
+            vehicleId: layer?.options?.vehicleData?.id ?? null
+          });
+        });
+      }
+
+      return Array.from(candidateMap.values())
+        .sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return a.distanceMeters - b.distanceMeters;
+        });
+    };
+
+    const activateOverlapCycleCandidate = (candidate) => {
+      if (!candidate) return false;
+
+      if (candidate.role === 'vehicle') {
+        const targetVehicle = candidate.vehicle
+          || vehicles.find((vehicle) => `${vehicle.id}` === `${candidate.vehicleId}`);
+        if (!targetVehicle || !hasValidCoords(targetVehicle)) return false;
+        if (`${selectedVehicleId ?? ''}` === `${targetVehicle.id ?? ''}`) {
+          if (candidate.layer && typeof candidate.layer.openPopup === 'function') {
+            candidate.layer.openPopup();
+          }
+          return true;
+        }
+        applySelection(targetVehicle.id, null);
+        focusVehicle(targetVehicle);
+        return true;
+      }
+
+      if (candidate.layer && typeof candidate.layer.openPopup === 'function') {
+        candidate.layer.openPopup();
+        return true;
+      }
+
+      return false;
+    };
+
+    const cycleOverlappingTargetsAtLatLng = (latlng, originalEvent = null) => {
+      if (!map || !latlng || selectedVehicleId === null) return false;
+      const candidates = collectOverlapCycleCandidates(latlng);
+      if (candidates.length < 2) {
+        resetOverlapCycleState();
+        return false;
+      }
+
+      const signature = candidates.map((candidate) => candidate.key).join('|');
+      const now = Date.now();
+      const previous = overlapCycleState;
+      const previousLatLng = previous
+        ? L.latLng(previous.lat, previous.lng)
+        : null;
+      const sameSequence = Boolean(
+        previous
+        && previous.signature === signature
+        && previousLatLng
+        && map.distance(latlng, previousLatLng) <= previous.hitRadiusMeters
+        && (now - previous.timestamp) <= OVERLAP_CYCLE_MAX_AGE_MS
+      );
+
+      let nextIndex = 0;
+      if (sameSequence) {
+        nextIndex = (previous.index + 1) % candidates.length;
+      } else {
+        const clickedKey = `${originalEvent?.cycleKey || ''}`.trim();
+        const clickedRole = `${originalEvent?.cycleRole || ''}`.trim();
+        const vehicleSelectionChanged = Boolean(originalEvent?.vehicleSelectionChanged);
+        const clickedIndex = clickedKey
+          ? candidates.findIndex((candidate) => candidate.key === clickedKey)
+          : -1;
+        const selectedVehicleIndex = candidates.findIndex((candidate) =>
+          candidate.role === 'vehicle'
+          && `${candidate.vehicle?.id ?? candidate.vehicleId ?? ''}` === `${selectedVehicleId}`
+        );
+        if (vehicleSelectionChanged) {
+          nextIndex = selectedVehicleIndex >= 0
+            ? selectedVehicleIndex
+            : (clickedIndex >= 0 ? clickedIndex : 0);
+        } else if (clickedRole === 'vehicle' && selectedVehicleIndex >= 0 && candidates.length > 1) {
+          nextIndex = (selectedVehicleIndex + 1) % candidates.length;
+        } else if (clickedIndex >= 0) {
+          nextIndex = clickedIndex;
+        } else {
+          nextIndex = selectedVehicleIndex >= 0 ? selectedVehicleIndex : 0;
+        }
+      }
+
+      const targetCandidate = candidates[nextIndex];
+      if (!activateOverlapCycleCandidate(targetCandidate)) return false;
+
+      overlapCycleState = {
+        signature,
+        index: nextIndex,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        hitRadiusMeters: getOverlapHitRadiusMeters(latlng),
+        timestamp: now
+      };
+      return true;
+    };
 
     const ensureSupabaseSession = () => ensureSupabaseSessionBase(supabaseClient);
     const vehicleService = createVehicleService({ client: supabaseClient, tableName: TABLES.vehicles });
@@ -724,7 +944,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return accuracy === 'exact' ? 'bg-emerald-300' : 'bg-amber-300';
     };
 
-    const GPS_TRAIL_POINT_LIMIT = 5;
+    const GPS_TRAIL_POINT_LIMIT = 10;
+    const GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS = 120000;
+    const GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS = 20000;
+    const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
     const GPS_HISTORY_HOTSPOT_VISIT_GAP_MS = 45 * 60 * 1000;
@@ -792,6 +1015,61 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         timestamp: Number.isFinite(timeMs) ? timeMs : parseGpsTrailTimestamp(record),
         timeMs
       };
+    };
+
+    const getVehicleTrailAnchorPoint = (vehicle = {}) => {
+      const lat = parseGpsNumericValue(
+        vehicle?.lat
+        ?? vehicle?.Lat
+        ?? vehicle?.latitude
+        ?? vehicle?.Latitude
+      );
+      const lng = parseGpsNumericValue(
+        vehicle?.lng
+        ?? vehicle?.long
+        ?? vehicle?.Long
+        ?? vehicle?.longitude
+        ?? vehicle?.Longitude
+      );
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+      return { lat, lng };
+    };
+
+    const getLatestTrailPointFromRecords = (records = []) => {
+      if (!Array.isArray(records) || !records.length) return null;
+      let latestRecord = null;
+      let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+      records.forEach((record) => {
+        const timestamp = parseGpsTrailTimestamp(record);
+        if (timestamp >= latestTimestamp) {
+          latestTimestamp = timestamp;
+          latestRecord = record;
+        }
+      });
+
+      if (!latestRecord) return null;
+      const point = toGpsTrailPoint(latestRecord);
+      if (!point) return null;
+      return { ...point, record: latestRecord };
+    };
+
+    const getMostRecentRecordSerial = (records = [], getRecordSerial = () => '') => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return '';
+      let latestSerial = '';
+      let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+      records.forEach((record) => {
+        const serial = getRecordSerial(record);
+        if (!serial) return;
+        const timestamp = parseGpsTrailTimestamp(record);
+        if (timestamp >= latestTimestamp) {
+          latestTimestamp = timestamp;
+          latestSerial = serial;
+        }
+      });
+
+      return latestSerial;
     };
 
     const parseGpsRecordMovingStatus = (record = {}) => {
@@ -1141,40 +1419,118 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       `;
     };
 
-    const drawVehicleGpsTrail = (points = []) => {
-      if (!highlightLayer || !Array.isArray(points) || !points.length) return;
-      const trailStrokeColor = '#14532d';
-      const trailFillColor = '#166534';
-      const trailArrowColor = 'rgba(20,83,45,0.76)';
-      const pathPoints = points.map((point) => [point.lat, point.lng]);
+    const clampUnitInterval = (value) => {
+      if (!Number.isFinite(value)) return 0;
+      if (value < 0) return 0;
+      if (value > 1) return 1;
+      return value;
+    };
 
-      if (pathPoints.length > 1) {
-        const trailLine = L.polyline(pathPoints, {
-          color: trailStrokeColor,
-          weight: 2.4,
-          opacity: 0.58,
+    const parseTrailColorToRgb = (value, fallback = { r: 20, g: 83, b: 45 }) => {
+      if (typeof value !== 'string') return fallback;
+      const normalized = value.trim();
+      if (!normalized) return fallback;
+
+      if (normalized.startsWith('#')) {
+        const hex = normalized.slice(1);
+        if (hex.length === 3) {
+          const r = Number.parseInt(hex[0] + hex[0], 16);
+          const g = Number.parseInt(hex[1] + hex[1], 16);
+          const b = Number.parseInt(hex[2] + hex[2], 16);
+          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return { r, g, b };
+        }
+        if (hex.length === 6) {
+          const r = Number.parseInt(hex.slice(0, 2), 16);
+          const g = Number.parseInt(hex.slice(2, 4), 16);
+          const b = Number.parseInt(hex.slice(4, 6), 16);
+          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return { r, g, b };
+        }
+      }
+
+      const rgbMatch = normalized.match(/^rgba?\((\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\)$/i);
+      if (!rgbMatch) return fallback;
+      const r = Number.parseInt(rgbMatch[1], 10);
+      const g = Number.parseInt(rgbMatch[2], 10);
+      const b = Number.parseInt(rgbMatch[3], 10);
+      if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return fallback;
+      return {
+        r: Math.max(0, Math.min(255, r)),
+        g: Math.max(0, Math.min(255, g)),
+        b: Math.max(0, Math.min(255, b))
+      };
+    };
+
+    const interpolateNumber = (fromValue, toValue, progress) => {
+      const boundedProgress = clampUnitInterval(progress);
+      return fromValue + ((toValue - fromValue) * boundedProgress);
+    };
+
+    const interpolateTrailRgb = (fromColor, toColor, progress) => {
+      return {
+        r: Math.round(interpolateNumber(fromColor.r, toColor.r, progress)),
+        g: Math.round(interpolateNumber(fromColor.g, toColor.g, progress)),
+        b: Math.round(interpolateNumber(fromColor.b, toColor.b, progress))
+      };
+    };
+
+    const rgbToHex = ({ r, g, b }) => {
+      const toHex = (value) => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, '0');
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    };
+
+    const rgbToRgba = ({ r, g, b }, alpha) => `rgba(${Math.max(0, Math.min(255, Math.round(r)))},${Math.max(0, Math.min(255, Math.round(g)))},${Math.max(0, Math.min(255, Math.round(b)))},${clampUnitInterval(alpha).toFixed(3)})`;
+
+    const drawVehicleGpsTrail = (points = [], vehicleColor = '') => {
+      if (!highlightLayer || !Array.isArray(points) || !points.length) return;
+      const oldestLineRgb = parseTrailColorToRgb('#14532d');
+      const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
+      const newestVehicleRgb = parseTrailColorToRgb(vehicleColor, oldestLineRgb);
+      const pointStepDenominator = Math.max(1, points.length - 1);
+      const segmentStepDenominator = Math.max(1, points.length - 1);
+
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const fromPoint = points[index];
+        const toPoint = points[index + 1];
+        const segmentProgress = clampUnitInterval((index + 0.5) / segmentStepDenominator);
+        const segmentRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
+        const segmentLine = L.polyline([
+          [fromPoint.lat, fromPoint.lng],
+          [toPoint.lat, toPoint.lng]
+        ], {
+          color: rgbToHex(segmentRgb),
+          weight: interpolateNumber(2.25, 2.85, segmentProgress),
+          opacity: interpolateNumber(0.56, 0.8, segmentProgress),
           dashArray: '4 6',
           lineCap: 'round',
           lineJoin: 'round',
           interactive: false
         }).addTo(highlightLayer);
-        trailLine.bringToBack();
+        segmentLine.bringToBack();
       }
 
       points.forEach((point, index) => {
-        const isLatestPoint = index === points.length - 1;
+        const pointProgress = clampUnitInterval(index / pointStepDenominator);
+        const pointStrokeRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, pointProgress);
+        const pointFillRgb = interpolateTrailRgb(oldestFillRgb, newestVehicleRgb, pointProgress);
         const pointMarker = L.circleMarker([point.lat, point.lng], {
-          radius: isLatestPoint ? 5.5 : 4,
-          color: trailStrokeColor,
-          weight: isLatestPoint ? 1.45 : 1.25,
-          fillColor: trailFillColor,
-          fillOpacity: isLatestPoint ? 0.42 : 0.3,
-          opacity: isLatestPoint ? 0.68 : 0.56,
-          interactive: true
+          radius: interpolateNumber(3.9, 5.6, pointProgress),
+          color: rgbToHex(pointStrokeRgb),
+          weight: interpolateNumber(1.2, 1.45, pointProgress),
+          fillColor: rgbToHex(pointFillRgb),
+          fillOpacity: interpolateNumber(0.28, 0.45, pointProgress),
+          opacity: interpolateNumber(0.54, 0.76, pointProgress),
+          interactive: true,
+          className: 'gps-trail-point',
+          cycleRole: 'route-point',
+          cycleKey: `route-point-${index}`
         }).addTo(highlightLayer);
 
         pointMarker.on('click', (event) => {
-          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = pointMarker.options?.cycleRole || 'route-point';
+            event.originalEvent.cycleKey = pointMarker.options?.cycleKey || `route-point-${index}`;
+          }
         });
         pointMarker.bindPopup(buildGpsTrailRecordPopup(point, index, points.length), {
           className: 'gps-record-popup',
@@ -1190,11 +1546,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           lat: (fromPoint.lat + toPoint.lat) / 2,
           lng: (fromPoint.lng + toPoint.lng) / 2
         };
+        const segmentProgress = clampUnitInterval((index + 0.5) / segmentStepDenominator);
+        const arrowRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
+        const arrowColor = rgbToRgba(arrowRgb, interpolateNumber(0.5, 0.82, segmentProgress));
         const bearing = getGpsTrailBearingDegrees(fromPoint, toPoint);
         L.marker([midpoint.lat, midpoint.lng], {
           icon: L.divIcon({
             className: 'gps-trail-arrow',
-            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${trailArrowColor};font-size:12px;line-height:12px;text-shadow:0 0 2px rgba(2,6,23,0.72)">▲</span>`,
+            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${arrowColor};font-size:12px;line-height:12px;text-shadow:0 0 2px rgba(2,6,23,0.72)">▲</span>`,
             iconSize: [12, 12],
             iconAnchor: [6, 6]
           }),
@@ -1276,11 +1635,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           fillOpacity: 0.05 + (hotspotStrength * 0.06),
           opacity: 0.42 + (hotspotStrength * 0.14),
           interactive: true,
-          className: 'vehicle-history-hotspot-ring'
+          className: 'vehicle-history-hotspot-ring',
+          cycleRole: 'parking-spot',
+          cycleKey: `parking-spot-${hotspot.id || index + 1}`
         }).addTo(highlightLayer);
 
         ring.on('click', (event) => {
-          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = ring.options?.cycleRole || 'parking-spot';
+            event.originalEvent.cycleKey = ring.options?.cycleKey || `parking-spot-${hotspot.id || index + 1}`;
+          }
         });
 
         ring.bindPopup(popupHtml, {
@@ -1307,11 +1672,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           fillOpacity: 0.45,
           opacity: 0.72,
           interactive: true,
-          className: 'vehicle-history-hotspot-core'
+          className: 'vehicle-history-hotspot-core',
+          cycleRole: 'parking-spot',
+          cycleKey: `parking-spot-${hotspot.id || index + 1}`
         }).addTo(highlightLayer);
 
         core.on('click', (event) => {
-          if (event?.originalEvent) event.originalEvent.handledByMarker = true;
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = core.options?.cycleRole || 'parking-spot';
+            event.originalEvent.cycleKey = core.options?.cycleKey || `parking-spot-${hotspot.id || index + 1}`;
+          }
         });
 
         core.bindPopup(popupHtml, {
@@ -1343,7 +1714,40 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         ? records.filter((record) => getRecordSerial(record) === winnerSerial)
         : records;
 
-      const latestRecords = [...winnerScopedRecords]
+      const latestSerial = getMostRecentRecordSerial(records, getRecordSerial);
+      const latestSerialRecords = latestSerial
+        ? records.filter((record) => getRecordSerial(record) === latestSerial)
+        : [];
+      let trailSourceRecords = winnerScopedRecords;
+
+      if (!winnerScopedRecords.length) {
+        trailSourceRecords = latestSerialRecords.length ? latestSerialRecords : records;
+      } else if (latestSerialRecords.length && latestSerial !== winnerSerial) {
+        const vehicleAnchor = getVehicleTrailAnchorPoint(vehicle);
+        const winnerLatestPoint = getLatestTrailPointFromRecords(winnerScopedRecords);
+        const latestSerialPoint = getLatestTrailPointFromRecords(latestSerialRecords);
+        const winnerLatestTimestamp = winnerLatestPoint?.timestamp ?? Number.NEGATIVE_INFINITY;
+        const latestSerialTimestamp = latestSerialPoint?.timestamp ?? Number.NEGATIVE_INFINITY;
+        const latestSerialIsFresher = latestSerialTimestamp - winnerLatestTimestamp >= GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS;
+        const winnerDistance = vehicleAnchor && winnerLatestPoint
+          ? getGpsPointDistanceMeters(vehicleAnchor, winnerLatestPoint)
+          : Number.POSITIVE_INFINITY;
+        const latestSerialDistance = vehicleAnchor && latestSerialPoint
+          ? getGpsPointDistanceMeters(vehicleAnchor, latestSerialPoint)
+          : Number.POSITIVE_INFINITY;
+        const latestSerialIsCloser = latestSerialDistance + GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS < winnerDistance;
+        const winnerLooksStale = winnerDistance > GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS;
+
+        if ((winnerLooksStale && latestSerialIsCloser) || (!vehicleAnchor && latestSerialIsFresher)) {
+          trailSourceRecords = latestSerialRecords;
+        }
+      }
+
+      if (trailSourceRecords.length < 2 && records.length > trailSourceRecords.length) {
+        trailSourceRecords = records;
+      }
+
+      const latestRecords = [...trailSourceRecords]
         .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
         .slice(0, GPS_TRAIL_POINT_LIMIT);
 
@@ -1362,7 +1766,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!trailPoints.length && !historyHotspots.length) return;
       drawVehicleHistoryHotspots(historyHotspots);
       if (trailPoints.length) {
-        drawVehicleGpsTrail(trailPoints);
+        drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle));
       }
     };
 
@@ -1763,7 +2167,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       map.on('click', (e) => {
-        if (e.originalEvent?.handledByMarker) return;
+        if (e.originalEvent?.handledByMarker) {
+          cycleOverlappingTargetsAtLatLng(e.latlng, e.originalEvent);
+          return;
+        }
 
         const lat = parseFloat(e.latlng.lat.toFixed(6));
         const lng = parseFloat(e.latlng.lng.toFixed(6));
@@ -2735,11 +3142,32 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
           const focusHandler = useCallback(
             `vehicle-focus-${vehicle.id}`,
-            () => () => {
+            () => (payload = {}) => {
               const currentVehicle = vehicles.find((item) => item.id === vehicle.id);
               if (!currentVehicle) return;
               if (!hasValidCoords(currentVehicle)) {
                 console.warn(`No coordinates available for vehicle ${currentVehicle.vin || currentVehicle.id || 'unknown'}`);
+                return;
+              }
+              const originalEvent = payload?.event?.originalEvent;
+              const vehicleSelectionChanged = `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`;
+              if (originalEvent) {
+                originalEvent.handledByMarker = true;
+                originalEvent.cycleRole = 'vehicle';
+                originalEvent.cycleKey = `vehicle-${currentVehicle.id}`;
+                originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
+              }
+              if (!vehicleSelectionChanged) {
+                const clickLatLng = payload?.marker?.getLatLng?.()
+                  || (hasValidCoords(currentVehicle) ? L.latLng(currentVehicle.lat, currentVehicle.lng) : null);
+                const didCycle = cycleOverlappingTargetsAtLatLng(clickLatLng, originalEvent || null);
+                if (!didCycle) {
+                  if (payload?.marker && typeof payload.marker.openPopup === 'function') {
+                    payload.marker.openPopup();
+                  } else {
+                    focusVehicle(currentVehicle);
+                  }
+                }
                 return;
               }
               applySelection(currentVehicle.id, null);
@@ -2966,7 +3394,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         fillColor: markerColor,
         fillOpacity: 0.95,
         opacity: 0.98,
-        className: 'vehicle-dot'
+        className: 'vehicle-dot',
+        cycleRole: 'vehicle',
+        cycleKey: `vehicle-${vehicle.id}`
       }).addTo(highlightLayer);
 
       const halo = L.circleMarker([vehicle.lat, vehicle.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
@@ -3413,8 +3843,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function applySelection(vehicleId = null, techId = null) {
+      const previousVehicleId = selectedVehicleId;
+      const previousTechId = selectedTechId;
       selectedVehicleId = vehicleId;
       selectedTechId = techId;
+      if (`${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}` || `${previousTechId ?? ''}` !== `${techId ?? ''}`) {
+        resetOverlapCycleState();
+      }
       if (vehicleId !== null && !syncingVehicleSelection) {
         const selectedVehicle = vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`);
         setSelectedVehicle({
@@ -3435,6 +3870,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function resetSelection() {
       gpsTrailRequestCounter += 1;
+      resetOverlapCycleState();
       selectedVehicleId = null;
       selectedTechId = null;
       Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
