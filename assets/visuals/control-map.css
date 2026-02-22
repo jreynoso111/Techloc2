@@ -292,6 +292,37 @@ body.gps-column-resizing {
     .service-mini-meta { margin: 6px 0 0; font-size: 11px; color: #e2e8f0; line-height: 1.3; display: flex; gap: 6px; align-items: baseline; }
     .service-mini-label { font-weight: 700; color: #cbd5e1; letter-spacing: 0.02em; text-transform: uppercase; font-size: 10px; }
     .service-mini-note { margin: 4px 0 0; font-size: 11px; color: #fef3c7; line-height: 1.35; font-weight: 600; }
+    .map-coord-link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(147, 197, 253, 0.55);
+      background: rgba(30, 58, 138, 0.28);
+      color: #dbeafe;
+      text-decoration: none;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      line-height: 1;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+    }
+    .map-coord-link-btn:hover {
+      background: rgba(30, 64, 175, 0.42);
+      border-color: rgba(191, 219, 254, 0.9);
+      color: #eff6ff;
+    }
+    .map-coord-link-btn:focus-visible {
+      outline: 2px solid rgba(147, 197, 253, 0.9);
+      outline-offset: 2px;
+    }
+    .map-coord-link-btn.is-tight {
+      margin-top: 4px;
+      padding: 3px 7px;
+      font-size: 9px;
+    }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
