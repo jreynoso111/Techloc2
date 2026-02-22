@@ -176,6 +176,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const hasVisibleParkingSpotPopup = () => Boolean(document.querySelector('.vehicle-history-hotspot-popup'));
+    const hasVisibleRoutePointPopup = () => Boolean(document.querySelector('.gps-record-popup'));
 
     const getOverlapHitRadiusMeters = (latlng) => {
       if (!map || !latlng) return 45;
@@ -964,6 +965,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_HISTORY_HOTSPOT_MIN_VISITS = 2;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
     const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+    const GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_DAYS = 3;
+    const GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_MS = GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_DAYS * GPS_HISTORY_DAY_MS;
     const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
     const HOTSPOT_SHARED_MATCH_RADIUS_METERS = 320;
     const HOTSPOT_RELATED_VEHICLE_LIMIT = 8;
@@ -1336,7 +1339,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       records = [],
       {
         getRecordSerial = () => '',
-        serialCountsBySerial = null
+        serialCountsBySerial = null,
+        parkedDaysOverride = null,
+        anchorPoint = null
       } = {}
     ) => {
       if (!Array.isArray(records) || !records.length) return [];
@@ -1405,6 +1410,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         selectedCluster.lastSeen = Math.max(selectedCluster.lastSeen, point.timestamp);
       });
 
+      const computeHotspotScore = ({
+        uniqueDays = 0,
+        visits = 0,
+        pingCount = 0,
+        stoppedCount = 0,
+        totalDurationMs = 0,
+        longestDurationDays = 0
+      } = {}) => {
+        const safeUniqueDays = Number.isFinite(uniqueDays) ? uniqueDays : 0;
+        const safeVisits = Number.isFinite(visits) ? visits : 0;
+        const safePingCount = Number.isFinite(pingCount) ? pingCount : 0;
+        const safeStoppedCount = Number.isFinite(stoppedCount) ? stoppedCount : 0;
+        const safeTotalDurationHours = Number.isFinite(totalDurationMs) ? (totalDurationMs / (1000 * 60 * 60)) : 0;
+        const safeLongestDurationDays = Number.isFinite(longestDurationDays) ? longestDurationDays : 0;
+        return (safeUniqueDays * 7)
+          + (safeVisits * 4)
+          + (Math.min(safePingCount, 250) * 1.35)
+          + (safeStoppedCount * 1.5)
+          + (Math.min(safeTotalDurationHours, 240) * 1.2)
+          + (Math.min(safeLongestDurationDays, 60) * 8.5);
+      };
+
       const normalizedHotspots = clusters
         .map((cluster, index) => {
           const sessions = buildHotspotSessions(cluster.points);
@@ -1433,12 +1460,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           );
           const uniqueDays = uniqueDayKeys.size;
           const pingCount = cluster.points.length;
-          const totalDurationHours = totalDurationMs / (1000 * 60 * 60);
-          const score = (uniqueDays * 7)
-            + (visits * 4)
-            + (Math.min(pingCount, 250) * 1.35)
-            + (stoppedCount * 1.5)
-            + (Math.min(totalDurationHours, 240) * 1.2);
+          const longestDurationDays = longestDurationMs / GPS_HISTORY_DAY_MS;
+          const score = computeHotspotScore({
+            uniqueDays,
+            visits,
+            pingCount,
+            stoppedCount,
+            totalDurationMs,
+            longestDurationDays
+          });
 
           return {
             id: `vehicle-history-hotspot-${index + 1}`,
@@ -1455,23 +1485,115 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             totalDurationMs,
             avgDurationMs,
             longestDurationMs,
+            longestDurationDays,
             lastStayDurationMs,
             score
           };
         });
 
-      const strictHotspots = normalizedHotspots.filter((hotspot) =>
-        hotspot.points >= 2
-        && (
-          hotspot.visits >= GPS_HISTORY_HOTSPOT_MIN_VISITS
+      const strictHotspots = normalizedHotspots.filter((hotspot) => {
+        const qualifiesLongStay = hotspot.longestDurationMs > GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_MS;
+        const hasSufficientSignals = hotspot.visits >= GPS_HISTORY_HOTSPOT_MIN_VISITS
           || hotspot.uniqueDays >= 2
           || hotspot.pingCount >= 8
           || hotspot.totalDurationMs >= 30 * 60 * 1000
-        )
-      );
+          || qualifiesLongStay;
+        const hasEnoughPoints = hotspot.points >= 2 || qualifiesLongStay;
+        return hasEnoughPoints && hasSufficientSignals;
+      });
 
       const fallbackHotspots = normalizedHotspots.filter((hotspot) => hotspot.points >= 1);
-      const candidates = strictHotspots.length ? strictHotspots : fallbackHotspots;
+      let candidates = strictHotspots.length ? strictHotspots : fallbackHotspots;
+
+      const normalizedOverrideDays = Number.isFinite(parkedDaysOverride) && parkedDaysOverride > 0
+        ? parkedDaysOverride
+        : null;
+      const normalizedAnchor = anchorPoint
+        && Number.isFinite(Number(anchorPoint.lat))
+        && Number.isFinite(Number(anchorPoint.lng))
+        ? { lat: Number(anchorPoint.lat), lng: Number(anchorPoint.lng) }
+        : null;
+
+      if (normalizedOverrideDays && normalizedAnchor) {
+        const forcedDurationMs = normalizedOverrideDays * GPS_HISTORY_DAY_MS;
+        const attachRadiusMeters = Math.max(
+          HOTSPOT_SHARED_MATCH_RADIUS_METERS,
+          GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 1.6
+        );
+        let closestIndex = -1;
+        let closestDistance = Number.POSITIVE_INFINITY;
+
+        candidates.forEach((hotspot, index) => {
+          const distance = getGpsPointDistanceMeters(normalizedAnchor, hotspot);
+          if (!Number.isFinite(distance) || distance >= closestDistance) return;
+          closestDistance = distance;
+          closestIndex = index;
+        });
+
+        if (closestIndex >= 0 && closestDistance <= attachRadiusMeters) {
+          const base = candidates[closestIndex];
+          const boostedUniqueDays = Math.max(base.uniqueDays || 0, Math.round(normalizedOverrideDays));
+          const boostedVisits = Math.max(base.visits || 0, Math.max(1, Math.round(normalizedOverrideDays / 2)));
+          const boostedTotalDurationMs = Math.max(base.totalDurationMs || 0, forcedDurationMs);
+          const boostedLongestDurationMs = Math.max(base.longestDurationMs || 0, forcedDurationMs);
+          const boostedLongestDurationDays = Math.max(base.longestDurationDays || 0, normalizedOverrideDays);
+          const boostedAvgDurationMs = Math.max(base.avgDurationMs || 0, Math.round(boostedTotalDurationMs / Math.max(1, boostedVisits)));
+          const boostedLastStayDurationMs = Math.max(base.lastStayDurationMs || 0, forcedDurationMs);
+          candidates[closestIndex] = {
+            ...base,
+            uniqueDays: boostedUniqueDays,
+            visits: boostedVisits,
+            totalDurationMs: boostedTotalDurationMs,
+            avgDurationMs: boostedAvgDurationMs,
+            longestDurationMs: boostedLongestDurationMs,
+            longestDurationDays: boostedLongestDurationDays,
+            lastStayDurationMs: boostedLastStayDurationMs,
+            score: computeHotspotScore({
+              uniqueDays: boostedUniqueDays,
+              visits: boostedVisits,
+              pingCount: base.pingCount,
+              stoppedCount: base.stoppedCount,
+              totalDurationMs: boostedTotalDurationMs,
+              longestDurationDays: boostedLongestDurationDays
+            })
+          };
+        } else {
+          const nowMs = Date.now();
+          const syntheticUniqueDays = Math.max(1, Math.round(normalizedOverrideDays));
+          const syntheticVisits = Math.max(1, Math.round(normalizedOverrideDays / 2));
+          const syntheticTotalDurationMs = forcedDurationMs;
+          const syntheticLongestDurationDays = normalizedOverrideDays;
+          candidates = [
+            ...candidates,
+            {
+              id: 'vehicle-history-hotspot-stationary-override',
+              lat: normalizedAnchor.lat,
+              lng: normalizedAnchor.lng,
+              points: 1,
+              pingCount: 1,
+              uniqueDays: syntheticUniqueDays,
+              visits: syntheticVisits,
+              stoppedCount: 1,
+              firstSeen: nowMs - forcedDurationMs,
+              lastSeen: nowMs,
+              radiusMeters: Math.max(100, Math.round(GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 0.7)),
+              totalDurationMs: syntheticTotalDurationMs,
+              avgDurationMs: syntheticTotalDurationMs,
+              longestDurationMs: syntheticTotalDurationMs,
+              longestDurationDays: syntheticLongestDurationDays,
+              lastStayDurationMs: syntheticTotalDurationMs,
+              score: computeHotspotScore({
+                uniqueDays: syntheticUniqueDays,
+                visits: syntheticVisits,
+                pingCount: 1,
+                stoppedCount: 1,
+                totalDurationMs: syntheticTotalDurationMs,
+                longestDurationDays: syntheticLongestDurationDays
+              })
+            }
+          ];
+        }
+      }
 
       return candidates
         .sort((a, b) => {
@@ -1527,10 +1649,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (!hotspotSourceRecords.length) {
           hotspotSourceRecords = records;
         }
+        const parkedDaysValue = getDaysParkedValue(vehicle);
+        const parkedDaysOverride = Number.isFinite(parkedDaysValue) && parkedDaysValue > 0 ? parkedDaysValue : null;
+        const anchorPoint = getVehicleTrailAnchorPoint(vehicle) || getLatestTrailPointFromRecords(hotspotSourceRecords);
 
         const hotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
           getRecordSerial,
-          serialCountsBySerial
+          serialCountsBySerial,
+          parkedDaysOverride,
+          anchorPoint
         }).map((hotspot, index) => ({
           ...hotspot,
           sourceVehicleId: vehicle.id,
@@ -1579,6 +1706,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const toMiles = (meters) => {
       if (!Number.isFinite(meters) || meters < 0) return null;
       return meters / 1609.344;
+    };
+
+    const buildGoogleMapsSearchUrl = (lat, lng) => {
+      const latValue = Number(lat);
+      const lngValue = Number(lng);
+      if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return '';
+      const query = `${latValue.toFixed(6)},${lngValue.toFixed(6)}`;
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    };
+
+    const buildGoogleMapsLinkHtml = (
+      lat,
+      lng,
+      {
+        label = 'Google Maps',
+        tight = false,
+      } = {}
+    ) => {
+      const href = buildGoogleMapsSearchUrl(lat, lng);
+      if (!href) return '';
+      const className = tight ? 'map-coord-link-btn is-tight' : 'map-coord-link-btn';
+      return `<a class="${className}" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a>`;
     };
 
     const buildRelatedHotspotCacheKey = (sourceVehicleId, hotspot) => {
@@ -1697,15 +1846,43 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return records;
     };
 
-    const resolveVehicleFromGpsRecord = (record = {}, vehiclesById = new Map(), vehiclesByVin = new Map()) => {
+    const buildVehicleIdentityIndexes = (vehicleList = []) => {
+      const vehiclesById = new Map();
+      const vehiclesByUniqueVin = new Map();
+      const ambiguousVins = new Set();
+
+      vehicleList.forEach((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (vehicleId) vehiclesById.set(vehicleId, vehicle);
+
+        const vin = getVehicleVin(vehicle);
+        if (!vin) return;
+        if (ambiguousVins.has(vin)) return;
+        if (vehiclesByUniqueVin.has(vin)) {
+          vehiclesByUniqueVin.delete(vin);
+          ambiguousVins.add(vin);
+          return;
+        }
+        vehiclesByUniqueVin.set(vin, vehicle);
+      });
+
+      return { vehiclesById, vehiclesByUniqueVin, ambiguousVins };
+    };
+
+    const isVehicleVinAmbiguous = (vehicle = {}, ambiguousVins = new Set()) => {
+      const vin = getVehicleVin(vehicle);
+      return Boolean(vin && ambiguousVins.has(vin));
+    };
+
+    const resolveVehicleFromGpsRecord = (record = {}, vehiclesById = new Map(), vehiclesByUniqueVin = new Map()) => {
       const recordVehicleId = `${record?.vehicle_id ?? record?.vehicleId ?? ''}`.trim();
       if (recordVehicleId && vehiclesById.has(recordVehicleId)) {
         return vehiclesById.get(recordVehicleId) || null;
       }
 
       const recordVin = normalizeVin(record?.VIN ?? record?.vin ?? '');
-      if (recordVin && vehiclesByVin.has(recordVin)) {
-        return vehiclesByVin.get(recordVin) || null;
+      if (recordVin && vehiclesByUniqueVin.has(recordVin)) {
+        return vehiclesByUniqueVin.get(recordVin) || null;
       }
 
       return null;
@@ -1749,14 +1926,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return hadQueryError ? null : [];
       }
 
-      const vehiclesById = new Map();
-      const vehiclesByVin = new Map();
-      vehicles.forEach((vehicle) => {
-        const vehicleId = `${vehicle?.id ?? ''}`.trim();
-        if (vehicleId) vehiclesById.set(vehicleId, vehicle);
-        const vin = getVehicleVin(vehicle);
-        if (vin) vehiclesByVin.set(vin, vehicle);
-      });
+      const { vehiclesById, vehiclesByUniqueVin } = buildVehicleIdentityIndexes(vehicles);
 
       const grouped = new Map();
       nearbyRecords.forEach((record) => {
@@ -1768,7 +1938,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         );
         if (!Number.isFinite(distanceMeters) || distanceMeters > matchRadiusMeters) return;
 
-        const vehicle = resolveVehicleFromGpsRecord(record, vehiclesById, vehiclesByVin);
+        const vehicle = resolveVehicleFromGpsRecord(record, vehiclesById, vehiclesByUniqueVin);
         if (!vehicle) return;
         if (`${vehicle?.id ?? ''}` === sourceId) return;
 
@@ -1830,12 +2000,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const sourceId = `${sourceVehicleId ?? ''}`.trim();
       const cacheKey = buildRelatedHotspotCacheKey(sourceId, hotspot);
       const now = Date.now();
+      const { ambiguousVins } = buildVehicleIdentityIndexes(vehicles);
       const cached = relatedHotspotVehiclesCache.get(cacheKey);
       if (cached && (now - cached.updatedAt) <= VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS) {
         return cached.matches
           .map((entry) => {
             const vehicle = vehicles.find((item) => `${item?.id ?? ''}` === `${entry.vehicleId}`);
             if (!vehicle) return null;
+            if (isVehicleVinAmbiguous(vehicle, ambiguousVins)) return null;
             return { ...entry, vehicle };
           })
           .filter(Boolean);
@@ -1859,7 +2031,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const candidates = vehicles
-        .filter((vehicle) => `${vehicle?.id ?? ''}`.trim() !== '' && `${vehicle?.id ?? ''}` !== sourceId)
+        .filter((vehicle) =>
+          `${vehicle?.id ?? ''}`.trim() !== ''
+          && `${vehicle?.id ?? ''}` !== sourceId
+          && !isVehicleVinAmbiguous(vehicle, ambiguousVins)
+        )
         .map((vehicle) => {
           if (!hasValidCoords(vehicle)) {
             return { vehicle, proximity: Number.POSITIVE_INFINITY };
@@ -2003,6 +2179,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const entries = Object.entries(record);
       const coordText = `${Number(point?.lat || 0).toFixed(5)}, ${Number(point?.lng || 0).toFixed(5)}`;
       const timestampText = Number.isFinite(point?.timeMs) ? formatDateTime(point.timeMs) : 'Insufficient data';
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(point?.lat, point?.lng, { tight: true });
 
       if (!entries.length) {
         return `
@@ -2010,6 +2187,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
             <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
             <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+            ${mapsLinkHtml}
             <p class="gps-record-empty">No columns available for this point.</p>
           </div>
         `;
@@ -2027,6 +2205,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
           <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
           <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+          ${mapsLinkHtml}
           <div class="gps-record-table-wrap">
             <table class="gps-record-table">
               <tbody>${rows}</tbody>
@@ -2204,7 +2383,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const pingPerDay = hotspot.uniqueDays
         ? `${(hotspot.pingCount / hotspot.uniqueDays).toFixed(1)}`
         : `${hotspot.pingCount || hotspot.points || 0}`;
+      const maxParkedDaysRaw = Math.max(
+        Number(hotspot.longestDurationDays || 0),
+        Number.isFinite(hotspot.longestDurationMs) ? (hotspot.longestDurationMs / GPS_HISTORY_DAY_MS) : 0
+      );
+      const maxParkedDaysLabel = Number.isFinite(maxParkedDaysRaw) && maxParkedDaysRaw > 0
+        ? `${(maxParkedDaysRaw >= 10 ? Math.round(maxParkedDaysRaw) : Number(maxParkedDaysRaw.toFixed(1))).toString().replace(/\.0$/, '')}d`
+        : '—';
       const popupKey = hotspot.popupKey || buildVehicleHistoryHotspotPopupKey(hotspot.sourceVehicleId, hotspot, index);
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(hotspot.lat, hotspot.lng, { tight: true });
       return `
         <div class="vehicle-history-hotspot-card">
           <p class="vehicle-history-hotspot-card-title">Parking Spot #${rank}</p>
@@ -2217,11 +2404,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <p><span class="vehicle-history-hotspot-k">Avg stay</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.avgDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Longest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Latest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.lastStayDurationMs)}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Max days</span><span class="vehicle-history-hotspot-v">${maxParkedDaysLabel}</span></p>
           </div>
           <div class="vehicle-history-hotspot-meta">
             <p><span>First</span><span>${formatHotspotDateTime(hotspot.firstSeen)}</span></p>
             <p><span>Last</span><span>${formatHotspotDateTime(hotspot.lastSeen)}</span></p>
             <p><span>Coords</span><span>${coords}</span></p>
+            ${mapsLinkHtml}
           </div>
           <div class="vehicle-history-hotspot-related-wrap">
             <p class="vehicle-history-hotspot-related-title">Other vehicles using this parking spot</p>
@@ -2594,9 +2783,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!hotspotSourceRecords.length) {
         hotspotSourceRecords = records;
       }
+      const parkedDaysValue = getDaysParkedValue(vehicle);
+      const parkedDaysOverride = Number.isFinite(parkedDaysValue) && parkedDaysValue > 0 ? parkedDaysValue : null;
+      const hotspotAnchorPoint = getVehicleTrailAnchorPoint(vehicle)
+        || getLatestTrailPointFromRecords(hotspotSourceRecords)
+        || getLatestTrailPointFromRecords(records);
       const historyHotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
         getRecordSerial,
-        serialCountsBySerial
+        serialCountsBySerial,
+        parkedDaysOverride,
+        anchorPoint: hotspotAnchorPoint
       }).map((hotspot, index) => ({
         ...hotspot,
         sourceVehicleId: vehicle.id,
@@ -2859,6 +3055,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const locationText = formatPartnerLocation(partner) || 'Location unavailable';
       const zipText = partner.zip || 'N/A';
       const noteText = partner.notes || partner.note || partner.details?.note || '';
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(partner.lat, partner.lng, { tight: true });
       const popup = L.popup({
         className: 'service-mini-popup',
         closeButton: true,
@@ -2874,6 +3071,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <p class="service-mini-location">${escapeHTML(locationText)}</p>
             <p class="service-mini-meta"><span class="service-mini-label">ZIP</span><span>${escapeHTML(zipText)}</span></p>
             ${noteText ? `<p class="service-mini-note"><span class="service-mini-label">Note</span> ${escapeHTML(noteText)}</p>` : ''}
+            ${mapsLinkHtml}
           </div>
         `);
 
@@ -3021,7 +3219,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const lng = parseFloat(e.latlng.lng.toFixed(6));
 
         const shouldCascadeToVehicleOnly = selectedVehicleId !== null
-          && (parkingSpotCascadeArmed || hasVisibleParkingSpotPopup());
+          && (parkingSpotCascadeArmed || hasVisibleParkingSpotPopup() || hasVisibleRoutePointPopup());
         if (shouldCascadeToVehicleOnly) {
           clearParkingSpotCascade();
           map.closePopup();
@@ -3410,14 +3608,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             icon: createServiceIcon(SERVICE_COLORS.tech)
           }).addTo(techLayer);
 
-          marker.bindPopup(`
-            <div class="text-slate-900 p-1 font-sans">
-              <strong class="block text-sm font-bold mb-1">${tech.company}</strong>
-              <div class="text-xs text-slate-500 mb-2">${tech.city}, ${tech.state} ${tech.zip}</div>
-              <a href="tel:${tech.phoneDial || tech.phone}" class="block bg-blue-100 text-blue-700 px-2 py-1 rounded text-center text-xs font-bold mb-1">${tech.phone}</a>
-              <div class="text-[10px] text-slate-400 truncate">${tech.email}</div>
-            </div>
-          `);
+	          marker.bindPopup(`
+	            <div class="text-slate-900 p-1 font-sans">
+	              <strong class="block text-sm font-bold mb-1">${tech.company}</strong>
+	              <div class="text-xs text-slate-500 mb-2">${tech.city}, ${tech.state} ${tech.zip}</div>
+	              <a href="tel:${tech.phoneDial || tech.phone}" class="block bg-blue-100 text-blue-700 px-2 py-1 rounded text-center text-xs font-bold mb-1">${tech.phone}</a>
+	              <div class="text-[10px] text-slate-400 truncate">${tech.email}</div>
+	              ${buildGoogleMapsLinkHtml(tech.lat, tech.lng, { tight: true })}
+	            </div>
+	          `);
 
           marker.on('click', (e) => {
             e.originalEvent.handledByMarker = true;
@@ -3610,14 +3809,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
             const locationText = formatPartnerLocation(partner);
 
-            marker.bindPopup(`
-              <div class="text-slate-900 p-1 font-sans">
-                <strong class="block text-sm font-bold mb-1">${partner.company}</strong>
-                <div class="text-xs text-slate-500 mb-2">${locationText || 'US'}</div>
-                <a href="tel:${partner.phoneDial || partner.phone}" class="block bg-slate-100 text-slate-800 px-2 py-1 rounded text-center text-xs font-bold mb-1">${partner.phone || 'Contact'}</a>
-                <div class="text-[10px] text-slate-500">${partner.availability || ''}</div>
-              </div>
-            `);
+	            marker.bindPopup(`
+	              <div class="text-slate-900 p-1 font-sans">
+	                <strong class="block text-sm font-bold mb-1">${partner.company}</strong>
+	                <div class="text-xs text-slate-500 mb-2">${locationText || 'US'}</div>
+	                <a href="tel:${partner.phoneDial || partner.phone}" class="block bg-slate-100 text-slate-800 px-2 py-1 rounded text-center text-xs font-bold mb-1">${partner.phone || 'Contact'}</a>
+	                <div class="text-[10px] text-slate-500">${partner.availability || ''}</div>
+	                ${buildGoogleMapsLinkHtml(partner.lat, partner.lng, { tight: true })}
+	              </div>
+	            `);
 
             marker.on('click', (e) => {
               e.originalEvent.handledByMarker = true;
@@ -4295,7 +4495,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         locationNote: vehicle.locationNote || '',
         accuracyDot,
         gpsFix: vehicle.gpsFix || 'Unknown',
-        dealCompletion: vehicle.dealCompletion || '—'
+        dealCompletion: vehicle.dealCompletion || '—',
+        mapsUrl: buildGoogleMapsSearchUrl(vehicle.lat, vehicle.lng)
       });
     }
 
