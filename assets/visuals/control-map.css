@@ -362,19 +362,218 @@ body.gps-column-resizing {
       background: #1e3a8af0;
       color: #dbeafe;
       border: 1px solid rgba(96, 165, 250, 0.68);
-      border-radius: 12px;
-      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.4);
+      border-radius: 10px;
+      box-shadow: 0 14px 28px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+      max-height: min(78vh, 480px);
     }
 
     .vehicle-history-hotspot-popup .leaflet-popup-content {
-      margin: 8px 10px;
+      margin: 6px 8px;
       width: 100%;
-      min-width: 245px;
+      min-width: 214px;
+      max-width: min(252px, calc(100vw - 60px));
+      max-height: min(72vh, 440px);
+      overflow: hidden;
     }
 
     .vehicle-history-hotspot-popup .leaflet-popup-tip {
       background: #1e3a8a;
       border: 1px solid rgba(96, 165, 250, 0.68);
+    }
+
+    .vehicle-history-hotspot-card {
+      font-size: 10px;
+      line-height: 1.2;
+      display: grid;
+      gap: 5px;
+      min-height: 0;
+    }
+
+    .vehicle-history-hotspot-card-title {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 800;
+      color: #bfdbfe;
+      letter-spacing: 0.01em;
+    }
+
+    .vehicle-history-hotspot-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 8px;
+      row-gap: 2px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .vehicle-history-hotspot-metrics p {
+      margin: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .vehicle-history-hotspot-k {
+      color: rgba(191, 219, 254, 0.76);
+      white-space: nowrap;
+    }
+
+    .vehicle-history-hotspot-v {
+      color: #f8fafc;
+      font-weight: 700;
+      text-align: right;
+    }
+
+    .vehicle-history-hotspot-meta {
+      display: grid;
+      gap: 2px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .vehicle-history-hotspot-meta p {
+      margin: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 6px;
+      color: #dbeafe;
+    }
+
+    .vehicle-history-hotspot-meta p span:first-child {
+      color: rgba(191, 219, 254, 0.76);
+      white-space: nowrap;
+    }
+
+    .vehicle-history-hotspot-meta p span:last-child {
+      text-align: right;
+      color: #f1f5f9;
+    }
+
+    .vehicle-history-hotspot-related-wrap {
+      margin-top: 3px;
+      padding-top: 5px;
+      border-top: 1px solid rgba(191, 219, 254, 0.26);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .vehicle-history-hotspot-related-title {
+      margin: 0 0 4px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(219, 234, 254, 0.9);
+    }
+
+    .vehicle-history-hotspot-related-body {
+      display: grid;
+      gap: 4px;
+      min-height: 0;
+      max-height: min(24vh, 170px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding-right: 2px;
+    }
+
+    .vehicle-history-hotspot-related-body::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .vehicle-history-hotspot-related-body::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.32);
+      border-radius: 999px;
+    }
+
+    .vehicle-history-hotspot-related-body::-webkit-scrollbar-thumb {
+      background: rgba(147, 197, 253, 0.55);
+      border-radius: 999px;
+    }
+
+    @media (max-width: 640px) {
+      .vehicle-history-hotspot-popup .leaflet-popup-content-wrapper {
+        max-height: 72vh;
+      }
+
+      .vehicle-history-hotspot-popup .leaflet-popup-content {
+        max-height: 68vh;
+      }
+
+      .vehicle-history-hotspot-related-body {
+        max-height: min(21vh, 136px);
+      }
+    }
+
+    .vehicle-history-hotspot-related-loading,
+    .vehicle-history-hotspot-related-empty,
+    .vehicle-history-hotspot-related-error {
+      margin: 0;
+      font-size: 10px;
+      line-height: 1.25;
+      color: rgba(219, 234, 254, 0.9);
+    }
+
+    .vehicle-history-hotspot-related-error {
+      color: #fecaca;
+    }
+
+    .vehicle-history-hotspot-related-list {
+      display: grid;
+      gap: 4px;
+    }
+
+    .vehicle-history-hotspot-related-btn {
+      width: 100%;
+      display: grid;
+      gap: 1px;
+      text-align: left;
+      border-radius: 6px;
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      background: rgba(15, 23, 42, 0.35);
+      color: #dbeafe;
+      padding: 4px 6px;
+      transition: border-color 0.15s ease, background-color 0.15s ease;
+      cursor: pointer;
+    }
+
+    .vehicle-history-hotspot-related-btn:hover {
+      border-color: rgba(186, 230, 253, 0.75);
+      background: rgba(15, 23, 42, 0.62);
+    }
+
+    .vehicle-history-hotspot-related-btn-title {
+      font-size: 10px;
+      font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.2;
+    }
+
+    .vehicle-history-hotspot-related-btn-vin {
+      font-size: 9px;
+      color: rgba(191, 219, 254, 0.95);
+      line-height: 1.2;
+    }
+
+    .vehicle-history-hotspot-related-btn-customer {
+      font-size: 9px;
+      color: rgba(224, 242, 254, 0.92);
+      line-height: 1.2;
+      font-weight: 600;
+    }
+
+    .vehicle-history-hotspot-related-btn-meta {
+      font-size: 9px;
+      color: rgba(219, 234, 254, 0.84);
+      line-height: 1.2;
+    }
+
+    .vehicle-hotspot-related-target {
+      border-color: rgba(147, 197, 253, 0.9) !important;
+      box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.75), 0 0 0 8px rgba(59, 130, 246, 0.14);
     }
 
     .gps-record-popup .leaflet-popup-content-wrapper {
