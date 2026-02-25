@@ -10,6 +10,7 @@ export const syncVehicleMarkers = ({
   vehicleLayer,
   vehicleMarkers,
   visible,
+  getVehicleMarkerKey,
   getVehicleMarkerColor,
   getVehicleMarkerBorderColor,
   isVehicleNotMoving
@@ -26,13 +27,17 @@ export const syncVehicleMarkers = ({
 
   vehiclesWithCoords.forEach(({ vehicle, coords, focusHandler }) => {
     if (!coords) return;
+    const markerKey = typeof getVehicleMarkerKey === 'function'
+      ? getVehicleMarkerKey(vehicle)
+      : `${vehicle?.id ?? ''}`;
+    if (!markerKey) return;
 
     const markerColor = getVehicleMarkerColor(vehicle);
     const borderColor = getVehicleMarkerBorderColor(markerColor);
     const isStopped = isVehicleNotMoving(vehicle);
     const icon = createVehicleMarkerIcon(markerColor, borderColor, isStopped);
 
-    const stored = vehicleMarkers.get(vehicle.id);
+    const stored = vehicleMarkers.get(markerKey);
     let marker = stored?.marker;
 
     if (marker) {
@@ -43,8 +48,9 @@ export const syncVehicleMarkers = ({
       marker.options.focusHandler = focusHandler;
       marker.options.markerColor = markerColor;
       marker.options.isStopped = isStopped;
+      marker.options.vehicleKey = markerKey;
       marker.options.cycleRole = 'vehicle';
-      marker.options.cycleKey = `vehicle-${vehicle.id}`;
+      marker.options.cycleKey = `vehicle-${markerKey}`;
     } else {
       marker = L.marker(
         [coords.lat, coords.lng],
@@ -55,25 +61,26 @@ export const syncVehicleMarkers = ({
           focusHandler,
           markerColor,
           isStopped,
+          vehicleKey: markerKey,
           cycleRole: 'vehicle',
-          cycleKey: `vehicle-${vehicle.id}`
+          cycleKey: `vehicle-${markerKey}`
         }
       ).addTo(vehicleLayer);
       marker.on('click', (event) => {
         const activeVehicle = marker?.options?.vehicleData || vehicle;
         const activeFocusHandler = marker?.options?.focusHandler || focusHandler;
-        const vehicleId = activeVehicle?.id ?? vehicle?.id;
+        const activeMarkerKey = `${marker?.options?.vehicleKey || markerKey}`;
         if (event?.originalEvent) {
           event.originalEvent.handledByMarker = true;
           event.originalEvent.cycleRole = 'vehicle';
-          event.originalEvent.cycleKey = `vehicle-${vehicleId}`;
+          event.originalEvent.cycleKey = `vehicle-${activeMarkerKey}`;
         }
         activeFocusHandler({ event, marker, vehicle: activeVehicle });
       });
     }
 
-    vehicleMarkers.set(vehicle.id, { marker });
-    activeIds.add(vehicle.id);
+    vehicleMarkers.set(markerKey, { marker });
+    activeIds.add(markerKey);
   });
 
   [...vehicleMarkers.keys()].forEach((id) => {

@@ -64,6 +64,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let routeLinesVisible = true;
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
+    let selectedVehicleKey = null;
     const checkedVehicleIds = new Set();
     const checkedVehicleClickTimes = new Map();
     const checkedVehicleClickTimesByVin = new Map();
@@ -330,6 +331,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const role = 'vehicle';
         const key = `${marker?.options?.cycleKey || getLayerCycleKey(marker, role)}`;
         const vehicle = marker?.options?.vehicleData || null;
+        const vehicleKey = `${marker?.options?.vehicleKey || getVehicleKey(vehicle)}`;
         registerCandidate({
           key,
           role,
@@ -337,7 +339,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           distanceMeters,
           layer: marker,
           vehicle,
-          vehicleId: vehicle?.id ?? null
+          vehicleId: vehicle?.id ?? null,
+          vehicleKey
         });
       });
 
@@ -362,7 +365,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             distanceMeters,
             layer,
             vehicle: layer?.options?.vehicleData || null,
-            vehicleId: layer?.options?.vehicleData?.id ?? null
+            vehicleId: layer?.options?.vehicleData?.id ?? null,
+            vehicleKey: layer?.options?.vehicleData
+              ? `${layer?.options?.vehicleKey || getVehicleKey(layer?.options?.vehicleData || null)}`
+              : ''
           });
         });
       };
@@ -384,13 +390,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const targetVehicle = candidate.vehicle
           || vehicles.find((vehicle) => `${vehicle.id}` === `${candidate.vehicleId}`);
         if (!targetVehicle || !hasValidCoords(targetVehicle)) return false;
-        if (`${selectedVehicleId ?? ''}` === `${targetVehicle.id ?? ''}`) {
+        const targetVehicleKey = `${candidate?.vehicleKey || getVehicleKey(targetVehicle)}`;
+        const matchesSelectedVehicle = (
+          `${selectedVehicleId ?? ''}` === `${targetVehicle.id ?? ''}`
+          && (!selectedVehicleKey || `${selectedVehicleKey}` === targetVehicleKey)
+        );
+        if (matchesSelectedVehicle) {
           if (candidate.layer && typeof candidate.layer.openPopup === 'function') {
             candidate.layer.openPopup();
           }
           return true;
         }
-        applySelection(targetVehicle.id, null);
+        applySelection(targetVehicle.id, null, targetVehicleKey);
         focusVehicle(targetVehicle);
         return true;
       }
@@ -437,7 +448,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           : -1;
         const selectedVehicleIndex = candidates.findIndex((candidate) =>
           candidate.role === 'vehicle'
-          && `${candidate.vehicle?.id ?? candidate.vehicleId ?? ''}` === `${selectedVehicleId}`
+          && (
+            (selectedVehicleKey && `${candidate.vehicleKey ?? ''}` === `${selectedVehicleKey}`)
+            || (!selectedVehicleKey && `${candidate.vehicle?.id ?? candidate.vehicleId ?? ''}` === `${selectedVehicleId}`)
+          )
         );
         if (vehicleSelectionChanged) {
           nextIndex = selectedVehicleIndex >= 0
@@ -508,6 +522,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       || vehicle?.vin
       || ''
     );
+
+    const getVehicleKey = (vehicle = {}) => {
+      const explicitKey = `${vehicle?.uiKey || ''}`.trim();
+      if (explicitKey) return explicitKey;
+      const idPart = `${vehicle?.id ?? ''}`.trim();
+      const vinPart = normalizeVin(vehicle?.vin);
+      const stockPart = normalizeStockNumber(vehicle?.stockNo);
+      return [idPart, vinPart, stockPart].join('::');
+    };
+
+    const findVehicleByKey = (vehicleKey = '') => {
+      const normalizedKey = `${vehicleKey || ''}`.trim();
+      if (!normalizedKey) return null;
+      return vehicles.find((vehicle) => getVehicleKey(vehicle) === normalizedKey) || null;
+    };
+
+    const getSelectedVehicleEntry = () => {
+      if (selectedVehicleKey) {
+        const byKey = findVehicleByKey(selectedVehicleKey);
+        if (byKey) return byKey;
+      }
+      if (selectedVehicleId === null) return null;
+      return vehicles.find((vehicle) => `${vehicle.id}` === `${selectedVehicleId}`) || null;
+    };
 
     const getCurrentUserId = async () => {
       if (!supabaseClient?.auth?.getSession) return null;
@@ -657,7 +695,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const syncVehicleSelectionFromStore = (selection, { shouldFocus = true } = {}) => {
       if (!selection) {
-        if (selectedVehicleId === null) return;
+        if (selectedVehicleId === null && selectedVehicleKey === null) return;
         syncingVehicleSelection = true;
         applySelection(null, selectedTechId);
         syncingVehicleSelection = false;
@@ -665,10 +703,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const match = vehicles.find((vehicle) => matchesVehicleSelection(vehicle, selection));
-      if (!match || selectedVehicleId === match.id) return;
+      if (!match) return;
+      const matchKey = getVehicleKey(match);
+      if (`${selectedVehicleId ?? ''}` === `${match.id ?? ''}` && `${selectedVehicleKey ?? ''}` === matchKey) return;
 
       syncingVehicleSelection = true;
-      applySelection(match.id, null);
+      applySelection(match.id, null, matchKey);
       syncingVehicleSelection = false;
       if (shouldFocus) focusVehicle(match);
     };
@@ -2545,6 +2585,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 type="button"
                 class="vehicle-history-hotspot-related-btn"
                 data-action="hotspot-related-vehicle"
+                data-vehicle-key="${escapeHTML(getVehicleKey(vehicle))}"
                 data-vehicle-id="${escapeHTML(`${vehicle.id}`)}"
               >
                 <span class="vehicle-history-hotspot-related-btn-title">${escapeHTML(vehicleLabel)}</span>
@@ -2558,11 +2599,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       `;
     };
 
-    const revealVehicleCardById = (vehicleId) => {
+    const revealVehicleCardByKey = (vehicleKey) => {
       const list = document.getElementById('vehicle-list');
       if (!list) return;
       const card = [...list.querySelectorAll('[data-type="vehicle"]')]
-        .find((node) => `${node?.dataset?.id ?? ''}` === `${vehicleId}`);
+        .find((node) => `${node?.dataset?.id ?? ''}` === `${vehicleKey}`);
       if (!card) return;
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       card.classList.add('vehicle-hotspot-related-target');
@@ -2612,8 +2653,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     };
 
-    const jumpToVehicleFromHotspotRelation = (vehicleId) => {
-      const vehicle = vehicles.find((item) => `${item?.id ?? ''}` === `${vehicleId ?? ''}`);
+    const jumpToVehicleFromHotspotRelation = (vehicleKey = '', vehicleId = '') => {
+      const vehicle = findVehicleByKey(vehicleKey)
+        || vehicles.find((item) => `${item?.id ?? ''}` === `${vehicleId ?? ''}`);
       if (!vehicle) return false;
 
       clearParkingSpotCascade();
@@ -2627,9 +2669,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (vehicleMarkersVisible) {
         focusVehicle(vehicle);
       } else {
-        applySelection(vehicle.id, null);
+        applySelection(vehicle.id, null, getVehicleKey(vehicle));
       }
-      requestAnimationFrame(() => revealVehicleCardById(vehicle.id));
+      requestAnimationFrame(() => revealVehicleCardByKey(getVehicleKey(vehicle)));
       return true;
     };
 
@@ -2648,9 +2690,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           if (!target) return;
           event.preventDefault();
           event.stopPropagation();
+          const targetVehicleKey = `${target.dataset.vehicleKey || ''}`.trim();
           const targetVehicleId = `${target.dataset.vehicleId || ''}`.trim();
-          if (!targetVehicleId) return;
-          jumpToVehicleFromHotspotRelation(targetVehicleId);
+          if (!targetVehicleKey && !targetVehicleId) return;
+          jumpToVehicleFromHotspotRelation(targetVehicleKey, targetVehicleId);
         });
       }
 
@@ -2893,7 +2936,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       prefetchRelatedVehiclesForHotspots(historyHotspots, vehicle.id);
 
       if (requestId !== gpsTrailRequestCounter) return;
-      if (movingOverrideChanged && `${selectedVehicleId ?? ''}` === `${vehicle?.id ?? ''}`) {
+      const selectedVehicleMatchesCurrent = (
+        `${selectedVehicleId ?? ''}` === `${vehicle?.id ?? ''}`
+        && (!selectedVehicleKey || `${selectedVehicleKey}` === getVehicleKey(vehicle))
+      );
+      if (movingOverrideChanged && selectedVehicleMatchesCurrent) {
         syncFocusedVehicleNotMovingBadge(vehicle);
       }
       if (!trailPoints.length && !historyHotspots.length) return;
@@ -3311,11 +3358,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (shouldCascadeToVehicleOnly) {
           clearParkingSpotCascade();
           map.closePopup();
-          const selectedVehicle = vehicles.find((vehicle) => `${vehicle.id}` === `${selectedVehicleId}`);
+          const selectedVehicle = getSelectedVehicleEntry();
           if (selectedVehicle && hasValidCoords(selectedVehicle) && vehicleMarkersVisible) {
             focusVehicle(selectedVehicle);
           } else {
-            applySelection(selectedVehicleId, null);
+            applySelection(selectedVehicleId, null, selectedVehicleKey);
           }
           return;
         }
@@ -3807,8 +3854,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const getCurrentOrigin = () => {
       if (selectedVehicleId !== null) {
-        const vehicle = vehicles.find(v => v.id === selectedVehicleId && hasValidCoords(v));
-        if (vehicle) return vehicle;
+        const vehicle = getSelectedVehicleEntry();
+        if (vehicle && hasValidCoords(vehicle)) return vehicle;
       }
 
       if (selectedTechId !== null) {
@@ -4084,7 +4131,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       custom: { containerId: 'dynamic-service-list', updater: renderCategorySidebar, getList: () => customServices }
     };
 
-    const findVehicleById = (id) => vehicles.find((vehicle) => `${vehicle.id}` === `${id}`);
+    const findVehicleById = (idOrKey) =>
+      findVehicleByKey(idOrKey) || vehicles.find((vehicle) => `${vehicle.id}` === `${idOrKey}`);
     const findTechById = (id) => technicians.find((tech) => `${tech.id}` === `${id}`);
     const findPartnerById = (type, id) => {
       const getter = PARTNER_TYPE_CONFIG[type]?.getList;
@@ -4136,7 +4184,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
-      applySelection(vehicle.id, null);
+      applySelection(vehicle.id, null, getVehicleKey(vehicle));
       focusVehicle(vehicle);
     }
 
@@ -4304,6 +4352,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           vehicleLayer,
           vehicleMarkers,
           visible: vehicleMarkersVisible,
+          getVehicleMarkerKey: getVehicleKey,
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
           isVehicleNotMoving
@@ -4316,23 +4365,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const canOpenRepairHistory = isAuthenticatedCached();
 
       filtered.forEach((vehicle, idx) => {
+        const currentVehicleKey = getVehicleKey(vehicle);
         const movingMeta = getMovingMeta(vehicle);
 
           const focusHandler = useCallback(
-            `vehicle-focus-${vehicle.id}`,
+            `vehicle-focus-${currentVehicleKey}`,
             () => (payload = {}) => {
-              const currentVehicle = vehicles.find((item) => item.id === vehicle.id);
+              const currentVehicle = findVehicleByKey(currentVehicleKey)
+                || vehicles.find((item) => `${item.id}` === `${vehicle.id}`)
+                || vehicle;
               if (!currentVehicle) return;
               if (!hasValidCoords(currentVehicle)) {
                 console.warn(`No coordinates available for vehicle ${currentVehicle.vin || currentVehicle.id || 'unknown'}`);
                 return;
               }
               const originalEvent = payload?.event?.originalEvent;
-              const vehicleSelectionChanged = `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`;
+              const vehicleSelectionMatchesKey = !selectedVehicleKey || `${selectedVehicleKey}` === currentVehicleKey;
+              const vehicleSelectionChanged = (
+                `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`
+                || !vehicleSelectionMatchesKey
+              );
               if (originalEvent) {
                 originalEvent.handledByMarker = true;
                 originalEvent.cycleRole = 'vehicle';
-                originalEvent.cycleKey = `vehicle-${currentVehicle.id}`;
+                originalEvent.cycleKey = `vehicle-${currentVehicleKey}`;
                 originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
               }
               if (!vehicleSelectionChanged) {
@@ -4348,10 +4404,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 }
                 return;
               }
-              applySelection(currentVehicle.id, null);
+              applySelection(currentVehicle.id, null, currentVehicleKey);
               focusVehicle(currentVehicle);
             },
-            [vehicle.id]
+            [currentVehicleKey]
           );
 
           let coords = null;
@@ -4401,7 +4457,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             .filter(Boolean)
             .join(' · ');
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
-          card.dataset.id = vehicle.id;
+          card.dataset.id = currentVehicleKey;
+          card.dataset.vehicleId = `${vehicle.id ?? ''}`;
           card.dataset.type = 'vehicle';
           card.innerHTML = `
             <div class="flex items-start justify-between gap-3">
@@ -4560,6 +4617,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           vehicleLayer,
           vehicleMarkers,
           visible: vehicleMarkersVisible,
+          getVehicleMarkerKey: getVehicleKey,
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
           isVehicleNotMoving
@@ -4575,7 +4633,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       highlightLayer.clearLayers();
       gpsTrailLayer?.clearLayers();
 
-      const storedMarker = vehicleMarkers.get(vehicle.id)?.marker;
+      const vehicleKey = getVehicleKey(vehicle);
+      const storedMarker = vehicleMarkers.get(vehicleKey)?.marker;
       const markerColor = getVehicleMarkerColor(vehicle);
       const anchorMarker = storedMarker || L.circleMarker([vehicle.lat, vehicle.lng], {
         radius: 9,
@@ -4586,7 +4645,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         opacity: 0.98,
         className: 'vehicle-dot',
         cycleRole: 'vehicle',
-        cycleKey: `vehicle-${vehicle.id}`
+        vehicleKey,
+        cycleKey: `vehicle-${vehicleKey}`
       }).addTo(highlightLayer);
 
       const halo = L.circleMarker([vehicle.lat, vehicle.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
@@ -4604,7 +4664,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       showServicesFromOrigin(vehicle, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
 
-      applySelection(vehicle.id, null);
+      applySelection(vehicle.id, null, vehicleKey);
       void renderVehicleGpsTrail(vehicle, trailRequestId);
     }
 
@@ -4962,7 +5022,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function getVehicleList(query) {
       if (selectedVehicleId !== null) {
-        const selectedVehicle = vehicles.find((vehicle) => `${vehicle.id}` === `${selectedVehicleId}`);
+        const selectedVehicle = getSelectedVehicleEntry();
         if (!selectedVehicle) return [];
         return matchesVehicleFilters(selectedVehicle, query) ? [selectedVehicle] : [];
       }
@@ -5031,7 +5091,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
-      const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+      const vehicle = getSelectedVehicleEntry();
       const tech = technicians.find(t => t.id === selectedTechId);
       const parts = [];
       if (vehicle) parts.push(`Vehicle ${vehicle.vin || vehicle.model}`);
@@ -5040,26 +5100,50 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       banner.classList.remove('hidden');
     }
 
-    function applySelection(vehicleId = null, techId = null) {
+    function applySelection(vehicleId = null, techId = null, vehicleKey = null) {
       const previousVehicleId = selectedVehicleId;
+      const previousVehicleKey = selectedVehicleKey;
       const previousTechId = selectedTechId;
-      if (`${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}` || vehicleId === null) {
+      const normalizedVehicleKey = `${vehicleKey || ''}`.trim();
+      const resolvedVehicle = vehicleId !== null
+        ? (normalizedVehicleKey
+          ? findVehicleByKey(normalizedVehicleKey)
+          : vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`))
+        : null;
+      const nextVehicleKey = vehicleId === null
+        ? null
+        : (normalizedVehicleKey || getVehicleKey(resolvedVehicle || { id: vehicleId }));
+
+      if (
+        `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
+        || `${previousVehicleKey ?? ''}` !== `${nextVehicleKey ?? ''}`
+        || vehicleId === null
+      ) {
         clearParkingSpotCascade();
       }
       selectedVehicleId = vehicleId;
+      selectedVehicleKey = nextVehicleKey;
       selectedTechId = techId;
-      if (`${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}` || `${previousTechId ?? ''}` !== `${techId ?? ''}`) {
+      if (
+        `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
+        || `${previousVehicleKey ?? ''}` !== `${nextVehicleKey ?? ''}`
+        || `${previousTechId ?? ''}` !== `${techId ?? ''}`
+      ) {
         resetOverlapCycleState();
       }
       if (vehicleId !== null && !syncingVehicleSelection) {
-        const selectedVehicle = vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`);
         setSelectedVehicle({
-          id: selectedVehicle?.id ?? vehicleId,
-          vin: selectedVehicle?.vin || '',
-          customerId: selectedVehicle?.customerId || ''
+          id: resolvedVehicle?.id ?? vehicleId,
+          vin: resolvedVehicle?.vin || '',
+          customerId: resolvedVehicle?.customerId || ''
         });
       } else if (vehicleId === null && !syncingVehicleSelection) {
         setSelectedVehicle(null);
+      }
+      if (vehicleId === null) {
+        gpsTrailRequestCounter += 1;
+        highlightLayer?.clearLayers();
+        gpsTrailLayer?.clearLayers();
       }
       if (vehicleId !== null) {
         sidebarStateController?.setState?.('right', true);
@@ -5074,6 +5158,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       resetOverlapCycleState();
       clearParkingSpotCascade();
       selectedVehicleId = null;
+      selectedVehicleKey = null;
       selectedTechId = null;
       Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
       highlightLayer?.clearLayers();

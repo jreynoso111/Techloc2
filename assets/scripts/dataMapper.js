@@ -185,6 +185,10 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     details: row,
   };
 
+  const normalizedId = `${v.id ?? ''}`.trim();
+  const normalizedVin = `${v.vin ?? ''}`.trim().toUpperCase();
+  const normalizedStock = `${v.stockNo ?? ''}`.trim().toUpperCase();
+  v.uiKey = [normalizedId, normalizedVin, normalizedStock, `${idx}`].join('::');
   v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.shortLocation} ${v.physicalLocation} ${v.customerId} ${v.customer}`.toLowerCase();
 
   return v;
