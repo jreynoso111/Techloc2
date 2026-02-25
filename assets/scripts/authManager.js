@@ -19,6 +19,7 @@ import {
   });
 
   const navIds = {
+    home: 'nav-home',
     control: 'nav-control-view',
     dashboard: 'nav-dashboard',
     services: 'nav-services',
@@ -53,41 +54,68 @@ import {
   };
 
   const getEffectiveSession = async () => {
-    if (hasSupabaseAuth) {
-      const { data } = await supabaseClient.auth.getSession();
-      return data?.session || null;
+    if (!hasSupabaseAuth) return null;
+
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        console.warn('Supabase getSession warning:', error);
+      }
+
+      if (data?.session) return data.session;
+
+      if (typeof supabaseClient.auth.refreshSession === 'function') {
+        const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
+        if (refreshError) {
+          console.warn('Supabase refreshSession warning:', refreshError);
+          return null;
+        }
+        return refreshed?.session || null;
+      }
+    } catch (error) {
+      console.warn('Supabase session resolution warning:', error);
     }
+
     return null;
   };
 
+  const normalizeAccessValue = (value, fallback) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || fallback;
+  };
+
+  const resolveFallbackProfileForSession = (session) => {
+    const sessionRole = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role || null;
+    const sessionStatus = session?.user?.app_metadata?.status || session?.user?.user_metadata?.status || null;
+    const fallbackRole = normalizeAccessValue(window.currentUserRole || sessionRole, 'user');
+    const fallbackStatus = normalizeAccessValue(window.currentUserStatus || sessionStatus, 'active');
+    return {
+      role: fallbackRole,
+      status: fallbackStatus,
+      email: session?.user?.email || null,
+    };
+  };
+
   // --- NUEVO: Función para obtener el rol y estado desde la tabla profiles ---
-  const fetchUserProfile = async (userId) => {
+  const fetchUserProfile = async (userId, fallbackProfile = { role: 'user', status: 'active', email: null }) => {
     try {
       const { data, error } = await supabaseClient
         .from('profiles')
         .select('role, status, email')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error || !data)
-        return {
-          role: 'user',
-          status: 'active',
-          email: null,
-        }; // Valores por defecto si falla
+        return fallbackProfile; // Valores por defecto si falla
 
       return {
-        role: data.role || 'user',
-        status: data.status || 'active',
-        email: data.email || null,
+        role: normalizeAccessValue(data.role, fallbackProfile.role || 'user'),
+        status: normalizeAccessValue(data.status, fallbackProfile.status || 'active'),
+        email: data.email || fallbackProfile.email || null,
       };
     } catch (err) {
       console.error('Error fetching role:', err);
-      return {
-        role: 'user',
-        status: 'active',
-        email: null,
-      };
+      return fallbackProfile;
     }
   };
 
@@ -100,7 +128,8 @@ import {
       };
     }
 
-    return fetchUserProfile(session.user.id);
+    const fallbackProfile = resolveFallbackProfileForSession(session);
+    return fetchUserProfile(session.user.id, fallbackProfile);
   };
 
   const waitForAccountLabel = (timeoutMs = 3000) =>
@@ -159,11 +188,18 @@ import {
 
   const updateNav = (hasSession, role, status) => // <--- Modificado para aceptar 'role' y 'status'
     whenDomReady.then(() => {
+      const homeLink = getNavElement('home');
       const controlLink = getNavElement('control');
       const dashboardLink = getNavElement('dashboard');
       const servicesLink = getNavElement('services');
       const loginLink = getNavElement('login');
       const logoutButton = getNavElement('logout');
+
+      if (homeLink) homeLink.href = mapsTo('index.html');
+      if (controlLink) controlLink.href = mapsTo('pages/control-map.html');
+      if (servicesLink) servicesLink.href = mapsTo('pages/admin/services.html');
+      if (dashboardLink) dashboardLink.href = mapsTo('pages/admin/index.html');
+      if (loginLink) loginLink.href = mapsTo('pages/login.html');
 
       const isSuspended = status === 'suspended';
       const canShowDashboard = hasSession && !isSuspended && roleAllowsDashboard(role);
@@ -232,15 +268,8 @@ import {
   };
 
   const enforceRouteProtection = (hasSession, role) => {
-    const isAdminPath = window.location.pathname.toLowerCase().includes('/admin/');
-
     if (!hasSession && isProtectedRoute()) {
       window.location.replace(mapsTo('pages/login.html'));
-      return;
-    }
-
-    if (hasSession && isAdminPath && !roleAllowsDashboard(role)) {
-      window.location.replace(mapsTo('index.html'));
       return;
     }
 

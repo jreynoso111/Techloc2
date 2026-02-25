@@ -40,6 +40,7 @@ export const syncVehicleMarkers = ({
       marker.setIcon(icon);
       marker.setZIndexOffset(isStopped ? 500 : 0);
       marker.options.vehicleData = vehicle;
+      marker.options.focusHandler = focusHandler;
       marker.options.markerColor = markerColor;
       marker.options.isStopped = isStopped;
       marker.options.cycleRole = 'vehicle';
@@ -51,6 +52,7 @@ export const syncVehicleMarkers = ({
           icon,
           zIndexOffset: isStopped ? 500 : 0,
           vehicleData: vehicle,
+          focusHandler,
           markerColor,
           isStopped,
           cycleRole: 'vehicle',
@@ -58,12 +60,15 @@ export const syncVehicleMarkers = ({
         }
       ).addTo(vehicleLayer);
       marker.on('click', (event) => {
+        const activeVehicle = marker?.options?.vehicleData || vehicle;
+        const activeFocusHandler = marker?.options?.focusHandler || focusHandler;
+        const vehicleId = activeVehicle?.id ?? vehicle?.id;
         if (event?.originalEvent) {
           event.originalEvent.handledByMarker = true;
           event.originalEvent.cycleRole = 'vehicle';
-          event.originalEvent.cycleKey = `vehicle-${vehicle.id}`;
+          event.originalEvent.cycleKey = `vehicle-${vehicleId}`;
         }
-        focusHandler({ event, marker, vehicle });
+        activeFocusHandler({ event, marker, vehicle: activeVehicle });
       });
     }
 

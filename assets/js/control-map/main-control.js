@@ -44,7 +44,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     
     // --- Base Config ---
 
-    let map, techLayer, targetLayer, connectionLayer, serviceLayer, serviceConnectionLayer, vehicleLayer, highlightLayer, resellerLayer, repairLayer, customServiceLayer, hotspotLayer, blacklistLayer;
+    let map, techLayer, targetLayer, connectionLayer, serviceLayer, serviceConnectionLayer, vehicleLayer, highlightLayer, gpsTrailLayer, resellerLayer, repairLayer, customServiceLayer, hotspotLayer, blacklistLayer;
     let technicians = [];
     let blacklistSites = [];
     let hotspots = [];
@@ -61,6 +61,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let vehicleMarkersVisible = true;
     let hotspotsVisible = false;
     let blacklistMarkersVisible = false;
+    let routeLinesVisible = true;
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
     const checkedVehicleIds = new Set();
@@ -69,6 +70,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const checkedVehicleStateByVin = new Map();
     const VEHICLE_CLICK_HISTORY_TABLE = 'control_map_vehicle_clicks';
     const VEHICLE_FILTERS_STORAGE_KEY = 'controlMapVehicleFilters';
+    const VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY = 'controlMapVehicleFiltersCollapsed';
     let syncingVehicleSelection = false;
     let selectedTechId = null;
     const vehicleMarkers = new Map();
@@ -82,11 +84,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let lastClientLocation = null;
     let renderedTechIds = '';
     let lastOriginPoint = null;
-    const serviceZipFilters = { tech: '', reseller: '', repair: '', custom: '' };
-    const serviceVendorFilters = { tech: '', reseller: '', repair: '', custom: '' };
+    const serviceSearchFilters = { tech: '', reseller: '', repair: '', custom: '' };
     const serviceFilterIds = { ...getServiceFilterIds() };
     const vehicleFilters = {
       invPrep: [],
+      physLoc: [],
       gpsFix: [],
       moving: [],
       dealStatus: [],
@@ -94,6 +96,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       dealMin: 0,
       dealMax: 100,
     };
+    let vehicleFiltersCollapsed = false;
 
     const getVehicleFiltersStorageKey = (userId) => `${VEHICLE_FILTERS_STORAGE_KEY}:${userId || 'anonymous'}`;
 
@@ -113,6 +116,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       return {
         invPrep: toArray(payload.invPrep),
+        physLoc: toArray(payload.physLoc),
         gpsFix: toArray(payload.gpsFix),
         moving: toArray(payload.moving),
         dealStatus: toArray(payload.dealStatus),
@@ -150,6 +154,73 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         );
       } catch (error) {
         console.warn('Failed to save vehicle filter preferences.', error);
+      }
+    };
+
+    const VEHICLE_FILTER_DROPDOWN_IDS = [
+      { toggleId: 'filter-invprep-toggle', panelId: 'filter-invprep-panel' },
+      { toggleId: 'filter-physloc-toggle', panelId: 'filter-physloc-panel' },
+      { toggleId: 'filter-gps-toggle', panelId: 'filter-gps-panel' },
+      { toggleId: 'filter-moving-toggle', panelId: 'filter-moving-panel' },
+      { toggleId: 'filter-deal-status-toggle', panelId: 'filter-deal-status-panel' },
+      { toggleId: 'filter-pt-toggle', panelId: 'filter-pt-panel' }
+    ];
+
+    const closeVehicleFilterDropdowns = () => {
+      VEHICLE_FILTER_DROPDOWN_IDS.forEach(({ toggleId, panelId }) => {
+        const toggle = document.getElementById(toggleId);
+        const panel = document.getElementById(panelId);
+        if (!toggle || !panel) return;
+        panel.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    };
+
+    const loadVehicleFiltersCollapsedPref = () => {
+      if (typeof window === 'undefined' || !window.localStorage) return false;
+      try {
+        const raw = localStorage.getItem(VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY);
+        return raw === '1';
+      } catch (_error) {
+        return false;
+      }
+    };
+
+    const persistVehicleFiltersCollapsedPref = () => {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      try {
+        localStorage.setItem(VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY, vehicleFiltersCollapsed ? '1' : '0');
+      } catch (_error) {
+        // Non-blocking: collapse state persistence can fail silently.
+      }
+    };
+
+    const applyVehicleFiltersCollapsedState = (collapsed = false, { persist = true } = {}) => {
+      vehicleFiltersCollapsed = Boolean(collapsed);
+      const filtersBody = document.getElementById('vehicle-filters-body');
+      const collapseBtn = document.getElementById('vehicle-filters-collapse');
+
+      if (filtersBody) {
+        filtersBody.hidden = vehicleFiltersCollapsed;
+        filtersBody.setAttribute('aria-hidden', String(vehicleFiltersCollapsed));
+        filtersBody.classList.toggle('is-collapsed', vehicleFiltersCollapsed);
+      }
+
+      if (collapseBtn) {
+        collapseBtn.textContent = vehicleFiltersCollapsed ? 'Show' : 'Hide';
+        collapseBtn.setAttribute('aria-expanded', String(!vehicleFiltersCollapsed));
+        collapseBtn.setAttribute(
+          'aria-label',
+          vehicleFiltersCollapsed ? 'Show vehicle filters' : 'Hide vehicle filters'
+        );
+      }
+
+      if (vehicleFiltersCollapsed) {
+        closeVehicleFilterDropdowns();
+      }
+
+      if (persist) {
+        persistVehicleFiltersCollapsedPref();
       }
     };
 
@@ -270,8 +341,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       });
 
-      if (highlightLayer?.eachLayer) {
-        highlightLayer.eachLayer((layer) => {
+      const collectFromLayerGroup = (layerGroup) => {
+        if (!layerGroup?.eachLayer) return;
+        layerGroup.eachLayer((layer) => {
           if (!layer || typeof layer.getLatLng !== 'function') return;
           if (layer?.options?.interactive === false) return;
           const hasPopup = !!layer.getPopup?.();
@@ -293,7 +365,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             vehicleId: layer?.options?.vehicleData?.id ?? null
           });
         });
-      }
+      };
+
+      collectFromLayerGroup(highlightLayer);
+      collectFromLayerGroup(gpsTrailLayer);
 
       return Array.from(candidateMap.values())
         .sort((a, b) => {
@@ -962,12 +1037,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
-    const GPS_HISTORY_HOTSPOT_MIN_VISITS = 2;
+    const GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS = 2;
+    const GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS = 1;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
     const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
-    const GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_DAYS = 3;
-    const GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_MS = GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_DAYS * GPS_HISTORY_DAY_MS;
     const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
+    const GPS_DEVICE_BLACKLIST_CACHE_TTL_MS = 5 * 60 * 1000;
     const HOTSPOT_SHARED_MATCH_RADIUS_METERS = 320;
     const HOTSPOT_RELATED_VEHICLE_LIMIT = 8;
     const HOTSPOT_RELATED_CANDIDATE_LIMIT = 120;
@@ -988,6 +1063,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const relatedHotspotVehiclesCache = new Map();
     let hotspotFastCoordinatePairs = [];
     let hotspotFastCoordinatePairLookupPromise = null;
+    let gpsDeviceBlacklistSerialsCache = new Set();
+    let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
+    let gpsDeviceBlacklistSerialsPending = null;
 
     const parseGpsNumericValue = (value) => {
       if (value === null || value === undefined) return null;
@@ -1138,25 +1216,53 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return Array.isArray(records) && records.length <= 1 ? 'unknown' : '';
     };
 
-    const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(`${serial}`.trim());
+    const normalizeGpsSerial = (serial = '') => `${serial ?? ''}`.trim().toUpperCase();
 
-    const getWiredGpsHistoryRecords = (records = [], getRecordSerial = () => '') => {
-      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
-      return records.filter((record) => isWiredGpsSerial(getRecordSerial(record)));
-    };
+    const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(normalizeGpsSerial(serial));
 
-    const mergeGpsHistoryRecordSets = (...recordSets) => {
-      const merged = [];
-      const seen = new Set();
-      recordSets.forEach((recordSet) => {
-        if (!Array.isArray(recordSet)) return;
-        recordSet.forEach((record) => {
-          if (!record || seen.has(record)) return;
-          seen.add(record);
-          merged.push(record);
+    const getGpsDeviceBlacklistSerials = async ({ force = false } = {}) => {
+      if (!supabaseClient?.from) return new Set();
+
+      const now = Date.now();
+      const cacheIsFresh = (now - gpsDeviceBlacklistSerialsCacheUpdatedAt) <= GPS_DEVICE_BLACKLIST_CACHE_TTL_MS;
+      if (!force && cacheIsFresh && gpsDeviceBlacklistSerialsCacheUpdatedAt > 0) {
+        return gpsDeviceBlacklistSerialsCache;
+      }
+
+      if (!force && gpsDeviceBlacklistSerialsPending) return gpsDeviceBlacklistSerialsPending;
+
+      gpsDeviceBlacklistSerialsPending = (async () => {
+        await ensureSupabaseSession();
+        const tableName = TABLES.gpsDeviceBlacklist || 'gps_blacklist';
+        const { data, error } = await runWithTimeout(
+          supabaseClient
+            .from(tableName)
+            .select('serial,is_active'),
+          8000,
+          'GPS blacklist request timed out.'
+        );
+
+        if (error) throw error;
+
+        const serials = new Set();
+        (data || []).forEach((row) => {
+          if (row?.is_active === false) return;
+          const serial = normalizeGpsSerial(row?.serial);
+          if (!serial) return;
+          serials.add(serial);
         });
+
+        gpsDeviceBlacklistSerialsCache = serials;
+        gpsDeviceBlacklistSerialsCacheUpdatedAt = Date.now();
+        return serials;
+      })().catch((error) => {
+        console.warn('GPS device blacklist load warning: ' + (error?.message || error));
+        return gpsDeviceBlacklistSerialsCache;
+      }).finally(() => {
+        gpsDeviceBlacklistSerialsPending = null;
       });
-      return merged;
+
+      return gpsDeviceBlacklistSerialsPending;
     };
 
     const parseGpsRecordMovingStatus = (record = {}) => {
@@ -1234,6 +1340,68 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const date = new Date(timeMs);
       if (Number.isNaN(date.getTime())) return null;
       return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    };
+
+    const selectParkingSpotRecordsByDay = (
+      records = [],
+      {
+        getRecordSerial = () => '',
+        blacklistedWirelessSerials = new Set()
+      } = {}
+    ) => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
+
+      const dayBuckets = new Map();
+      const fallbackWiredRecords = [];
+      const fallbackWirelessRecords = [];
+      const blacklistedSerials = blacklistedWirelessSerials instanceof Set
+        ? blacklistedWirelessSerials
+        : new Set();
+
+      records.forEach((record) => {
+        const serial = normalizeGpsSerial(getRecordSerial(record));
+        if (!serial) return;
+        const isWired = isWiredGpsSerial(serial);
+        const isWirelessAllowed = !isWired && !blacklistedSerials.has(serial);
+        if (!isWired && !isWirelessAllowed) return;
+
+        if (isWired) {
+          fallbackWiredRecords.push(record);
+        } else {
+          fallbackWirelessRecords.push(record);
+        }
+
+        const timeMs = parseGpsTrailTimeMs(record);
+        const dayStartMs = toUtcDayStartMs(timeMs);
+        if (!Number.isFinite(dayStartMs)) return;
+
+        const bucket = dayBuckets.get(dayStartMs) || { wired: [], wireless: [] };
+        if (isWired) {
+          bucket.wired.push(record);
+        } else if (isWirelessAllowed) {
+          bucket.wireless.push(record);
+        }
+        dayBuckets.set(dayStartMs, bucket);
+      });
+
+      if (!dayBuckets.size) {
+        return fallbackWiredRecords.length ? fallbackWiredRecords : fallbackWirelessRecords;
+      }
+
+      const selectedRecords = [];
+      const seenRecords = new Set();
+      [...dayBuckets.keys()].sort((a, b) => a - b).forEach((dayStartMs) => {
+        const bucket = dayBuckets.get(dayStartMs);
+        if (!bucket) return;
+        const preferredRecords = bucket.wired.length ? bucket.wired : bucket.wireless;
+        preferredRecords.forEach((record) => {
+          if (!record || seenRecords.has(record)) return;
+          seenRecords.add(record);
+          selectedRecords.push(record);
+        });
+      });
+
+      return selectedRecords;
     };
 
     const buildHotspotSessions = (points = []) => {
@@ -1339,9 +1507,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       records = [],
       {
         getRecordSerial = () => '',
-        serialCountsBySerial = null,
-        parkedDaysOverride = null,
-        anchorPoint = null
+        serialCountsBySerial = null
       } = {}
     ) => {
       if (!Array.isArray(records) || !records.length) return [];
@@ -1357,12 +1523,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .map((record) => {
           const trailPoint = toGpsTrailPoint(record);
           if (!trailPoint) return null;
-          const recordSerial = `${getRecordSerial(record) || ''}`.trim();
+          const rawRecordSerial = `${getRecordSerial(record) || ''}`.trim();
+          const recordSerial = normalizeGpsSerial(rawRecordSerial);
           const readingCountForSerial = recordSerial
-            ? Number(resolvedSerialCounts.get(recordSerial) || 0)
+            ? Number(resolvedSerialCounts.get(recordSerial) || resolvedSerialCounts.get(rawRecordSerial) || 0)
             : 0;
           return {
             ...trailPoint,
+            serial: recordSerial,
             movingStatus: readingCountForSerial <= 1
               ? 'unknown'
               : parseGpsRecordMovingStatus(record)
@@ -1372,7 +1540,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       if (!points.length) return [];
 
-      // Parking spots must consider both: long parked stays and frequent recurring pings.
+      // Parking spots require multi-day stays (readings on different days in the same location cluster).
       const sourcePoints = points;
 
       if (!sourcePoints.length) return [];
@@ -1460,7 +1628,31 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           );
           const uniqueDays = uniqueDayKeys.size;
           const pingCount = cluster.points.length;
+          const serialCounts = new Map();
+          cluster.points.forEach((point) => {
+            const serial = normalizeGpsSerial(point?.serial);
+            if (!serial) return;
+            serialCounts.set(serial, (serialCounts.get(serial) || 0) + 1);
+          });
+          const serials = [...serialCounts.entries()]
+            .sort((a, b) => {
+              if (b[1] !== a[1]) return b[1] - a[1];
+              return a[0].localeCompare(b[0]);
+            })
+            .map(([serial, pings]) => ({
+              serial,
+              pings,
+              type: isWiredGpsSerial(serial) ? 'wired' : 'wireless'
+            }));
           const longestDurationDays = longestDurationMs / GPS_HISTORY_DAY_MS;
+          const longestStayActiveDays = sessions.reduce((maxDays, session) => {
+            const activeDays = Number.isFinite(session?.activeDays) ? session.activeDays : 0;
+            return Math.max(maxDays, activeDays);
+          }, 0);
+          const multiDayStayCount = sessions.filter((session) => (
+            Number.isFinite(session?.activeDays)
+            && session.activeDays >= GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS
+          )).length;
           const score = computeHotspotScore({
             uniqueDays,
             visits,
@@ -1476,6 +1668,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             lng: cluster.center.lng,
             points: cluster.points.length,
             pingCount,
+            serials,
             uniqueDays,
             visits,
             stoppedCount,
@@ -1487,113 +1680,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             longestDurationMs,
             longestDurationDays,
             lastStayDurationMs,
+            longestStayActiveDays,
+            multiDayStayCount,
             score
           };
         });
 
       const strictHotspots = normalizedHotspots.filter((hotspot) => {
-        const qualifiesLongStay = hotspot.longestDurationMs > GPS_HISTORY_HOTSPOT_LONG_STAY_MIN_MS;
-        const hasSufficientSignals = hotspot.visits >= GPS_HISTORY_HOTSPOT_MIN_VISITS
-          || hotspot.uniqueDays >= 2
-          || hotspot.pingCount >= 8
-          || hotspot.totalDurationMs >= 30 * 60 * 1000
-          || qualifiesLongStay;
-        const hasEnoughPoints = hotspot.points >= 2 || qualifiesLongStay;
-        return hasEnoughPoints && hasSufficientSignals;
+        const hasEnoughPoints = hotspot.points >= 2;
+        const hasMinConsecutiveDays = hotspot.longestStayActiveDays >= GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS;
+        const hasMinMultiDayStays = hotspot.multiDayStayCount >= GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS;
+        return hasEnoughPoints && hasMinConsecutiveDays && hasMinMultiDayStays;
       });
 
-      const fallbackHotspots = normalizedHotspots.filter((hotspot) => hotspot.points >= 1);
-      let candidates = strictHotspots.length ? strictHotspots : fallbackHotspots;
-
-      const normalizedOverrideDays = Number.isFinite(parkedDaysOverride) && parkedDaysOverride > 0
-        ? parkedDaysOverride
-        : null;
-      const normalizedAnchor = anchorPoint
-        && Number.isFinite(Number(anchorPoint.lat))
-        && Number.isFinite(Number(anchorPoint.lng))
-        ? { lat: Number(anchorPoint.lat), lng: Number(anchorPoint.lng) }
-        : null;
-
-      if (normalizedOverrideDays && normalizedAnchor) {
-        const forcedDurationMs = normalizedOverrideDays * GPS_HISTORY_DAY_MS;
-        const attachRadiusMeters = Math.max(
-          HOTSPOT_SHARED_MATCH_RADIUS_METERS,
-          GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 1.6
-        );
-        let closestIndex = -1;
-        let closestDistance = Number.POSITIVE_INFINITY;
-
-        candidates.forEach((hotspot, index) => {
-          const distance = getGpsPointDistanceMeters(normalizedAnchor, hotspot);
-          if (!Number.isFinite(distance) || distance >= closestDistance) return;
-          closestDistance = distance;
-          closestIndex = index;
-        });
-
-        if (closestIndex >= 0 && closestDistance <= attachRadiusMeters) {
-          const base = candidates[closestIndex];
-          const boostedUniqueDays = Math.max(base.uniqueDays || 0, Math.round(normalizedOverrideDays));
-          const boostedVisits = Math.max(base.visits || 0, Math.max(1, Math.round(normalizedOverrideDays / 2)));
-          const boostedTotalDurationMs = Math.max(base.totalDurationMs || 0, forcedDurationMs);
-          const boostedLongestDurationMs = Math.max(base.longestDurationMs || 0, forcedDurationMs);
-          const boostedLongestDurationDays = Math.max(base.longestDurationDays || 0, normalizedOverrideDays);
-          const boostedAvgDurationMs = Math.max(base.avgDurationMs || 0, Math.round(boostedTotalDurationMs / Math.max(1, boostedVisits)));
-          const boostedLastStayDurationMs = Math.max(base.lastStayDurationMs || 0, forcedDurationMs);
-          candidates[closestIndex] = {
-            ...base,
-            uniqueDays: boostedUniqueDays,
-            visits: boostedVisits,
-            totalDurationMs: boostedTotalDurationMs,
-            avgDurationMs: boostedAvgDurationMs,
-            longestDurationMs: boostedLongestDurationMs,
-            longestDurationDays: boostedLongestDurationDays,
-            lastStayDurationMs: boostedLastStayDurationMs,
-            score: computeHotspotScore({
-              uniqueDays: boostedUniqueDays,
-              visits: boostedVisits,
-              pingCount: base.pingCount,
-              stoppedCount: base.stoppedCount,
-              totalDurationMs: boostedTotalDurationMs,
-              longestDurationDays: boostedLongestDurationDays
-            })
-          };
-        } else {
-          const nowMs = Date.now();
-          const syntheticUniqueDays = Math.max(1, Math.round(normalizedOverrideDays));
-          const syntheticVisits = Math.max(1, Math.round(normalizedOverrideDays / 2));
-          const syntheticTotalDurationMs = forcedDurationMs;
-          const syntheticLongestDurationDays = normalizedOverrideDays;
-          candidates = [
-            ...candidates,
-            {
-              id: 'vehicle-history-hotspot-stationary-override',
-              lat: normalizedAnchor.lat,
-              lng: normalizedAnchor.lng,
-              points: 1,
-              pingCount: 1,
-              uniqueDays: syntheticUniqueDays,
-              visits: syntheticVisits,
-              stoppedCount: 1,
-              firstSeen: nowMs - forcedDurationMs,
-              lastSeen: nowMs,
-              radiusMeters: Math.max(100, Math.round(GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS * 0.7)),
-              totalDurationMs: syntheticTotalDurationMs,
-              avgDurationMs: syntheticTotalDurationMs,
-              longestDurationMs: syntheticTotalDurationMs,
-              longestDurationDays: syntheticLongestDurationDays,
-              lastStayDurationMs: syntheticTotalDurationMs,
-              score: computeHotspotScore({
-                uniqueDays: syntheticUniqueDays,
-                visits: syntheticVisits,
-                pingCount: 1,
-                stoppedCount: 1,
-                totalDurationMs: syntheticTotalDurationMs,
-                longestDurationDays: syntheticLongestDurationDays
-              })
-            }
-          ];
-        }
-      }
+      let candidates = strictHotspots;
 
       return candidates
         .sort((a, b) => {
@@ -1643,21 +1743,19 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const winnerScopedRecords = winnerSerial
           ? records.filter((record) => getRecordSerial(record) === winnerSerial)
           : records;
-        const wiredScopedRecords = getWiredGpsHistoryRecords(records, getRecordSerial);
+        const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
 
-        let hotspotSourceRecords = mergeGpsHistoryRecordSets(winnerScopedRecords, wiredScopedRecords);
+        let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
+          getRecordSerial,
+          blacklistedWirelessSerials
+        });
         if (!hotspotSourceRecords.length) {
-          hotspotSourceRecords = records;
+          hotspotSourceRecords = winnerScopedRecords.length ? winnerScopedRecords : records;
         }
-        const parkedDaysValue = getDaysParkedValue(vehicle);
-        const parkedDaysOverride = Number.isFinite(parkedDaysValue) && parkedDaysValue > 0 ? parkedDaysValue : null;
-        const anchorPoint = getVehicleTrailAnchorPoint(vehicle) || getLatestTrailPointFromRecords(hotspotSourceRecords);
 
         const hotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
           getRecordSerial,
-          serialCountsBySerial,
-          parkedDaysOverride,
-          anchorPoint
+          serialCountsBySerial
         }).map((hotspot, index) => ({
           ...hotspot,
           sourceVehicleId: vehicle.id,
@@ -2277,7 +2375,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const rgbToRgba = ({ r, g, b }, alpha) => `rgba(${Math.max(0, Math.min(255, Math.round(r)))},${Math.max(0, Math.min(255, Math.round(g)))},${Math.max(0, Math.min(255, Math.round(b)))},${clampUnitInterval(alpha).toFixed(3)})`;
 
     const drawVehicleGpsTrail = (points = [], vehicleColor = '') => {
-      if (!highlightLayer || !Array.isArray(points) || !points.length) return;
+      if (!gpsTrailLayer || !Array.isArray(points) || !points.length) return;
       const oldestLineRgb = parseTrailColorToRgb('#14532d');
       const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
       const newestVehicleRgb = parseTrailColorToRgb(vehicleColor, oldestLineRgb);
@@ -2300,7 +2398,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           lineCap: 'round',
           lineJoin: 'round',
           interactive: false
-        }).addTo(highlightLayer);
+        }).addTo(gpsTrailLayer);
         segmentLine.bringToBack();
       }
 
@@ -2319,7 +2417,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           className: 'gps-trail-point',
           cycleRole: 'route-point',
           cycleKey: `route-point-${index}`
-        }).addTo(highlightLayer);
+        }).addTo(gpsTrailLayer);
 
         pointMarker.on('click', (event) => {
           if (event?.originalEvent) {
@@ -2355,7 +2453,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }),
           interactive: false,
           zIndexOffset: 420
-        }).addTo(highlightLayer);
+        }).addTo(gpsTrailLayer);
       }
     };
 
@@ -2380,16 +2478,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const buildVehicleHistoryHotspotPopup = (hotspot, index = 0) => {
       const rank = index + 1;
       const coords = `${Number(hotspot.lat).toFixed(5)}, ${Number(hotspot.lng).toFixed(5)}`;
-      const pingPerDay = hotspot.uniqueDays
-        ? `${(hotspot.pingCount / hotspot.uniqueDays).toFixed(1)}`
-        : `${hotspot.pingCount || hotspot.points || 0}`;
-      const maxParkedDaysRaw = Math.max(
-        Number(hotspot.longestDurationDays || 0),
-        Number.isFinite(hotspot.longestDurationMs) ? (hotspot.longestDurationMs / GPS_HISTORY_DAY_MS) : 0
-      );
-      const maxParkedDaysLabel = Number.isFinite(maxParkedDaysRaw) && maxParkedDaysRaw > 0
-        ? `${(maxParkedDaysRaw >= 10 ? Math.round(maxParkedDaysRaw) : Number(maxParkedDaysRaw.toFixed(1))).toString().replace(/\.0$/, '')}d`
-        : '—';
+      const serialsLabel = (Array.isArray(hotspot?.serials) ? hotspot.serials : [])
+        .map((entry) => {
+          const serial = normalizeGpsSerial(entry?.serial);
+          if (!serial) return '';
+          const serialType = `${entry?.type || ''}`.trim().toLowerCase() === 'wired' ? 'Wired' : 'Wireless';
+          const pingCount = Number(entry?.pings);
+          const pingLabel = Number.isFinite(pingCount) && pingCount > 0 ? `, ${pingCount} pings` : '';
+          return `${serial} (${serialType}${pingLabel})`;
+        })
+        .filter(Boolean)
+        .join(', ');
       const popupKey = hotspot.popupKey || buildVehicleHistoryHotspotPopupKey(hotspot.sourceVehicleId, hotspot, index);
       const mapsLinkHtml = buildGoogleMapsLinkHtml(hotspot.lat, hotspot.lng, { tight: true });
       return `
@@ -2399,16 +2498,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <p><span class="vehicle-history-hotspot-k">Pings</span><span class="vehicle-history-hotspot-v">${hotspot.pingCount || hotspot.points}</span></p>
             <p><span class="vehicle-history-hotspot-k">Days</span><span class="vehicle-history-hotspot-v">${hotspot.uniqueDays || 0}</span></p>
             <p><span class="vehicle-history-hotspot-k">Visits</span><span class="vehicle-history-hotspot-v">${hotspot.visits}</span></p>
-            <p><span class="vehicle-history-hotspot-k">Avg/day</span><span class="vehicle-history-hotspot-v">${pingPerDay}</span></p>
-            <p><span class="vehicle-history-hotspot-k">Dwell</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.totalDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Avg stay</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.avgDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Longest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Latest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.lastStayDurationMs)}</span></p>
-            <p><span class="vehicle-history-hotspot-k">Max days</span><span class="vehicle-history-hotspot-v">${maxParkedDaysLabel}</span></p>
           </div>
           <div class="vehicle-history-hotspot-meta">
             <p><span>First</span><span>${formatHotspotDateTime(hotspot.firstSeen)}</span></p>
             <p><span>Last</span><span>${formatHotspotDateTime(hotspot.lastSeen)}</span></p>
+            <p><span>Serial(s)</span><span class="vehicle-history-hotspot-serial-text">${escapeHTML(serialsLabel || 'Insufficient data')}</span></p>
             <p><span>Coords</span><span>${coords}</span></p>
             ${mapsLinkHtml}
           </div>
@@ -2691,7 +2788,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const renderVehicleGpsTrail = async (vehicle, requestId) => {
-      if (!vehicle || !highlightLayer || requestId !== gpsTrailRequestCounter) return;
+      if (!vehicle || !gpsTrailLayer || requestId !== gpsTrailRequestCounter) return;
 
       const vin = gpsHistoryManager.getVehicleVin(vehicle);
       const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
@@ -2710,7 +2807,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const winnerScopedRecords = winnerSerial
         ? records.filter((record) => getRecordSerial(record) === winnerSerial)
         : records;
-      const wiredScopedRecords = getWiredGpsHistoryRecords(records, getRecordSerial);
 
       const latestSerial = getMostRecentRecordSerial(records, getRecordSerial);
       const movingHistoryOverride = resolveVehicleMovingHistoryOverride({
@@ -2778,21 +2874,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .filter((point) => point !== null)
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      // Parking spots include winner serial + any wired serial (serial starts with 0-7).
-      let hotspotSourceRecords = mergeGpsHistoryRecordSets(winnerScopedRecords, wiredScopedRecords);
+      const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
+      let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
+        getRecordSerial,
+        blacklistedWirelessSerials
+      });
       if (!hotspotSourceRecords.length) {
-        hotspotSourceRecords = records;
+        hotspotSourceRecords = winnerScopedRecords.length ? winnerScopedRecords : records;
       }
-      const parkedDaysValue = getDaysParkedValue(vehicle);
-      const parkedDaysOverride = Number.isFinite(parkedDaysValue) && parkedDaysValue > 0 ? parkedDaysValue : null;
-      const hotspotAnchorPoint = getVehicleTrailAnchorPoint(vehicle)
-        || getLatestTrailPointFromRecords(hotspotSourceRecords)
-        || getLatestTrailPointFromRecords(records);
       const historyHotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
         getRecordSerial,
-        serialCountsBySerial,
-        parkedDaysOverride,
-        anchorPoint: hotspotAnchorPoint
+        serialCountsBySerial
       }).map((hotspot, index) => ({
         ...hotspot,
         sourceVehicleId: vehicle.id,
@@ -2813,6 +2905,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const ICON_PATHS = {
       mapPin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle>',
+      layers: '<path d="M12 2 2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path>',
       navigation: '<polygon points="3 11 12 2 21 11 12 20 3 11"></polygon><line x1="12" y1="22" x2="12" y2="13"></line>',
       mail: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><polyline points="3 7 12 13 21 7"></polyline>',
       wifiOff: '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 0 12 9.5 10.94 10.94 0 0 0 4.08 12.74"></path><path d="M5.1 16.5A6.95 6.95 0 0 1 12 14.5a6.95 6.95 0 0 1 3.53.96"></path><line x1="12" y1="20" x2="12.01" y2="20"></line>',
@@ -2860,8 +2953,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const PARTNER_SIDEBAR_CONFIGS = [
-      { type: 'reseller', eyebrow: 'Reseller network', title: 'Nearby resellers', accentClass: 'text-emerald-300', filterPlaceholder: 'Filter resellers by name, city, or state', emptyText: 'Resellers will appear here.' },
-      { type: 'repair', eyebrow: 'Repair network', title: 'Repair shops nearby', accentClass: 'text-orange-200', filterPlaceholder: 'Filter repair shops by name, city, or state', emptyText: 'Repair shops will appear here.' },
+      { type: 'reseller', eyebrow: 'Reseller network', title: 'Nearby resellers', accentClass: 'text-emerald-300', filterPlaceholder: 'Search by name, city, state, ZIP, or note', emptyText: 'Resellers will appear here.' },
+      { type: 'repair', eyebrow: 'Repair network', title: 'Repair shops nearby', accentClass: 'text-orange-200', filterPlaceholder: 'Search by name, city, state, ZIP, or note', emptyText: 'Repair shops will appear here.' },
     ];
 
     const CUSTOM_SIDEBAR_CONFIG = {
@@ -2904,22 +2997,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <div class="flex justify-between items-end">
               <div id="${type}-search-status" class="hidden text-xs text-blue-400 animate-pulse font-medium">Locating address...</div>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <input
-                id="${type}-zip-filter"
-                type="text"
-                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Search ZIP code"
-                autocomplete="off"
-              >
-              <input
-                id="${type}-vendor-filter"
-                type="text"
-                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Search vendor"
-                autocomplete="off"
-              >
-            </div>
+            <input
+              id="${type}-service-filter"
+              type="text"
+              class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+              placeholder="${filterPlaceholder}"
+              autocomplete="off"
+            >
           </div>
         </div>
         <div id="${type}-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
@@ -2946,22 +3030,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             </div>
           </div>
           <div class="mt-4 space-y-2">
-            <div class="grid grid-cols-2 gap-2">
-              <input
-                id="dynamic-service-zip-filter"
-                type="text"
-                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Search ZIP code"
-                autocomplete="off"
-              >
-              <input
-                id="dynamic-service-vendor-filter"
-                type="text"
-                class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-                placeholder="Search vendor"
-                autocomplete="off"
-              >
-            </div>
+            <input
+              id="dynamic-service-filter"
+              type="text"
+              class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+              placeholder="Search by name, city, state, ZIP, or note"
+              autocomplete="off"
+            >
           </div>
         </div>
         <div id="dynamic-service-list" class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900 scroll-smooth relative">
@@ -2984,28 +3059,21 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     buildPartnerSidebars();
 
-    function ensureTechZipVendorControls() {
-      if (document.getElementById('tech-zip-filter') && document.getElementById('tech-vendor-filter')) return;
+    function ensureTechSearchControl() {
+      if (document.getElementById('tech-service-filter')) return;
       const sidebar = document.getElementById('left-sidebar');
       if (!sidebar) return;
       const header = sidebar.querySelector('.p-5.border-b.border-slate-800.bg-slate-900');
       if (!header) return;
 
       const wrapper = document.createElement('div');
-      wrapper.className = 'grid grid-cols-2 gap-2';
+      wrapper.className = 'space-y-2';
       wrapper.innerHTML = `
         <input
-          id="tech-zip-filter"
+          id="tech-service-filter"
           type="text"
           class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-          placeholder="Search ZIP code"
-          autocomplete="off"
-        >
-        <input
-          id="tech-vendor-filter"
-          type="text"
-          class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-          placeholder="Search vendor"
+          placeholder="Search by company, city, state, ZIP, or note"
           autocomplete="off"
         >
       `;
@@ -3013,7 +3081,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       header.appendChild(wrapper);
     }
 
-    ensureTechZipVendorControls();
+    ensureTechSearchControl();
 
     const isServiceSidebarVisible = (type) => {
       if (!isServiceTypeEnabled(type)) return false;
@@ -3038,8 +3106,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const isRepoAgentPartner = (partner = {}) => `${partner.categoryLabel || partner.category || ''}`.trim().toLowerCase() === 'repo agent';
     const isParkingStoragePartner = (partner = {}) => `${partner.categoryLabel || partner.category || ''}`.trim().toLowerCase() === 'parking/storage';
 
-    const hasSpAgentNote = (partner = {}) => `${partner.notes || ''}`.trim().toLowerCase() === 'sp agent';
-    const hasSpStorageNote = (partner = {}) => `${partner.notes || ''}`.trim().toLowerCase() === 'sp storage';
+    const getPartnerNoteText = (partner = {}) => String(
+      partner.notes
+      || partner.note
+      || partner.details?.Note
+      || partner.details?.note
+      || partner.details?.notes
+      || ''
+    ).trim();
+    const getTechNoteText = (tech = {}) => String(
+      tech.notes
+      || tech.note
+      || tech.details?.Note
+      || tech.details?.note
+      || tech.details?.notes
+      || ''
+    ).trim();
+    const getServiceNoteDisplay = (entry = {}, type = 'partner') => {
+      const note = type === 'tech' ? getTechNoteText(entry) : getPartnerNoteText(entry);
+      return note || '—';
+    };
+    const hasSpAgentNote = (partner = {}) => getPartnerNoteText(partner).toLowerCase() === 'sp agent';
+    const hasSpStorageNote = (partner = {}) => getPartnerNoteText(partner).toLowerCase() === 'sp storage';
 
     const getPartnerColor = (partner, defaultColor) => isUnauthorizedPartner(partner) ? '#94a3b8' : defaultColor;
 
@@ -3053,8 +3141,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const showServicePreviewCard = (partner) => {
       if (!map || !partner) return;
       const locationText = formatPartnerLocation(partner) || 'Location unavailable';
-      const zipText = partner.zip || 'N/A';
-      const noteText = partner.notes || partner.note || partner.details?.note || '';
+      const noteText = getPartnerNoteText(partner);
+      const noteDisplay = noteText || '—';
       const mapsLinkHtml = buildGoogleMapsLinkHtml(partner.lat, partner.lng, { tight: true });
       const popup = L.popup({
         className: 'service-mini-popup',
@@ -3069,8 +3157,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="service-mini-card">
             <p class="service-mini-title">${escapeHTML(partner.company || partner.name || 'Service')}</p>
             <p class="service-mini-location">${escapeHTML(locationText)}</p>
-            <p class="service-mini-meta"><span class="service-mini-label">ZIP</span><span>${escapeHTML(zipText)}</span></p>
-            ${noteText ? `<p class="service-mini-note"><span class="service-mini-label">Note</span> ${escapeHTML(noteText)}</p>` : ''}
+            <p class="service-mini-meta"><span class="service-mini-label">Note</span><span>${escapeHTML(noteDisplay)}</span></p>
             ${mapsLinkHtml}
           </div>
         `);
@@ -3185,6 +3272,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       serviceLayer = L.layerGroup().addTo(map);
       serviceConnectionLayer = L.layerGroup().addTo(map);
       highlightLayer = L.layerGroup().addTo(map);
+      gpsTrailLayer = L.layerGroup();
+      if (routeLinesVisible) gpsTrailLayer.addTo(map);
       resellerLayer = createPartnerClusterGroup(SERVICE_COLORS.reseller);
       repairLayer = createPartnerClusterGroup(SERVICE_COLORS.repair);
       customServiceLayer = createPartnerClusterGroup(SERVICE_COLORS.custom);
@@ -3211,7 +3300,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       map.on('click', (e) => {
         if (e.originalEvent?.handledByMarker) {
-          cycleOverlappingTargetsAtLatLng(e.latlng, e.originalEvent);
           return;
         }
 
@@ -3631,6 +3719,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       displayList.slice(0, 50).forEach((tech, idx) => {
         const isNearest = target && idx === 0;
 
+        const techNoteText = getServiceNoteDisplay(tech, 'tech');
         const card = document.createElement('div');
         card.className = `p-3 rounded-lg border transition-colors cursor-pointer ${isNearest ? 'bg-slate-800 border-blue-500 ring-1 ring-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`;
         card.dataset.id = tech.id;
@@ -3644,7 +3733,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="flex justify-between items-start gap-3">
             <div class="min-w-0 space-y-1">
               <h3 class="font-bold text-white text-sm break-words leading-tight" title="${tech.company}">${tech.company}</h3>
-              <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${tech.city || 'Unknown'}, ${tech.state || 'US'}</span></p>
+              <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${tech.city || 'Unknown'}, ${tech.state || 'US'}${tech.zip ? ` ${tech.zip}` : ''}</span></p>
             </div>
             <div class="text-right text-[11px] text-slate-400 leading-tight space-y-0.5">
               <p class="font-semibold text-slate-200">${tech.phone || ''}</p>
@@ -3652,7 +3741,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               ${distanceLabel ? `<p class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation', 'h-3 w-3')}<span class="font-semibold text-slate-100">${distanceLabel}</span></p>` : ''}
             </div>
           </div>
-          ${tech.zip ? `<p class="text-[10px] text-slate-500 mt-1">${tech.zip}</p>` : ''}
+          <p class="text-[10px] text-slate-500 mt-1">Note: ${escapeHTML(techNoteText)}</p>
 
         `;
 
@@ -3663,38 +3752,48 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isAnyServiceSidebarOpen = () => getVisibleServiceTypes().length > 0;
 
-    const getServiceZipFilterValue = (type = 'tech') => `${serviceZipFilters[type] || ''}`.trim().toLowerCase();
-    const getServiceVendorFilterValue = (type = 'tech') => `${serviceVendorFilters[type] || ''}`.trim().toLowerCase();
-
-    const getServiceZipInputId = (type) => (type === 'custom' ? 'dynamic-service-zip-filter' : `${type}-zip-filter`);
-    const getServiceVendorInputId = (type) => (type === 'custom' ? 'dynamic-service-vendor-filter' : `${type}-vendor-filter`);
+    const getServiceSearchFilterValue = (type = 'tech') => `${serviceSearchFilters[type] || ''}`.trim().toLowerCase();
+    const getServiceSearchInputId = (type) => (type === 'custom' ? 'dynamic-service-filter' : `${type}-service-filter`);
 
     const applyServiceFilter = (list = [], type = 'tech') => {
-      const zipQuery = getServiceZipFilterValue(type);
-      const vendorQuery = getServiceVendorFilterValue(type);
+      const query = getServiceSearchFilterValue(type);
       const allowedIds = Array.isArray(serviceFilterIds[type]) ? new Set(serviceFilterIds[type].map((id) => `${id}`)) : null;
       const baseList = allowedIds ? list.filter((partner) => allowedIds.has(`${partner.id}`)) : list;
-      if (!zipQuery && !vendorQuery) return baseList;
+      if (!query) return baseList;
       return baseList.filter((partner) => {
-        const zipHaystack = `${partner.zip || partner.zipcode || ''}`.toLowerCase();
-        const vendorHaystack = [partner.company, partner.name, partner.contact, partner.vendor]
+        const noteText = type === 'tech' ? getTechNoteText(partner) : getPartnerNoteText(partner);
+        const haystack = [
+          partner.company,
+          partner.name,
+          partner.contact,
+          partner.vendor,
+          partner.city,
+          partner.state,
+          partner.region,
+          partner.zip,
+          partner.zipcode,
+          partner.phone,
+          partner.email,
+          partner.availability,
+          partner.authorization,
+          partner.categoryLabel,
+          partner.category,
+          noteText
+        ]
           .map((value) => `${value || ''}`.toLowerCase())
           .join(' ');
-
-        if (zipQuery && !zipHaystack.includes(zipQuery)) return false;
-        if (vendorQuery && !vendorHaystack.includes(vendorQuery)) return false;
-        return true;
+        return haystack.includes(query);
       });
     };
 
     function filterSidebarForPartner(type, partner) {
       if (!type || !partner) return;
-      serviceZipFilters[type] = partner.zip || partner.zipcode || '';
-      serviceVendorFilters[type] = partner.company || partner.name || '';
-      const zipInput = document.getElementById(getServiceZipInputId(type));
-      if (zipInput) zipInput.value = serviceZipFilters[type];
-      const vendorInput = document.getElementById(getServiceVendorInputId(type));
-      if (vendorInput) vendorInput.value = serviceVendorFilters[type];
+      serviceSearchFilters[type] = [partner.company || partner.name || '', partner.zip || partner.zipcode || '']
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      const searchInput = document.getElementById(getServiceSearchInputId(type));
+      if (searchInput) searchInput.value = serviceSearchFilters[type];
       renderVisibleSidebars();
     }
 
@@ -3727,18 +3826,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const getSelectedService = (type) => selectedServiceByType[type] || null;
 
-    const syncServiceZipVendorInputs = () => {
+    const syncServiceSearchInputs = () => {
       SERVICE_TYPES.forEach((type) => {
-        const zipInput = document.getElementById(getServiceZipInputId(type));
-        const zipValue = serviceZipFilters[type] || '';
-        if (zipInput && zipInput.value !== zipValue) {
-          zipInput.value = zipValue;
-        }
-
-        const vendorInput = document.getElementById(getServiceVendorInputId(type));
-        const vendorValue = serviceVendorFilters[type] || '';
-        if (vendorInput && vendorInput.value !== vendorValue) {
-          vendorInput.value = vendorValue;
+        const searchInput = document.getElementById(getServiceSearchInputId(type));
+        const searchValue = serviceSearchFilters[type] || '';
+        if (searchInput && searchInput.value !== searchValue) {
+          searchInput.value = searchValue;
         }
       });
     };
@@ -3836,8 +3929,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
           if (idx >= cardLimit) return;
 
-          const locationText = formatPartnerLocation(partner);
-          const card = document.createElement('div');
+	          const locationText = formatPartnerLocation(partner);
+          const partnerNoteText = getServiceNoteDisplay(partner, 'partner');
+	          const card = document.createElement('div');
           const isSelected = selectedService?.id === partner.id;
           card.className = `p-3 rounded-lg border transition-colors cursor-pointer ${isSelected || (idx === 0 && origin) ? 'bg-slate-800 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`;
           card.dataset.id = partner.id;
@@ -3856,11 +3950,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <p class="text-[10px] text-slate-500">${partner.availability || ''}</p>
               </div>
             </div>
-            <div class="grid grid-cols-2 gap-2 mt-2 text-[11px] text-slate-300">
-              <div class="flex items-center gap-1 text-slate-400">${svgIcon('mapPin')}<span>${locationText || 'US'}</span></div>
-              ${origin ? `<div class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation')}<span class="font-semibold text-slate-100">${Math.round(partner.distance)} mi</span></div>` : ''}
-              ${partner.notes ? `<div class="col-span-2 text-[10px] text-slate-400 leading-tight">${partner.notes}</div>` : ''}
-            </div>
+	            <div class="grid grid-cols-2 gap-2 mt-2 text-[11px] text-slate-300">
+	              <div class="flex items-center gap-1 text-slate-400">${svgIcon('mapPin')}<span>${locationText || 'US'}</span></div>
+	              ${origin ? `<div class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation')}<span class="font-semibold text-slate-100">${Math.round(partner.distance)} mi</span></div>` : ''}
+		              <div class="col-span-2 text-[10px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</div>
+	            </div>
 
           `;
 
@@ -3925,9 +4019,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const fragment = document.createDocumentFragment();
-      filtered.slice(0, PARTNER_CARD_LIMIT).forEach((partner) => {
-        const locationText = formatPartnerLocation(partner) || 'US';
-        const card = document.createElement('article');
+	      filtered.slice(0, PARTNER_CARD_LIMIT).forEach((partner) => {
+	        const locationText = formatPartnerLocation(partner) || 'US';
+        const partnerNoteText = getServiceNoteDisplay(partner, 'partner');
+	        const card = document.createElement('article');
         card.className = 'rounded-xl border border-slate-800 bg-slate-900/70 p-3 shadow-sm hover:border-blue-500/70 transition-colors';
         card.dataset.id = partner.id;
         card.dataset.type = 'partner';
@@ -3945,8 +4040,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               ${distanceLabel ? `<p class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation', 'h-3 w-3')}<span class="font-semibold text-slate-100">${distanceLabel}</span></p>` : ''}
             </div>
           </div>
-          ${partner.notes ? `<p class="mt-2 text-[11px] text-slate-400 leading-tight">${escapeHTML(partner.notes)}</p>` : ''}
-        `;
+		          <p class="mt-2 text-[11px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</p>
+	        `;
 
         fragment.appendChild(card);
 
@@ -4100,6 +4195,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function setupLayerToggles() {
       createLayerToggle({
+        toggleId: 'toggle-route-lines',
+        labelOn: 'Hide Route Lines',
+        labelOff: 'Show Route Lines',
+        getVisible: () => routeLinesVisible,
+        setVisible: (value) => {
+          routeLinesVisible = value;
+        },
+        onShow: () => {
+          if (!gpsTrailLayer || !map) return;
+          if (!map.hasLayer(gpsTrailLayer)) gpsTrailLayer.addTo(map);
+        },
+        onHide: () => {
+          if (!gpsTrailLayer || !map) return;
+          if (map.hasLayer(gpsTrailLayer)) map.removeLayer(gpsTrailLayer);
+        }
+      });
+
+      createLayerToggle({
         toggleId: 'toggle-hotspots',
         labelOn: 'Hide Hotspot Areas',
         labelOff: 'Show Hotspot Areas',
@@ -4158,6 +4271,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
           vehicleMarkers.clear();
           highlightLayer?.clearLayers();
+          gpsTrailLayer?.clearLayers();
           gpsTrailRequestCounter += 1;
         }
       });
@@ -4277,6 +4391,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const gpsReasonClasses = hasNoGps ? 'text-[10px] text-red-200/90' : 'text-[10px] text-slate-400';
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
+          const shortAddress = String(vehicle.shortLocation || vehicle.lastLocation || '').trim();
+          const zipCode = String(vehicle.zipcode || '').trim();
+          const escapedZip = zipCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const zipIncludedInAddress = zipCode && escapedZip
+            ? new RegExp(`\\b${escapedZip}\\b`).test(shortAddress)
+            : false;
+          const locationDisplay = [shortAddress || 'No location provided', zipCode && !zipIncludedInAddress ? zipCode : '']
+            .filter(Boolean)
+            .join(' · ');
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = vehicle.id;
           card.dataset.type = 'vehicle';
@@ -4285,7 +4408,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div class="space-y-1">
                 <p class="text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">${vehicle.model}</p>
                 <h3 class="font-extrabold text-white text-sm leading-tight flex items-center gap-2">${vehicle.year || '—'} <span class="text-slate-600">•</span> ${vehicle.vin || 'VIN N/A'}</h3>
-                <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${vehicle.lastLocation || 'No location provided'}</p>
+                <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
+                <p class="text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
                 ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
                 <p class="text-[11px] text-blue-200 font-semibold">Customer ID: <span class="text-slate-100">${vehicle.customerId || '—'}</span></p>
               </div>
@@ -4449,6 +4573,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!vehicleMarkersVisible) return;
       clearParkingSpotCascade();
       highlightLayer.clearLayers();
+      gpsTrailLayer?.clearLayers();
 
       const storedMarker = vehicleMarkers.get(vehicle.id)?.marker;
       const markerColor = getVehicleMarkerColor(vehicle);
@@ -4514,6 +4639,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const invPrep = normalizeFilterValue(vehicle.invPrepStatus);
       if (vehicleFilters.invPrep.length && !vehicleFilters.invPrep.includes(invPrep)) return false;
+
+      const physicalLocation = normalizeFilterValue(vehicle.physicalLocation);
+      if (vehicleFilters.physLoc.length && !vehicleFilters.physLoc.includes(physicalLocation)) return false;
 
       const gpsFixValue = normalizeFilterValue(vehicle.gpsFix) || EMPTY_FILTER_VALUE;
       if (vehicleFilters.gpsFix.length && !vehicleFilters.gpsFix.includes(gpsFixValue)) return false;
@@ -4639,6 +4767,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function updateVehicleFilterOptions() {
       const invPrepValues = getUniqueVehicleValues('invPrepStatus');
+      const physicalLocationValues = getUniqueVehicleValues('physicalLocation');
       const gpsValues = getUniqueVehicleValues('gpsFix', { includeEmpty: true });
       const dealStatusValues = Array.from(
         new Set(
@@ -4651,12 +4780,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movingValues = getMovingOptions();
 
       vehicleFilters.invPrep = normalizeFilterSelections(invPrepValues, vehicleFilters.invPrep);
+      vehicleFilters.physLoc = normalizeFilterSelections(physicalLocationValues, vehicleFilters.physLoc);
       vehicleFilters.gpsFix = normalizeFilterSelections(gpsValues, vehicleFilters.gpsFix);
       vehicleFilters.dealStatus = normalizeFilterSelections(dealStatusValues, vehicleFilters.dealStatus);
       vehicleFilters.ptStatus = normalizeFilterSelections(ptValues, vehicleFilters.ptStatus);
       vehicleFilters.moving = normalizeFilterSelections(movingValues, vehicleFilters.moving);
 
       renderCheckboxOptions('filter-invprep', invPrepValues, vehicleFilters.invPrep);
+      renderCheckboxOptions('filter-physloc', physicalLocationValues, vehicleFilters.physLoc);
       renderCheckboxOptions('filter-gps', gpsValues, vehicleFilters.gpsFix, (value) => getGpsFixLabel(value, EMPTY_FILTER_VALUE));
       renderCheckboxOptions('filter-deal-status', dealStatusValues, vehicleFilters.dealStatus);
       renderCheckboxOptions('filter-pt', ptValues, vehicleFilters.ptStatus);
@@ -4682,6 +4813,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function updateVehicleFilterLabels() {
       updateVehicleFilterLabel('filter-invprep-toggle', vehicleFilters.invPrep);
+      updateVehicleFilterLabel('filter-physloc-toggle', vehicleFilters.physLoc);
       updateVehicleFilterLabel('filter-gps-toggle', vehicleFilters.gpsFix, (value) => getGpsFixLabel(value, EMPTY_FILTER_VALUE));
       updateVehicleFilterLabel('filter-moving-toggle', vehicleFilters.moving, getMovingLabel);
       updateVehicleFilterLabel('filter-deal-status-toggle', vehicleFilters.dealStatus);
@@ -4690,6 +4822,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function syncVehicleFilterInputs() {
       const invPrepContainer = document.getElementById('filter-invprep');
+      const physLocContainer = document.getElementById('filter-physloc');
       const gpsContainer = document.getElementById('filter-gps');
       const movingContainer = document.getElementById('filter-moving');
       const dealStatusContainer = document.getElementById('filter-deal-status');
@@ -4705,6 +4838,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       };
 
       syncCheckboxes(invPrepContainer, vehicleFilters.invPrep);
+      syncCheckboxes(physLocContainer, vehicleFilters.physLoc);
       syncCheckboxes(gpsContainer, vehicleFilters.gpsFix);
       syncCheckboxes(movingContainer, vehicleFilters.moving);
       syncCheckboxes(dealStatusContainer, vehicleFilters.dealStatus);
@@ -4716,6 +4850,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function resetVehicleFilters() {
       vehicleFilters.invPrep = [];
+      vehicleFilters.physLoc = [];
       vehicleFilters.gpsFix = [];
       vehicleFilters.moving = [];
       vehicleFilters.dealStatus = [];
@@ -4728,15 +4863,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function bindVehicleFilterDropdowns() {
-      const dropdowns = [
-        { toggleId: 'filter-invprep-toggle', panelId: 'filter-invprep-panel' },
-        { toggleId: 'filter-gps-toggle', panelId: 'filter-gps-panel' },
-        { toggleId: 'filter-moving-toggle', panelId: 'filter-moving-panel' },
-        { toggleId: 'filter-deal-status-toggle', panelId: 'filter-deal-status-panel' },
-        { toggleId: 'filter-pt-toggle', panelId: 'filter-pt-panel' }
-      ];
-
-      const entries = dropdowns
+      const entries = VEHICLE_FILTER_DROPDOWN_IDS
         .map(({ toggleId, panelId }) => ({
           toggle: document.getElementById(toggleId),
           panel: document.getElementById(panelId)
@@ -4756,6 +4883,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       entries.forEach(({ toggle, panel }) => {
         toggle.addEventListener('click', (event) => {
           event.preventDefault();
+          if (vehicleFiltersCollapsed) return;
           const isHidden = panel.classList.contains('hidden');
           closeAll(isHidden ? panel : null);
           panel.classList.toggle('hidden', !isHidden);
@@ -4773,6 +4901,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function bindVehicleFilterHandlers() {
       const checkboxHandlers = [
         { id: 'filter-invprep', key: 'invPrep' },
+        { id: 'filter-physloc', key: 'physLoc' },
         { id: 'filter-gps', key: 'gpsFix' },
         { id: 'filter-moving', key: 'moving' },
         { id: 'filter-deal-status', key: 'dealStatus' },
@@ -4821,12 +4950,21 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         resetVehicleFilters();
       });
 
+      const collapseBtn = document.getElementById('vehicle-filters-collapse');
+      collapseBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        applyVehicleFiltersCollapsedState(!vehicleFiltersCollapsed);
+      });
+
       bindVehicleFilterDropdowns();
+      applyVehicleFiltersCollapsedState(loadVehicleFiltersCollapsedPref(), { persist: false });
     }
 
     function getVehicleList(query) {
       if (selectedVehicleId !== null) {
-        return vehicles.filter(v => v.id === selectedVehicleId);
+        const selectedVehicle = vehicles.find((vehicle) => `${vehicle.id}` === `${selectedVehicleId}`);
+        if (!selectedVehicle) return [];
+        return matchesVehicleFilters(selectedVehicle, query) ? [selectedVehicle] : [];
       }
 
       let baseList = vehicles;
@@ -4939,6 +5077,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       selectedTechId = null;
       Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
       highlightLayer?.clearLayers();
+      gpsTrailLayer?.clearLayers();
       connectionLayer?.clearLayers();
       serviceLayer?.clearLayers();
       serviceConnectionLayer?.clearLayers();
@@ -6092,24 +6231,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           };
 
           filterConfigs.forEach(({ type }) => {
-            const zipInput = document.getElementById(getServiceZipInputId(type));
-            if (zipInput) {
-              zipInput.addEventListener('input', () => {
-                serviceZipFilters[type] = zipInput.value;
-                refreshServiceSearch();
-              });
-            }
-
-            const vendorInput = document.getElementById(getServiceVendorInputId(type));
-            if (vendorInput) {
-              vendorInput.addEventListener('input', () => {
-                serviceVendorFilters[type] = vendorInput.value;
+            const searchInput = document.getElementById(getServiceSearchInputId(type));
+            if (searchInput) {
+              searchInput.addEventListener('input', () => {
+                serviceSearchFilters[type] = searchInput.value;
                 refreshServiceSearch();
               });
             }
           });
 
-          syncServiceZipVendorInputs();
+          syncServiceSearchInputs();
 
           setupEventDelegation();
 

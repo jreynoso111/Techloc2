@@ -131,6 +131,19 @@ const wrapFetch = () => {
       }
       return response;
     } catch (error) {
+      const name = String(error?.name || '');
+      const message = String(error?.message || '').toLowerCase();
+      const isAbort =
+        name === 'AbortError' ||
+        message.includes('aborted') ||
+        message.includes('aborterror') ||
+        message.includes('the user aborted a request');
+
+      // Ignore expected cancellation events (navigation/unload/manual aborts).
+      if (isAbort || document.visibilityState === 'hidden') {
+        throw error;
+      }
+
       if (!isIgnored) {
         notifyGlobalAlert({
           title: 'Network Error',

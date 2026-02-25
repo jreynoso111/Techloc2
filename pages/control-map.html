@@ -78,6 +78,7 @@
       </div>
     </div>
     <div id="map-visibility-group" class="pointer-events-none absolute top-4 left-1/2 z-[500] -translate-x-1/2 transform flex flex-wrap justify-center gap-2">
+      <button id="toggle-route-lines" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Route Lines</button>
       <button id="toggle-hotspots" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Hotspot Areas</button>
       <button id="toggle-blacklist" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Blacklist Marks</button>
       <button id="toggle-vehicle-markers" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Vehicles Marks</button>
@@ -197,38 +198,42 @@
     <!-- Vehicles Sidebar -->
     <aside id="right-sidebar" class="resizable-sidebar right-0 border-l border-slate-800 flex flex-col z-30 shadow-2xl collapsed-right" style="width: var(--right-sidebar-width)">
       <div class="resize-handle left-0"></div>
-      <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10">
+      <div class="vehicle-sidebar-head p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <p class="text-[10px] font-bold uppercase text-amber-300 mb-1">Control Map</p>
-            <h2 class="text-xl font-black text-white leading-tight">Vehicles</h2>
+            <p class="text-[9px] font-bold uppercase text-amber-300 mb-0.5">Control Map</p>
+            <h2 class="text-lg font-black text-white leading-tight">Vehicles</h2>
           </div>
           <div class="flex items-center gap-3">
             <div class="text-right">
               <p class="text-[10px] uppercase text-slate-400 font-bold">Total</p>
-              <p id="vehicles-count" class="text-2xl font-black text-white leading-none">0</p>
+              <p id="vehicles-count" class="text-xl font-black text-white leading-none">0</p>
             </div>
-            <button id="collapse-right" class="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 text-lg font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize vehicles sidebar">-</button>
+            <button id="collapse-right" class="h-7 w-7 rounded-full border border-slate-700 bg-slate-800/80 text-base font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize vehicles sidebar">-</button>
           </div>
         </div>
-        <div class="mt-4 relative">
+        <div class="vehicle-sidebar-search mt-4 relative">
           <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
           <svg class="h-4 w-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
         </div>
-        <div class="mt-2 space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
+        <div class="vehicle-filter-panel mt-2 space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
           <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
             <span>Vehicle filters</span>
-            <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[10px] font-bold">Reset</button>
+            <div class="flex items-center gap-2">
+              <button id="vehicle-filters-collapse" type="button" class="vehicle-filters-collapse-btn text-cyan-300 hover:text-cyan-200 text-[9px] font-bold uppercase tracking-wide" aria-expanded="true">Hide</button>
+              <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[9px] font-bold uppercase tracking-wide">Reset</button>
+            </div>
           </div>
-          <div class="grid grid-cols-2 gap-1.5 text-[10px]">
-            <div class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">Inv. Prep. Stat</span>
+          <div id="vehicle-filters-body" class="vehicle-filters-body">
+            <div class="vehicle-filter-grid grid grid-cols-2 gap-1.5 text-[10px]">
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">Inv. Prep. Stat</span>
               <div class="relative">
-                <button id="filter-invprep-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
-                  <span>Select</span>
+                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
                 <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
@@ -236,11 +241,23 @@
                 </div>
               </div>
             </div>
-            <div class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">GPS Fix</span>
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">Physical Location</span>
               <div class="relative">
-                <button id="filter-gps-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
-                  <span>Select</span>
+                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
+                  <div id="filter-physloc" class="grid gap-1.5"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">GPS Fix</span>
+              <div class="relative">
+                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
                 <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
@@ -248,11 +265,11 @@
                 </div>
               </div>
             </div>
-            <div class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">Moving</span>
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">Moving</span>
               <div class="relative">
-                <button id="filter-moving-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
-                  <span>Select</span>
+                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
                 <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
@@ -260,11 +277,11 @@
                 </div>
               </div>
             </div>
-            <div class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">Deal status</span>
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">Deal status</span>
               <div class="relative">
-                <button id="filter-deal-status-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
-                  <span>Select</span>
+                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
                 <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
@@ -272,11 +289,11 @@
                 </div>
               </div>
             </div>
-            <div class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">PT Status</span>
+            <div class="vehicle-filter-field space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">PT Status</span>
               <div class="relative">
-                <button id="filter-pt-toggle" type="button" class="flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
-                  <span>Select</span>
+                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
                 <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
@@ -284,18 +301,19 @@
                 </div>
               </div>
             </div>
-            <label class="space-y-0.5">
-              <span class="block text-slate-400 font-semibold">Deal completion %</span>
-              <div class="flex items-center gap-1.5 text-[10px] text-slate-300">
-                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
+            <label class="vehicle-filter-field vehicle-filter-range space-y-0.5">
+              <span class="vehicle-filter-label block text-slate-400 font-semibold">Deal completion %</span>
+              <div class="vehicle-filter-range-row flex items-center gap-1.5 text-[10px] text-slate-300">
+                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
                 <span class="text-slate-500">to</span>
-                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
+                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
               </div>
             </label>
+            </div>
           </div>
         </div>
       </div>
-      <div id="vehicle-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+      <div id="vehicle-list" class="vehicle-list-scroll flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
         <div class="text-center mt-10 text-slate-600 text-xs">Waiting for vehicle data...</div>
       </div>
     </aside>

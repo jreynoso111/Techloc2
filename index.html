@@ -124,6 +124,22 @@
       return client;
     };
 
+    const safeSessionStorageGet = (key) => {
+      try {
+        return sessionStorage.getItem(key);
+      } catch (_error) {
+        return null;
+      }
+    };
+
+    const safeSessionStorageSet = (key, value) => {
+      try {
+        sessionStorage.setItem(key, value);
+      } catch (_error) {
+        // Non-blocking on restricted storage environments.
+      }
+    };
+
     // --- 1. LÓGICA DE ESTADÍSTICAS (SUPABASE) ---
     const animateValue = (id, start, end, duration) => {
       const el = document.getElementById(id);
@@ -170,7 +186,7 @@
         return;
       }
 
-      const cachedStats = sessionStorage.getItem(CACHE_KEY);
+      const cachedStats = safeSessionStorageGet(CACHE_KEY);
       if (cachedStats) {
         try {
           const { totalCount, availableCount, uniqueStates, avgRating, timestamp } = JSON.parse(cachedStats);
@@ -221,7 +237,7 @@
         // D. SLA Rating: Valor estático alto (hasta que tengas columna de rating real)
         const avgRating = 4.8;
 
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+        safeSessionStorageSet(CACHE_KEY, JSON.stringify({
           totalCount,
           availableCount,
           uniqueStates,
@@ -319,13 +335,19 @@
       }
 
       // Iniciar fondo de constelación
-      setupBackgroundManager();
+      try {
+        setupBackgroundManager();
+      } catch (error) {
+        console.warn('Background manager failed to initialize.', error);
+      }
 
       // Ejecutar lógica de autenticación
       handleAuthUI();
 
       // Cargar estadísticas de la base de datos
-      fetchServiceStats();
+      fetchServiceStats().catch((error) => {
+        console.warn('Home stats load warning:', error);
+      });
     });
   </script>
   <script type="module" src="assets/scripts/sharedHeader.js"></script>

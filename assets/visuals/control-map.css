@@ -107,31 +107,135 @@ body.gps-column-resizing {
       }
     }
 
-    @media (max-width: 1024px) {
-      :root {
-        --left-sidebar-width: 260px;
-        --right-sidebar-width: 260px;
-        --reseller-sidebar-width: 240px;
-        --repair-sidebar-width: 240px;
-        --custom-sidebar-width: 240px;
-        --dynamic-sidebar-width: 240px;
-      }
+	    @media (max-width: 1024px) {
+	      :root {
+	        --left-sidebar-width: 260px;
+	        --right-sidebar-width: 260px;
+	        --reseller-sidebar-width: 240px;
+	        --repair-sidebar-width: 240px;
+	        --custom-sidebar-width: 240px;
+	        --dynamic-sidebar-width: 240px;
+	      }
 
-      header .max-w-6xl { row-gap: 1rem; }
-    }
+	      header .max-w-6xl { row-gap: 1rem; }
+
+	      .vehicle-filter-grid {
+	        grid-template-columns: repeat(2, minmax(0, 1fr));
+	      }
+
+	      .vehicle-filter-range {
+	        grid-column: span 2;
+	      }
+	    }
 
     /* Map */
     #tech-map { height: 100%; width: 100%; background-color: #0b1220; z-index: 1; position: absolute; inset: 0; }
     .leaflet-control-container .leaflet-top, .leaflet-control-container .leaflet-bottom { z-index: 500; }
 
-    .resizable-sidebar {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      backdrop-filter: blur(12px);
-      background: rgba(15, 23, 42, 0.9);
-      transition: transform 0.3s ease;
-    }
+	    .resizable-sidebar {
+	      position: absolute;
+	      top: 0;
+	      bottom: 0;
+	      backdrop-filter: blur(12px);
+	      background: rgba(15, 23, 42, 0.9);
+	      transition: transform 0.3s ease;
+	    }
+
+	    .vehicle-sidebar-head {
+	      padding: 0.85rem 0.85rem 0.6rem;
+	    }
+
+	    .vehicle-sidebar-search {
+	      margin-top: 0.5rem;
+	    }
+
+	    .vehicle-sidebar-search #vehicle-search {
+	      border-radius: 0.7rem;
+	      padding-top: 0.5rem;
+	      padding-bottom: 0.5rem;
+	      font-size: 12px;
+	    }
+
+	    .vehicle-filter-panel {
+	      margin-top: 0.45rem;
+	      padding: 0.45rem 0.5rem;
+	      border-radius: 0.75rem;
+	      display: grid;
+	      gap: 0.35rem;
+	    }
+
+	    .vehicle-filters-collapse-btn {
+	      text-decoration: none;
+	    }
+
+	    .vehicle-filters-body {
+	      display: grid;
+	    }
+
+	    .vehicle-filters-body.is-collapsed {
+	      display: none;
+	    }
+
+	    .vehicle-filter-grid {
+	      display: grid;
+	      grid-template-columns: repeat(3, minmax(0, 1fr));
+	      gap: 0.35rem;
+	      font-size: 9px;
+	    }
+
+	    .vehicle-filter-field {
+	      display: grid;
+	      gap: 0.2rem;
+	      min-width: 0;
+	    }
+
+	    .vehicle-filter-label {
+	      font-size: 9px;
+	      line-height: 1.1;
+	      color: #94a3b8;
+	      font-weight: 700;
+	      white-space: nowrap;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	    }
+
+	    .vehicle-filter-btn {
+	      min-height: 1.45rem;
+	      padding: 0.18rem 0.38rem;
+	      border-radius: 0.45rem;
+	      font-size: 9px;
+	      line-height: 1.1;
+	    }
+
+	    .vehicle-filter-btn .vehicle-filter-value {
+	      min-width: 0;
+	      overflow: hidden;
+	      text-overflow: ellipsis;
+	      white-space: nowrap;
+	    }
+
+	    .vehicle-filter-range {
+	      grid-column: span 3;
+	    }
+
+	    .vehicle-filter-range-row {
+	      display: flex;
+	      align-items: center;
+	      gap: 0.35rem;
+	      font-size: 9px;
+	      color: #cbd5e1;
+	    }
+
+	    .vehicle-filter-range-input {
+	      min-height: 1.45rem;
+	      padding: 0.16rem 0.34rem;
+	      border-radius: 0.45rem;
+	      font-size: 10px;
+	    }
+
+	    .vehicle-list-scroll {
+	      padding: 0.7rem;
+	    }
 
     .collapsed-left { transform: translateX(calc(-1 * var(--left-sidebar-width))); }
     .collapsed-right { transform: translateX(var(--right-sidebar-width)); }
@@ -481,6 +585,14 @@ body.gps-column-resizing {
     .vehicle-history-hotspot-meta p span:last-child {
       text-align: right;
       color: #f1f5f9;
+    }
+
+    .vehicle-history-hotspot-serial-text {
+      display: inline-block;
+      max-width: 158px;
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.2;
     }
 
     .vehicle-history-hotspot-related-wrap {
