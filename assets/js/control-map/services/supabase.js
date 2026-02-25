@@ -12,6 +12,7 @@ export const TABLES = {
   deals: 'DealsJP1',
   hotspots: 'Hotspots',
   blacklist: 'Services_Blacklist',
+  gpsDeviceBlacklist: 'gps_blacklist',
   repairHistory: 'repair_history',
   gpsHistory: 'PT-LastPing'
 };

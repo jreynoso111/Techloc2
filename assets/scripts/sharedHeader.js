@@ -5,6 +5,7 @@ initGlobalAlerts();
 initGlobalActivityTracker();
 
 const headerSlot = document.querySelector('[data-shared-header]');
+const HEADER_TEMPLATE_CACHE_KEY = 'techloc:shared-header-template:v1';
 
 const getBasePath = () => {
   const bodyBase = document.body?.dataset.basePath;
@@ -89,24 +90,53 @@ const setupContactDropdown = (container) => {
   });
 };
 
+const readCachedHeaderTemplate = () => {
+  try {
+    return window.sessionStorage?.getItem(HEADER_TEMPLATE_CACHE_KEY) || '';
+  } catch (_error) {
+    return '';
+  }
+};
+
+const writeCachedHeaderTemplate = (template) => {
+  if (!template) return;
+  try {
+    window.sessionStorage?.setItem(HEADER_TEMPLATE_CACHE_KEY, template);
+  } catch (_error) {
+    // Cache failures are non-blocking.
+  }
+};
+
+const renderHeaderTemplate = (template, { basePath, pageTitle, activeNav }) => {
+  if (!headerSlot || !template) return;
+  const rendered = template
+    .replaceAll('{{BASE}}', basePath)
+    .replace('{{PAGE_TITLE}}', pageTitle);
+
+  headerSlot.innerHTML = rendered;
+  setActiveNav(headerSlot, activeNav);
+  setupMobileMenu(headerSlot);
+  setupContactDropdown(headerSlot);
+};
+
 const hydrateHeader = async () => {
   if (!headerSlot) return;
   const basePath = getBasePath();
   const pageTitle = document.body?.dataset.pageTitle || document.title;
   const activeNav = document.body?.dataset.activeNav || '';
+  const renderContext = { basePath, pageTitle, activeNav };
+
+  const cachedTemplate = readCachedHeaderTemplate();
+  if (cachedTemplate) {
+    renderHeaderTemplate(cachedTemplate, renderContext);
+  }
 
   try {
     const response = await fetch(`${basePath}assets/templates/site-header.html`);
     if (!response.ok) throw new Error(`Header template not found (${response.status})`);
     const template = await response.text();
-    const rendered = template
-      .replaceAll('{{BASE}}', basePath)
-      .replace('{{PAGE_TITLE}}', pageTitle);
-
-    headerSlot.innerHTML = rendered;
-    setActiveNav(headerSlot, activeNav);
-    setupMobileMenu(headerSlot);
-    setupContactDropdown(headerSlot);
+    writeCachedHeaderTemplate(template);
+    renderHeaderTemplate(template, renderContext);
   } catch (error) {
     console.error('Shared header failed to load:', error);
   }

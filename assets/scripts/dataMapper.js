@@ -71,6 +71,7 @@ const normalizeInstaller = (row, idx = 0, { getField: fieldGetter, toStateCode, 
     city: city || '',
     state: stateCode,
     zip: zip || '',
+    note: field(row, 'notes', 'note', 'Notes', 'Note') || '',
     lat: coords.lat,
     lng: coords.lng,
     locationAccuracy: accuracy,
@@ -86,6 +87,7 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
   const stateCode = toState(field(row, 'state', 'region', 'State', 'Region', 'state_code')) || 'US';
   const city = field(row, 'city', 'City');
   const zip = field(row, 'zip', 'Zip', 'zipcode', 'postal_code');
+  const note = field(row, 'notes', 'note', 'Notes', 'Note');
   const { coords, accuracy } = resolve(row, { zip, city, stateCode, seed: idx, getField: field });
   const { display: phone, tel: phoneDial } = formatPhoneNumber(field(row, 'phone', 'Phone'));
   return {
@@ -98,7 +100,8 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
     contact: field(row, 'contact', 'Contact', 'contact_name'),
     availability: field(row, 'availability', 'tier', 'Availability'),
     authorization: field(row, 'authorization', 'Authorization'),
-    notes: field(row, 'notes', 'Notes'),
+    notes: note || '',
+    note: note || '',
     city: city || '',
     state: stateCode,
     zip: zip || '',
@@ -131,12 +134,15 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
   const dealCompletion = field(row, 'Deal Completion', 'Deal completion', 'Deal completition', 'Remaining');
   const dealStatus = field(row, 'Deal Status', 'deal status');
   const vehicleStatus = field(row, 'Vehicle Status', 'vehicle status', 'vehicle_status');
+  const physicalLocation = field(row, 'Physical Location', 'phys_loc', 'physical_location');
+  const shortLocation = field(row, 'short_location', 'Short Location', 'short location');
   const v = {
     id: row?.id ?? idx,
     status: dealStatus || 'ACTIVE',
     dealStatus: dealStatus || 'ACTIVE',
     vehicleStatus: vehicleStatus || '',
     invPrepStatus: field(row, 'INV Prep Stat', 'Inv. Prep. Stat.', 'Inv Prep Stat'),
+    physicalLocation: physicalLocation || '',
     dealCompletion,
     type: field(row, 'Unit Type', 'type') || 'Vehicle',
     year: field(row, 'Model Year', 'year'),
@@ -163,6 +169,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     daysStationary: field(row, 'days_stationary', 'Days Stationary', 'Days stationary', 'Days Stationary (Calc)', 'Days Parked'),
     stockNo: field(row, 'Current Stock No', 'current_stock_no', 'Stock No', 'Stock'),
     openBalance: field(row, 'Open Balance', 'open_balance'),
+    shortLocation: shortLocation || '',
     state: stateCode,
     city: city || '',
     zipcode: zip || '',
@@ -178,7 +185,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     details: row,
   };
 
-  v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.customerId} ${v.customer}`.toLowerCase();
+  v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.shortLocation} ${v.physicalLocation} ${v.customerId} ${v.customer}`.toLowerCase();
 
   return v;
 };

@@ -9,6 +9,7 @@ import {
   if (!hasSupabaseAuth) {
     console.warn('Supabase session APIs unavailable.');
   }
+  const PROFILE_LOOKUP_TIMEOUT_MS = 2200;
 
   const whenDomReady = new Promise((resolve) => {
     if (document.readyState !== 'loading') {
@@ -19,6 +20,7 @@ import {
   });
 
   const navIds = {
+    home: 'nav-home',
     control: 'nav-control-view',
     dashboard: 'nav-dashboard',
     services: 'nav-services',
@@ -52,42 +54,110 @@ import {
     return `${basePath}${normalizedPage}`;
   };
 
+  const isAdminRoute = window.location.pathname.toLowerCase().includes('/admin/');
+  if (isAdminRoute) {
+    whenDomReady.then(() => {
+      const homeLink = getNavElement('home');
+      const controlLink = getNavElement('control');
+      const dashboardLink = getNavElement('dashboard');
+      const servicesLink = getNavElement('services');
+      const loginLink = getNavElement('login');
+      if (homeLink) homeLink.href = mapsTo('index.html');
+      if (controlLink) controlLink.href = mapsTo('pages/control-map.html');
+      if (servicesLink) servicesLink.href = mapsTo('pages/admin/services.html');
+      if (dashboardLink) dashboardLink.href = mapsTo('pages/admin/index.html');
+      if (loginLink) loginLink.href = mapsTo('pages/login.html');
+    });
+    return;
+  }
+
+  const withTimeout = (promise, timeoutMs = PROFILE_LOOKUP_TIMEOUT_MS, label = 'operation') =>
+    new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        const timeoutError = new Error(`${label} timed out after ${timeoutMs}ms`);
+        timeoutError.name = 'TimeoutError';
+        reject(timeoutError);
+      }, timeoutMs);
+
+      Promise.resolve(promise)
+        .then((value) => {
+          clearTimeout(timeoutId);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
+
   const getEffectiveSession = async () => {
-    if (hasSupabaseAuth) {
-      const { data } = await supabaseClient.auth.getSession();
-      return data?.session || null;
+    if (!hasSupabaseAuth) return null;
+
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error) {
+        console.warn('Supabase getSession warning:', error);
+      }
+
+      if (data?.session) return data.session;
+
+      if (typeof supabaseClient.auth.refreshSession === 'function') {
+        const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
+        if (refreshError) {
+          console.warn('Supabase refreshSession warning:', refreshError);
+          return null;
+        }
+        return refreshed?.session || null;
+      }
+    } catch (error) {
+      console.warn('Supabase session resolution warning:', error);
     }
+
     return null;
   };
 
+  const normalizeAccessValue = (value, fallback) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return normalized || fallback;
+  };
+
+  const resolveFallbackProfileForSession = (session) => {
+    const sessionRole = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role || null;
+    const sessionStatus = session?.user?.app_metadata?.status || session?.user?.user_metadata?.status || null;
+    const fallbackRole = normalizeAccessValue(window.currentUserRole || sessionRole, 'user');
+    const fallbackStatus = normalizeAccessValue(window.currentUserStatus || sessionStatus, 'active');
+    return {
+      role: fallbackRole,
+      status: fallbackStatus,
+      email: session?.user?.email || null,
+    };
+  };
+
   // --- NUEVO: Función para obtener el rol y estado desde la tabla profiles ---
-  const fetchUserProfile = async (userId) => {
+  const fetchUserProfile = async (userId, fallbackProfile = { role: 'user', status: 'active', email: null }) => {
     try {
-      const { data, error } = await supabaseClient
-        .from('profiles')
-        .select('role, status, email')
-        .eq('id', userId)
-        .single();
+      const { data, error } = await withTimeout(
+        supabaseClient
+          .from('profiles')
+          .select('role, status, email')
+          .eq('id', userId)
+          .maybeSingle(),
+        PROFILE_LOOKUP_TIMEOUT_MS,
+        'Profile lookup',
+      );
 
       if (error || !data)
-        return {
-          role: 'user',
-          status: 'active',
-          email: null,
-        }; // Valores por defecto si falla
+        return fallbackProfile; // Valores por defecto si falla
 
       return {
-        role: data.role || 'user',
-        status: data.status || 'active',
-        email: data.email || null,
+        role: normalizeAccessValue(data.role, fallbackProfile.role || 'user'),
+        status: normalizeAccessValue(data.status, fallbackProfile.status || 'active'),
+        email: data.email || fallbackProfile.email || null,
       };
     } catch (err) {
-      console.error('Error fetching role:', err);
-      return {
-        role: 'user',
-        status: 'active',
-        email: null,
-      };
+      const isTimeout = String(err?.name || '') === 'TimeoutError';
+      console.warn(isTimeout ? 'Profile lookup timed out; using fallback role.' : 'Error fetching role:', err);
+      return fallbackProfile;
     }
   };
 
@@ -100,7 +170,8 @@ import {
       };
     }
 
-    return fetchUserProfile(session.user.id);
+    const fallbackProfile = resolveFallbackProfileForSession(session);
+    return fetchUserProfile(session.user.id, fallbackProfile);
   };
 
   const waitForAccountLabel = (timeoutMs = 3000) =>
@@ -134,6 +205,25 @@ import {
     accountName.textContent = label;
   };
 
+  const applyAccessState = (role, status) => {
+    const normalizedRole = normalizeAccessValue(role, 'user');
+    const normalizedStatus = normalizeAccessValue(status, 'active');
+    window.currentUserRole = normalizedRole;
+    window.currentUserStatus = normalizedStatus;
+    document.body.setAttribute('data-user-role', normalizedRole);
+    document.body.setAttribute('data-user-status', normalizedStatus);
+    window.dispatchEvent(
+      new CustomEvent('auth:role-ready', { detail: { role: normalizedRole, status: normalizedStatus } })
+    );
+  };
+
+  const clearAccessState = () => {
+    window.currentUserRole = null;
+    window.currentUserStatus = null;
+    document.body.removeAttribute('data-user-role');
+    document.body.removeAttribute('data-user-status');
+  };
+
   const toggleDashboardLinks = (hasSession, role, status) =>
     whenDomReady.then(() => {
       const isSuspended = status === 'suspended';
@@ -159,11 +249,18 @@ import {
 
   const updateNav = (hasSession, role, status) => // <--- Modificado para aceptar 'role' y 'status'
     whenDomReady.then(() => {
+      const homeLink = getNavElement('home');
       const controlLink = getNavElement('control');
       const dashboardLink = getNavElement('dashboard');
       const servicesLink = getNavElement('services');
       const loginLink = getNavElement('login');
       const logoutButton = getNavElement('logout');
+
+      if (homeLink) homeLink.href = mapsTo('index.html');
+      if (controlLink) controlLink.href = mapsTo('pages/control-map.html');
+      if (servicesLink) servicesLink.href = mapsTo('pages/admin/services.html');
+      if (dashboardLink) dashboardLink.href = mapsTo('pages/admin/index.html');
+      if (loginLink) loginLink.href = mapsTo('pages/login.html');
 
       const isSuspended = status === 'suspended';
       const canShowDashboard = hasSession && !isSuspended && roleAllowsDashboard(role);
@@ -232,15 +329,8 @@ import {
   };
 
   const enforceRouteProtection = (hasSession, role) => {
-    const isAdminPath = window.location.pathname.toLowerCase().includes('/admin/');
-
     if (!hasSession && isProtectedRoute()) {
       window.location.replace(mapsTo('pages/login.html'));
-      return;
-    }
-
-    if (hasSession && isAdminPath && !roleAllowsDashboard(role)) {
-      window.location.replace(mapsTo('index.html'));
       return;
     }
 
@@ -291,31 +381,15 @@ import {
       let userRole = 'user'; // Rol por defecto
       let userStatus = 'active';
 
-      // --- NUEVO: Si hay sesión, buscamos el rol en la base de datos ---
       if (hasSession && session.user) {
-        const profile = await resolveProfileForSession(session);
-        userRole = profile.role;
-        userStatus = profile.status.toLowerCase();
-        await updateHeaderAccount(session, profile.email);
-
-        // Guardamos el rol y estado globalmente para usarlo en otros scripts
-        window.currentUserRole = userRole;
-        window.currentUserStatus = userStatus;
-
-        // Opcional: Añadir al body para usar CSS (ej: body[data-role="admin"] .delete-btn { display: block; })
-        document.body.setAttribute('data-user-role', userRole);
-        document.body.setAttribute('data-user-status', userStatus);
-
-        // Disparamos un evento para avisar a otros scripts que el rol está listo
-        window.dispatchEvent(
-          new CustomEvent('auth:role-ready', { detail: { role: userRole, status: userStatus } })
-        );
+        const fallbackProfile = resolveFallbackProfileForSession(session);
+        userRole = normalizeAccessValue(fallbackProfile.role, 'user');
+        userStatus = normalizeAccessValue(fallbackProfile.status, 'active');
+        applyAccessState(userRole, userStatus);
+        updateHeaderAccount(session, fallbackProfile.email);
       } else {
-        window.currentUserRole = null;
-        window.currentUserStatus = null;
-        document.body.removeAttribute('data-user-role');
-        document.body.removeAttribute('data-user-status');
-        await updateHeaderAccount(null);
+        clearAccessState();
+        updateHeaderAccount(null);
       }
 
       const isLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
@@ -329,6 +403,21 @@ import {
       enforceRouteProtection(hasSession, userRole);
       bindLogout();
 
+      if (hasSession && session.user) {
+        resolveProfileForSession(session)
+          .then(async (profile) => {
+            const resolvedRole = normalizeAccessValue(profile.role, userRole);
+            const resolvedStatus = normalizeAccessValue(profile.status, userStatus);
+            applyAccessState(resolvedRole, resolvedStatus);
+            updateHeaderAccount(session, profile.email);
+            updateNav(true, resolvedRole, resolvedStatus);
+            enforceRouteProtection(true, resolvedRole);
+          })
+          .catch((error) => {
+            console.warn('Deferred profile resolution warning', error);
+          });
+      }
+
       if (hasSupabaseAuth && typeof supabaseClient.auth.onAuthStateChange === 'function') {
         supabaseClient.auth.onAuthStateChange(async (event, session) => {
           if (event === 'SIGNED_OUT') {
@@ -341,20 +430,27 @@ import {
           let updatedStatus = 'active';
 
           if (sessionExists && effectiveSession.user) {
-             const profile = await resolveProfileForSession(effectiveSession);
-             updatedRole = profile.role;
-             updatedStatus = profile.status.toLowerCase();
-             window.currentUserRole = updatedRole;
-             window.currentUserStatus = updatedStatus;
-             document.body.setAttribute('data-user-role', updatedRole);
-             document.body.setAttribute('data-user-status', updatedStatus);
-             await updateHeaderAccount(effectiveSession, profile.email);
+             const fallbackProfile = resolveFallbackProfileForSession(effectiveSession);
+             updatedRole = normalizeAccessValue(fallbackProfile.role, 'user');
+             updatedStatus = normalizeAccessValue(fallbackProfile.status, 'active');
+             applyAccessState(updatedRole, updatedStatus);
+             updateHeaderAccount(effectiveSession, fallbackProfile.email);
+
+             resolveProfileForSession(effectiveSession)
+               .then(async (profile) => {
+                 const strictRole = normalizeAccessValue(profile.role, updatedRole);
+                 const strictStatus = normalizeAccessValue(profile.status, updatedStatus);
+                 applyAccessState(strictRole, strictStatus);
+                 updateHeaderAccount(effectiveSession, profile.email);
+                 updateNav(true, strictRole, strictStatus);
+                 enforceRouteProtection(true, strictRole);
+               })
+               .catch((error) => {
+                 console.warn('Deferred profile refresh warning', error);
+               });
           } else {
-             window.currentUserRole = null;
-             window.currentUserStatus = null;
-             document.body.removeAttribute('data-user-role');
-             document.body.removeAttribute('data-user-status');
-             await updateHeaderAccount(null);
+             clearAccessState();
+             updateHeaderAccount(null);
           }
 
           const onLoginPage = window.location.pathname.toLowerCase().includes('/login.html');
