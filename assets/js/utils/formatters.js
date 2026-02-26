@@ -128,7 +128,7 @@ const parseMovingIndicator = (...candidates) => {
     const numeric = Number.parseInt(raw, 10);
     if (Number.isFinite(numeric)) {
       if (numeric === 1) return 'moving';
-      if (numeric === -1) return 'stopped';
+      if (numeric === -1 || numeric === 0) return 'stopped';
     }
     const normalized = raw.toLowerCase();
     if (normalized === 'moving' || normalized === 'move' || normalized === 'true' || normalized === 'yes') {
