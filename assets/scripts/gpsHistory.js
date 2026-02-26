@@ -77,6 +77,191 @@ const getRecordSerial = (record = {}) => {
   return '';
 };
 
+const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
+const GPS_STATIONARY_CLUSTER_RADIUS_METERS = 220;
+
+const parseCoordinate = (record = {}, key = 'lat') => {
+  const candidates = key === 'lat'
+    ? ['lat', 'Lat', 'latitude', 'Latitude']
+    : ['long', 'Long', 'lng', 'Lng', 'longitude', 'Longitude', 'lon', 'Lon'];
+  for (const candidate of candidates) {
+    const raw = record?.[candidate];
+    if (raw === null || raw === undefined || raw === '') continue;
+    const parsed = Number.parseFloat(`${raw}`.replace(/[^\d.\-]/g, ''));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const toLocalDayStartMs = (timeMs) => {
+  if (!Number.isFinite(timeMs) || timeMs <= 0) return null;
+  const date = new Date(timeMs);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+};
+
+const getPointDistanceMeters = (fromPoint, toPoint) => {
+  if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(fromPoint.lat) || !Number.isFinite(fromPoint.lng)) return Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(toPoint.lat) || !Number.isFinite(toPoint.lng)) return Number.POSITIVE_INFINITY;
+  const toRadians = (value) => value * (Math.PI / 180);
+  const earthRadiusMeters = 6371000;
+  const deltaLat = toRadians(toPoint.lat - fromPoint.lat);
+  const deltaLng = toRadians(toPoint.lng - fromPoint.lng);
+  const lat1 = toRadians(fromPoint.lat);
+  const lat2 = toRadians(toPoint.lat);
+  const a = (Math.sin(deltaLat / 2) ** 2)
+    + (Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2));
+  const boundedA = Math.min(1, Math.max(0, a));
+  const c = 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+  return earthRadiusMeters * c;
+};
+
+const applyWinnerDisplayOverrides = (records = []) => {
+  if (!Array.isArray(records) || !records.length) return records;
+
+  const entries = records.map((record, index) => {
+    const timestamp = getRecordTimestampMs(record);
+    return {
+      record,
+      index,
+      timestamp,
+      lat: parseCoordinate(record, 'lat'),
+      lng: parseCoordinate(record, 'long'),
+      dayStartMs: toLocalDayStartMs(timestamp),
+      derivedMoved: null,
+      derivedDaysStationary: null
+    };
+  });
+
+  const ordered = [...entries].sort((a, b) => {
+    if (a.timestamp === b.timestamp) return a.index - b.index;
+    return a.timestamp - b.timestamp;
+  });
+
+  let previous = null;
+  let sessionStartDayMs = null;
+  ordered.forEach((entry) => {
+    const hasCoords = Number.isFinite(entry.lat) && Number.isFinite(entry.lng);
+    const previousHasCoords = Number.isFinite(previous?.lat) && Number.isFinite(previous?.lng);
+    const distance = (hasCoords && previousHasCoords)
+      ? getPointDistanceMeters({ lat: previous.lat, lng: previous.lng }, { lat: entry.lat, lng: entry.lng })
+      : Number.POSITIVE_INFINITY;
+
+    if (!previous || !Number.isFinite(distance) || distance > GPS_STATIONARY_CLUSTER_RADIUS_METERS) {
+      entry.derivedMoved = previous ? 'Moving' : 'Parked';
+      sessionStartDayMs = entry.dayStartMs;
+    } else {
+      entry.derivedMoved = 'Parked';
+      if (!Number.isFinite(sessionStartDayMs) && Number.isFinite(entry.dayStartMs)) {
+        sessionStartDayMs = entry.dayStartMs;
+      }
+    }
+
+    if (Number.isFinite(entry.dayStartMs) && Number.isFinite(sessionStartDayMs)) {
+      entry.derivedDaysStationary = Math.max(
+        0,
+        Math.floor((entry.dayStartMs - sessionStartDayMs) / GPS_HISTORY_DAY_MS)
+      );
+    }
+
+    previous = entry;
+  });
+
+  const byRecord = new Map(ordered.map((entry) => [entry.record, entry]));
+  return records.map((record) => {
+    const entry = byRecord.get(record);
+    if (!entry) return record;
+    return {
+      ...record,
+      __derivedMoved: entry.derivedMoved,
+      __derivedDaysStationary: entry.derivedDaysStationary
+    };
+  });
+};
+
+const getRecordTimestampMs = (record = {}) => {
+  const candidates = [
+    record?.['PT-LastPing'],
+    record?.gps_time,
+    record?.Date,
+    record?.created_at,
+    record?.updated_at
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const parsed = Date.parse(candidate);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  const numericId = Number(record?.id);
+  return Number.isFinite(numericId) ? numericId : Number.NEGATIVE_INFINITY;
+};
+
+const getLocalDayBoundsMs = (referenceMs = Date.now()) => {
+  const referenceDate = new Date(referenceMs);
+  const dayStart = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate()
+  ).getTime();
+  return {
+    start: dayStart,
+    end: dayStart + GPS_HISTORY_DAY_MS
+  };
+};
+
+const getMostRecentSerialFromRecords = (records = [], { excludeSerial = '' } = {}) => {
+  if (!Array.isArray(records) || !records.length) return '';
+  const excluded = normalizeSerial(excludeSerial);
+  let selectedSerial = '';
+  let selectedTimestamp = Number.NEGATIVE_INFINITY;
+  records.forEach((record) => {
+    const serial = getRecordSerial(record);
+    if (!serial) return;
+    if (excluded && serial === excluded) return;
+    const timestamp = getRecordTimestampMs(record);
+    if (timestamp >= selectedTimestamp) {
+      selectedTimestamp = timestamp;
+      selectedSerial = serial;
+    }
+  });
+  return selectedSerial;
+};
+
+const resolveVehicleWinnerSerialFromRecords = (vehicle = {}, records = [], { nowMs = Date.now() } = {}) => {
+  const configuredWinnerSerial = getVehicleWinnerSerial(vehicle);
+  if (!Array.isArray(records) || !records.length) return configuredWinnerSerial;
+
+  if (configuredWinnerSerial) {
+    const { start, end } = getLocalDayBoundsMs(nowMs);
+    const winnerHasReadingToday = records.some((record) => {
+      const serial = getRecordSerial(record);
+      if (!serial || serial !== configuredWinnerSerial) return false;
+      const timestamp = getRecordTimestampMs(record);
+      return Number.isFinite(timestamp) && timestamp >= start && timestamp < end;
+    });
+    if (winnerHasReadingToday) return configuredWinnerSerial;
+
+    const recentWindowStart = nowMs - GPS_WINNER_RECENCY_WINDOW_MS;
+    const winnerHasRecentReading = records.some((record) => {
+      const serial = getRecordSerial(record);
+      if (!serial || serial !== configuredWinnerSerial) return false;
+      const timestamp = getRecordTimestampMs(record);
+      return Number.isFinite(timestamp) && timestamp >= recentWindowStart;
+    });
+    if (winnerHasRecentReading) return configuredWinnerSerial;
+
+    const winnerHasAnyReading = records.some((record) => getRecordSerial(record) === configuredWinnerSerial);
+    if (winnerHasAnyReading) return configuredWinnerSerial;
+
+    const fallbackSerial = getMostRecentSerialFromRecords(records, { excludeSerial: configuredWinnerSerial });
+    if (fallbackSerial) return fallbackSerial;
+  }
+
+  return getMostRecentSerialFromRecords(records);
+};
+
 const createGpsHistoryManager = ({
   supabaseClient,
   ensureSupabaseSession,
@@ -156,7 +341,7 @@ const createGpsHistoryManager = ({
   const setupGpsHistoryUI = ({ vehicle, body, signal, records: preloadedRecords, error: preloadedError }) => {
     const VIN = getVehicleVin(vehicle);
     const vehicleId = getVehicleId(vehicle);
-    const winnerSerial = getVehicleWinnerSerial(vehicle);
+    let winnerSerial = getVehicleWinnerSerial(vehicle);
     const historyBody = body.querySelector('[data-gps-history-body]');
     const historyHead = body.querySelector('[data-gps-history-head]');
     const columnsToggle = body.querySelector('[data-gps-columns-toggle]');
@@ -385,6 +570,24 @@ const createGpsHistoryManager = ({
       return safeEscape(`${value}`);
     };
 
+    const normalizeColumnKey = (key = '') => `${key}`.trim().toLowerCase().replace(/\s+/g, '_');
+    const isMovedColumnKey = (normalizedKey = '') => normalizedKey === 'moved';
+    const isDaysStationaryColumnKey = (normalizedKey = '') =>
+      normalizedKey === 'days_stationary'
+      || normalizedKey === 'days_parked'
+      || normalizedKey === 'days_stationary_calc';
+
+    const getDisplayValue = (record, key, rawValue) => {
+      const normalizedKey = normalizeColumnKey(key);
+      if (isMovedColumnKey(normalizedKey) && record?.__derivedMoved) {
+        return record.__derivedMoved;
+      }
+      if (isDaysStationaryColumnKey(normalizedKey) && Number.isFinite(record?.__derivedDaysStationary)) {
+        return record.__derivedDaysStationary;
+      }
+      return rawValue;
+    };
+
     const renderTableHead = () => {
       if (!historyHead) return;
       const visibleColumns = getVisibleColumns();
@@ -447,7 +650,10 @@ const createGpsHistoryManager = ({
       renderTableHead();
       const visibleColumns = getVisibleColumns();
       const modeRecords = getModeFilteredRecords(records);
-      const filteredRecords = getSortedRecords(getFilteredRecords(modeRecords));
+      const displayRecords = (viewMode === 'winner' && winnerSerial)
+        ? applyWinnerDisplayOverrides(modeRecords)
+        : modeRecords;
+      const filteredRecords = getSortedRecords(getFilteredRecords(displayRecords));
 
       if (statusText) {
         const modeSuffix = viewMode === 'winner' && winnerSerial
@@ -474,14 +680,15 @@ const createGpsHistoryManager = ({
             const width = columnWidths[col.key];
             const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
             const rawValue = record?.[col.key];
+            const displayValue = getDisplayValue(record, col.key, rawValue);
             const normalizedKey = `${col.key || ''}`.toLowerCase();
             const tooltipValue = isAddressColumn(normalizedKey)
-              ? stripAddressCountrySuffix(rawValue)
-              : rawValue;
-            const tooltip = rawValue === null || rawValue === undefined || rawValue === ''
+              ? stripAddressCountrySuffix(displayValue)
+              : displayValue;
+            const tooltip = displayValue === null || displayValue === undefined || displayValue === ''
               ? ''
               : safeEscape(typeof tooltipValue === 'object' ? JSON.stringify(tooltipValue) : `${tooltipValue}`);
-            return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, rawValue)}</div></td>`;
+            return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, displayValue)}</div></td>`;
           }).join('')}
         </tr>
       `).join('');
@@ -720,6 +927,8 @@ const createGpsHistoryManager = ({
     };
 
     const finalizeRender = (records, error) => {
+      winnerSerial = resolveVehicleWinnerSerialFromRecords(vehicle, records);
+      syncViewControls();
       renderHistory(records);
       if (statusText && error) statusText.textContent = 'Unable to load GPS history.';
       if (error) {
@@ -969,6 +1178,7 @@ const createGpsHistoryManager = ({
     getVehicleId,
     getVehicleVin,
     getVehicleWinnerSerial,
+    resolveVehicleWinnerSerialFromRecords,
     getRecordSerial,
     fetchGpsHistory,
     setupGpsHistoryUI

@@ -518,6 +518,28 @@
       box.classList.remove('hidden');
     };
 
+    const registerGlobalAlertIgnorePattern = (pattern) => {
+      if (typeof window === 'undefined') return () => {};
+      const normalized = String(pattern || '').trim();
+      if (!normalized) return () => {};
+
+      const currentPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+        ? window.__techlocIgnoredAlertRequestPatterns
+        : [];
+      const alreadyPresent = currentPatterns.includes(normalized);
+      if (!alreadyPresent) {
+        window.__techlocIgnoredAlertRequestPatterns = [...currentPatterns, normalized];
+      }
+
+      return () => {
+        if (alreadyPresent) return;
+        const activePatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+          ? window.__techlocIgnoredAlertRequestPatterns
+          : [];
+        window.__techlocIgnoredAlertRequestPatterns = activePatterns.filter((item) => item !== normalized);
+      };
+    };
+
     const buildSlimPtPayload = (row = {}) => {
       const clean = (value) => cleanValue(value);
       const numericOrValue = (value) => {
@@ -1805,128 +1827,132 @@
       let nextIndex = 0;
       let targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, dedupedRows.length);
       let ptConflictTarget = PT_PING_PRIMARY_CONFLICT_TARGET;
+      const releasePtLastPingAlertIgnore = registerGlobalAlertIgnorePattern('/rest/v1/PT-LastPing');
+      try {
+        while (nextIndex < dedupedRows.length) {
+          const remaining = dedupedRows.length - nextIndex;
+          let batchSize = Math.min(targetBatchSize, remaining);
+          let retryAttempt = 0;
+          let uploaded = false;
 
-      while (nextIndex < dedupedRows.length) {
-        const remaining = dedupedRows.length - nextIndex;
-        let batchSize = Math.min(targetBatchSize, remaining);
-        let retryAttempt = 0;
-        let uploaded = false;
+          while (!uploaded) {
+            const sliceEnd = nextIndex + batchSize;
+            const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
+            const batch = batchRows.map(buildSlimPtPayload);
+            const batchNumber = aggregated.batches + 1;
+            const retryLabel = retryAttempt > 0 ? `, retry ${retryAttempt}` : '';
 
-        while (!uploaded) {
-          const sliceEnd = nextIndex + batchSize;
-          const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
-          const batch = batchRows.map(buildSlimPtPayload);
-          const batchNumber = aggregated.batches + 1;
-          const retryLabel = retryAttempt > 0 ? `, retry ${retryAttempt}` : '';
-
-          setStatus(
-            `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
-            `(batch ${batchNumber}, size ${batchSize}${retryLabel})...`
-          );
-          setProgress(
-            (nextIndex / dedupedRows.length) * 90,
-            `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
-          );
-
-          const { error } = await supabaseClient
-            .from('PT-LastPing')
-            .upsert(batch, {
-              onConflict: ptConflictTarget,
-              ignoreDuplicates: true,
-            });
-
-          if (!error) {
-            aggregated.batches += 1;
-            aggregated.inserted += batch.length;
-            nextIndex = sliceEnd;
-            uploaded = true;
+            setStatus(
+              `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
+              `(batch ${batchNumber}, size ${batchSize}${retryLabel})...`
+            );
             setProgress(
               (nextIndex / dedupedRows.length) * 90,
-              `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
+              `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
             );
-            if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
-              targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, Math.floor(targetBatchSize * 1.5));
+
+            const { error } = await supabaseClient
+              .from('PT-LastPing')
+              .upsert(batch, {
+                onConflict: ptConflictTarget,
+                ignoreDuplicates: true,
+              });
+
+            if (!error) {
+              aggregated.batches += 1;
+              aggregated.inserted += batch.length;
+              nextIndex = sliceEnd;
+              uploaded = true;
+              setProgress(
+                (nextIndex / dedupedRows.length) * 90,
+                `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
+              );
+              if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
+                targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, Math.floor(targetBatchSize * 1.5));
+              }
+              if (PT_PING_BATCH_DELAY_MS > 0) {
+                await waitMs(PT_PING_BATCH_DELAY_MS);
+              }
+              continue;
             }
-            if (PT_PING_BATCH_DELAY_MS > 0) {
-              await waitMs(PT_PING_BATCH_DELAY_MS);
+
+            console.error('Supabase PT upload error:', {
+              error,
+              nextIndex,
+              batchSize,
+              retryAttempt,
+              ptConflictTarget,
+            });
+
+            if (isRlsBlocked(error)) {
+              showToast('Upload blocked by security policy (RLS).', 'error');
+              setStatus('Upload blocked by security policy (RLS).');
+              setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} blocked`);
+              showPtError(error, `Batch ${batchNumber} blocked`);
+              return;
             }
-            continue;
-          }
 
-          console.error('Supabase PT upload error:', {
-            error,
-            nextIndex,
-            batchSize,
-            retryAttempt,
-            ptConflictTarget,
-          });
-
-          if (isRlsBlocked(error)) {
-            showToast('Upload blocked by security policy (RLS).', 'error');
-            setStatus('Upload blocked by security policy (RLS).');
-            setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} blocked`);
-            showPtError(error, `Batch ${batchNumber} blocked`);
-            return;
-          }
-
-          if (isPtOnConflictConfigError(error) && ptConflictTarget !== PT_PING_FALLBACK_CONFLICT_TARGET) {
-            ptConflictTarget = PT_PING_FALLBACK_CONFLICT_TARGET;
-            retryAttempt = 0;
-            setStatus('Conflict key read_day/day_half unavailable. Switching to Serial + Date and retrying...');
-            await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
-            continue;
-          }
-
-          if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
-            const nextBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
-            if (nextBatchSize < batchSize) {
-              batchSize = nextBatchSize;
-              targetBatchSize = nextBatchSize;
+            if (isPtOnConflictConfigError(error) && ptConflictTarget !== PT_PING_FALLBACK_CONFLICT_TARGET) {
+              ptConflictTarget = PT_PING_FALLBACK_CONFLICT_TARGET;
               retryAttempt = 0;
-              setStatus(`Batch timed out. Reducing batch size to ${batchSize} and retrying...`);
+              setStatus('Conflict key read_day/day_half unavailable. Switching to Serial + Date and retrying...');
               await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
               continue;
             }
-          }
 
-          if (isPtBatchRetryable(error) && retryAttempt < PT_PING_MAX_RETRIES_PER_BATCH) {
-            retryAttempt += 1;
-            const retryDelayMs = PT_PING_RETRY_BASE_DELAY_MS * retryAttempt;
-            setStatus(
-              `Temporary upload error on batch ${batchNumber}. ` +
-              `Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`
+            if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
+              const nextBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+              if (nextBatchSize < batchSize) {
+                batchSize = nextBatchSize;
+                targetBatchSize = nextBatchSize;
+                retryAttempt = 0;
+                setStatus(`Batch timed out. Reducing batch size to ${batchSize} and retrying...`);
+                await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
+                continue;
+              }
+            }
+
+            if (isPtBatchRetryable(error) && retryAttempt < PT_PING_MAX_RETRIES_PER_BATCH) {
+              retryAttempt += 1;
+              const retryDelayMs = PT_PING_RETRY_BASE_DELAY_MS * retryAttempt;
+              setStatus(
+                `Temporary upload error on batch ${batchNumber}. ` +
+                `Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`
+              );
+              await waitMs(retryDelayMs);
+              continue;
+            }
+
+            showToast('Upload failed', 'error');
+            setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
+            setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} failed`);
+            showPtError(
+              error,
+              `Batch ${batchNumber} failed (batch size ${batchSize}, conflict target ${ptConflictTarget}).`
             );
-            await waitMs(retryDelayMs);
-            continue;
+            throw error;
           }
-
-          showToast('Upload failed', 'error');
-          setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
-          setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} failed`);
-          showPtError(
-            error,
-            `Batch ${batchNumber} failed (batch size ${batchSize}, conflict target ${ptConflictTarget}).`
-          );
-          throw error;
         }
+
+        setProgress(100, 'Done');
+
+        const summary =
+          'Completed.' +
+          '\nBatches: ' + aggregated.batches +
+          '\nSent to Supabase: ' + aggregated.inserted +
+          '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
+          '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
+          '\nSkipped duplicates (client half-day bucket): ' + aggregated.skippedDeduplication +
+          '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
+          '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
+          '\nErrors: ' + parseErrors;
+        setStatus(`Upload complete. Sent: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
+        showToast(summary, 'success');
+        if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+        lucide.createIcons();
+      } finally {
+        releasePtLastPingAlertIgnore();
       }
-
-      setProgress(100, 'Done');
-
-      const summary =
-        'Completed.' +
-        '\nBatches: ' + aggregated.batches +
-        '\nSent to Supabase: ' + aggregated.inserted +
-        '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
-        '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
-        '\nSkipped duplicates (client half-day bucket): ' + aggregated.skippedDeduplication +
-        '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
-        '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
-        '\nErrors: ' + parseErrors;
-      setStatus(`Upload complete. Sent: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
-      showToast(summary, 'success');
-      if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
-      lucide.createIcons();
     };
 
     const initBackground = async () => {
