@@ -147,7 +147,33 @@ const parseMovingIndicator = (...candidates) => {
   return null;
 };
 
+const parseStationaryDays = (...candidates) => {
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const raw = String(candidate).trim();
+    if (!raw) continue;
+    const numeric = Number.parseFloat(raw.replace(/[^\d.\-]/g, ''));
+    if (!Number.isFinite(numeric)) continue;
+    return Math.max(0, numeric);
+  }
+  return null;
+};
+
 export const getMovingStatus = (vehicle = {}) => {
+  // Prefer stationary-day signals when present: 0 days means moving, >0 means stopped.
+  const stationaryDays = parseStationaryDays(
+    vehicle?.historyDaysStationaryOverride,
+    vehicle?.daysStationary,
+    vehicle?.details?.historyDaysStationaryOverride,
+    vehicle?.details?.days_stationary,
+    vehicle?.details?.['Days Stationary'],
+    vehicle?.details?.['Days stationary'],
+    vehicle?.details?.['Days Parked']
+  );
+  if (stationaryDays !== null) {
+    return stationaryDays <= 0 ? 'moving' : 'stopped';
+  }
+
   const historyOverride = `${vehicle?.historyMovingOverride || vehicle?.details?.historyMovingOverride || ''}`
     .trim()
     .toLowerCase();

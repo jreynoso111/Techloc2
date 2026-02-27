@@ -116,21 +116,14 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
 const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, resolveCoords } = {}) => {
   const field = fieldGetter || getField;
   const toState = toStateCode || ((value = '') => `${value}`.slice(0, 2).toUpperCase());
-  const resolve = resolveCoords || defaultResolveCoords;
   const stateCode = toState(field(row, 'State Loc', 'State', 'state', 'state_code'));
   const rawLat = parseFloat(field(row, 'Lat', 'lat'));
   const rawLng = parseFloat(field(row, 'Long', 'Lng', 'long', 'lng'));
   const hasExactCoords = Number.isFinite(rawLat) && Number.isFinite(rawLng) && rawLat !== 0 && rawLng !== 0;
   const zip = field(row, 'PT ZipCode', 'Zip', 'zip');
   const city = field(row, 'PT City', 'City', 'city');
-  const { coords, accuracy } = resolve(row, {
-    zip,
-    city,
-    stateCode,
-    seed: idx,
-    fallbackLatLng: hasExactCoords ? { lat: rawLat, lng: rawLng } : null,
-    getField: field
-  });
+  const coords = hasExactCoords ? { lat: rawLat, lng: rawLng } : { lat: 0, lng: 0 };
+  const accuracy = hasExactCoords ? 'exact' : 'missing';
   const dealCompletion = field(row, 'Deal Completion', 'Deal completion', 'Deal completition', 'Remaining');
   const dealStatus = field(row, 'Deal Status', 'deal status');
   const vehicleStatus = field(row, 'Vehicle Status', 'vehicle status', 'vehicle_status');

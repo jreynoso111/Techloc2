@@ -695,6 +695,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
     const matchesVehicleSelection = (vehicle, selection) => {
       if (!vehicle || !selection) return false;
+      const selectionKey = `${selection.key || ''}`.trim();
+      if (selectionKey && getVehicleKey(vehicle) === selectionKey) return true;
       if (selection.id !== null && selection.id !== undefined && `${vehicle.id}` === `${selection.id}`) return true;
       const selectionVin = normalizeSelectionValue(selection.vin);
       const vehicleVin = normalizeSelectionValue(vehicle.vin);
@@ -1027,6 +1029,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       runWithTimeout,
       timeoutMs: SUPABASE_TIMEOUT_MS,
       tableName: TABLES.gpsHistory,
+      isSerialBlacklisted: (serial = '') => {
+        const normalized = normalizeGpsSerial(serial);
+        if (!normalized) return false;
+        return gpsDeviceBlacklistSerialsCache.has(normalized);
+      },
       escapeHTML,
       formatDateTime
     });
@@ -1078,6 +1085,89 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return '';
     };
 
+    const ADDRESS_COUNTRY_SUFFIXES = new Set([
+      'usa',
+      'us',
+      'u s a',
+      'united states',
+      'united states of america',
+      'estados unidos',
+      'eeuu'
+    ]);
+
+    const normalizeAddressCountryToken = (value = '') => `${value}`
+      .toLowerCase()
+      .replace(/\./g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const stripCountryMentionsFromFreeText = (value = '') => `${value}`
+      .replace(/\bUnited\s+States(?:\s+of\s+America)?\b/gi, '')
+      .replace(/\bU\s*\.?\s*S\s*\.?\s*A\b/gi, '')
+      .replace(/\bEstados\s+Unidos\b/gi, '')
+      .replace(/\bEEUU\b/gi, '')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    const looksLikeStreetSegment = (segment = '') => (
+      /^\d/.test(`${segment}`.trim())
+      || /\b(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|hwy|highway|ln|lane|ct|court|cir|circle)\b/i
+        .test(`${segment}`.trim())
+    );
+
+    const formatVehicleSidebarAddress = (rawAddress = '', zipCode = '') => {
+      const normalizedZip = `${zipCode || ''}`.trim();
+      let addressText = stripCountryMentionsFromFreeText(`${rawAddress || ''}`.trim());
+
+      if (addressText.includes('.')) {
+        const dotIndex = addressText.indexOf('.');
+        const trailing = addressText.slice(dotIndex + 1).trim();
+        if (trailing) addressText = trailing;
+      }
+
+      if (!addressText && normalizedZip) return normalizedZip;
+      if (!addressText) return 'No location provided';
+
+      let parts = addressText
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      while (parts.length > 1) {
+        const token = normalizeAddressCountryToken(parts[parts.length - 1]);
+        if (!ADDRESS_COUNTRY_SUFFIXES.has(token)) break;
+        parts.pop();
+      }
+
+      const zipRegex = /\b\d{5}(?:-\d{4})?\b/;
+      const zipIndex = parts.findIndex((part) => zipRegex.test(part));
+
+      if (zipIndex >= 0) {
+        const fromIndex = Math.max(0, zipIndex - 1);
+        parts = parts.slice(fromIndex, zipIndex + 1);
+      } else if (parts.length >= 3) {
+        parts = parts.slice(-2);
+      }
+
+      if (parts.length > 1 && looksLikeStreetSegment(parts[0])) {
+        parts = parts.slice(1);
+      }
+
+      let formatted = stripCountryMentionsFromFreeText(parts.join(', '));
+      const escapedZip = normalizedZip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const zipAlreadyIncluded = normalizedZip && escapedZip
+        ? new RegExp(`\\b${escapedZip}\\b`).test(formatted)
+        : false;
+
+      if (normalizedZip && !zipAlreadyIncluded) {
+        formatted = formatted ? `${formatted}, ${normalizedZip}` : normalizedZip;
+      }
+
+      return formatted || normalizedZip || 'No location provided';
+    };
+
     const getAccuracyDot = (accuracy = '') => {
       return accuracy === 'exact' ? 'bg-emerald-300' : 'bg-amber-300';
     };
@@ -1091,6 +1181,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS = 120000;
     const GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS = 20000;
     const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
+    const GPS_TRAIL_LABEL_MERGE_RADIUS_METERS = 90;
     const GPS_MOVING_ANALYSIS_MAX_POINTS = 8;
     const GPS_MOVING_STOPPED_TOTAL_DISTANCE_METERS = 550;
     const GPS_MOVING_STOPPED_NET_DISTANCE_METERS = 180;
@@ -1099,6 +1190,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_MOVING_MOVING_TOTAL_DISTANCE_METERS = 1300;
     const GPS_MOVING_MOVING_NET_DISTANCE_METERS = 420;
     const GPS_MOVING_MOVING_MAX_SEGMENT_METERS = 320;
+    const GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 10000;
+    const GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
     const GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS = 2;
@@ -1293,6 +1386,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const resolveVehicleMovingHistoryOverride = ({
       records = [],
+      vehicle = null,
       winnerSerial = '',
       latestSerial = '',
       serialCountsBySerial = new Map(),
@@ -1313,7 +1407,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         ? winnerScopedRecords
         : (latestScopedRecords.length ? latestScopedRecords : records);
 
-      const inferredStatus = inferMovingHistoryStatusFromRecords(movementSourceRecords);
+      const inferredStatus = inferMovingHistoryStatusFromRecords(movementSourceRecords, { vehicle });
       if (inferredStatus === 'moving' || inferredStatus === 'stopped') return inferredStatus;
 
       const readCount = (serial = '') => {
@@ -1372,9 +1466,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const resolvedWinnerSerial = typeof gpsHistoryManager?.resolveVehicleWinnerSerialFromRecords === 'function'
         ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
         : configuredWinnerSerial;
-      const hasConfiguredWinnerRecords = configuredWinnerSerial
-        && records.some((record) => `${getRecordSerial(record) || ''}`.trim() === configuredWinnerSerial);
-      const winnerSerial = hasConfiguredWinnerRecords ? configuredWinnerSerial : resolvedWinnerSerial;
+      const winnerSerial = resolvedWinnerSerial || configuredWinnerSerial;
       const movementSourceRecords = winnerSerial
         ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === winnerSerial)
         : records;
@@ -1383,19 +1475,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const serialCountsBySerial = countGpsHistoryRecordsBySerial(movementSourceRecords, getRecordSerial);
       const movingHistoryOverride = resolveVehicleMovingHistoryOverride({
         records: movementSourceRecords,
+        vehicle,
         winnerSerial,
         latestSerial,
         serialCountsBySerial,
         getRecordSerial
       });
-      const stationaryDays = inferStationaryDaysFromRecords(movementSourceRecords);
+      const latestMovementRecord = [...movementSourceRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))[0] || null;
+      const explicitLatestStationaryDays = parseGpsRecordDaysParked(latestMovementRecord || {});
+      const stationaryDays = Number.isFinite(explicitLatestStationaryDays)
+        ? explicitLatestStationaryDays
+        : inferStationaryDaysFromRecords(movementSourceRecords);
       const currentMovingOverride = `${vehicle?.historyMovingOverride || ''}`.trim().toLowerCase();
       const normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
       const movingOverrideChanged = currentMovingOverride !== normalizedOverride;
       const currentDaysRaw = vehicle?.historyDaysStationaryOverride ?? vehicle?.details?.historyDaysStationaryOverride;
       const currentDays = Number.isFinite(Number(currentDaysRaw)) ? Number(currentDaysRaw) : null;
-      const nextDays = Number.isFinite(stationaryDays) && normalizedOverride !== 'moving'
-        ? Math.max(0, Math.round(stationaryDays))
+      const nextDays = Number.isFinite(stationaryDays)
+        ? Math.max(0, Math.floor(stationaryDays))
         : null;
       const daysChanged = (currentDays === null && nextDays !== null)
         || (currentDays !== null && nextDays === null)
@@ -1533,7 +1631,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return null;
     };
 
-    const inferMovingHistoryStatusFromRecords = (records = []) => {
+    const inferMovingHistoryStatusFromRecords = (records = [], { vehicle = null } = {}) => {
       if (!Array.isArray(records) || !records.length) return '';
 
       const analysisRecords = [...records]
@@ -1597,12 +1695,33 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       );
       if (likelyMoving && movingVotes >= stoppedVotes) return 'moving';
 
+      const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle);
+      const withinDistanceThreshold = (
+        totalDistanceMeters <= stoppedDistanceThreshold
+        && netDistanceMeters <= stoppedDistanceThreshold
+      );
+      if (withinDistanceThreshold) return 'stopped';
+
       if (movementVotes.length) {
         return stoppedVotes >= movingVotes ? 'stopped' : 'moving';
       }
 
       return '';
     };
+
+    const isTruckOrTrailerUnit = (vehicle = {}) => {
+      const unitType = `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`
+        .trim()
+        .toLowerCase();
+      if (!unitType) return false;
+      return unitType.includes('truck') || unitType.includes('trailer');
+    };
+
+    const getStoppedDistanceThresholdForVehicle = (vehicle = {}) => (
+      isTruckOrTrailerUnit(vehicle)
+        ? GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
+        : GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
+    );
 
     const getGpsPointDistanceMeters = (fromPoint, toPoint) => {
       if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
@@ -2671,13 +2790,144 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return `${kilometers.toFixed(2)} km`;
     };
 
+    const formatTrailElapsedMs = (elapsedMs) => {
+      if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return '0s';
+
+      const totalSeconds = Math.round(elapsedMs / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const parts = [];
+      if (days > 0) parts.push(`${days}d`);
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0 && parts.length < 2) parts.push(`${minutes}m`);
+      if (!parts.length) parts.push(`${seconds}s`);
+      return parts.slice(0, 2).join(' ');
+    };
+
+    const formatTrailSegmentElapsedTime = (fromPoint, toPoint) => {
+      const fromTime = Number(fromPoint?.timeMs);
+      const toTime = Number(toPoint?.timeMs);
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return '';
+      return formatTrailElapsedMs(Math.abs(toTime - fromTime));
+    };
+
+    const parseGpsRecordDaysParked = (record = {}) => {
+      if (!record || typeof record !== 'object') return null;
+      const candidates = [
+        record?.days_stationary,
+        record?.days_parked,
+        record?.days_stationary_calc,
+        record?.DaysParked,
+        record?.['Days Parked'],
+        record?.['Days Stationary'],
+        record?.historyDaysStationaryOverride
+      ];
+      for (const candidate of candidates) {
+        const parsed = parseGpsNumericValue(candidate);
+        if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed));
+      }
+      return null;
+    };
+
+    const getTrailPointDayStartMs = (point = {}) => {
+      const timeMs = Number.isFinite(point?.timeMs) ? point.timeMs : point?.timestamp;
+      return toUtcDayStartMs(timeMs);
+    };
+
+    const getTrailPointMovementStatus = (point = {}, previousPoint = null) => {
+      const explicit = parseGpsRecordMovingStatus(point?.record || {});
+      if (explicit === 'moving' || explicit === 'stopped') return explicit;
+
+      const explicitDaysParked = parseGpsRecordDaysParked(point?.record || {});
+      if (Number.isFinite(explicitDaysParked)) {
+        return explicitDaysParked <= 0 ? 'moving' : 'stopped';
+      }
+
+      if (previousPoint) {
+        const segmentDistance = getGpsPointDistanceMeters(previousPoint, point);
+        if (Number.isFinite(segmentDistance)) {
+          return segmentDistance <= GPS_MOVING_STOPPED_MAX_SEGMENT_METERS ? 'stopped' : 'moving';
+        }
+      }
+
+      return 'unknown';
+    };
+
+    const buildTrailDerivedParkedDays = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const result = new Array(points.length).fill(null);
+      let stationaryStartDayMs = null;
+
+      points.forEach((point, index) => {
+        const previousPoint = index > 0 ? points[index - 1] : null;
+        const movement = getTrailPointMovementStatus(point, previousPoint);
+        const dayStartMs = getTrailPointDayStartMs(point);
+
+        if (movement === 'moving') {
+          stationaryStartDayMs = null;
+          result[index] = 0;
+          return;
+        }
+
+        if (movement !== 'stopped' || !Number.isFinite(dayStartMs)) {
+          result[index] = null;
+          return;
+        }
+
+        if (!Number.isFinite(stationaryStartDayMs)) {
+          stationaryStartDayMs = dayStartMs;
+        }
+
+        result[index] = Math.max(
+          0,
+          Math.floor((dayStartMs - stationaryStartDayMs) / GPS_HISTORY_DAY_MS)
+        );
+      });
+
+      return result;
+    };
+
+    const buildTrailParkedStartTimeByPoint = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const parkedStartByIndex = new Array(points.length).fill(null);
+      let parkedStartMs = null;
+
+      points.forEach((point, index) => {
+        const previousPoint = index > 0 ? points[index - 1] : null;
+        const movement = getTrailPointMovementStatus(point, previousPoint);
+        const pointTimeMs = Number(point?.timeMs);
+
+        if (movement !== 'stopped') {
+          parkedStartMs = null;
+          parkedStartByIndex[index] = null;
+          return;
+        }
+
+        if (!Number.isFinite(parkedStartMs) && Number.isFinite(pointTimeMs)) {
+          parkedStartMs = pointTimeMs;
+        }
+        parkedStartByIndex[index] = parkedStartMs;
+      });
+
+      return parkedStartByIndex;
+    };
+
     const drawVehicleGpsTrail = (points = [], vehicleColor = '') => {
       if (!gpsTrailLayer || !Array.isArray(points) || !points.length) return;
       const oldestLineRgb = parseTrailColorToRgb('#14532d');
       const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
       const newestVehicleRgb = parseTrailColorToRgb(vehicleColor, oldestLineRgb);
+      const oldestLabelRgb = parseTrailColorToRgb('#334155');
+      const newestLabelRgb = parseTrailColorToRgb('#14532d');
+      const oldestLabelTextRgb = parseTrailColorToRgb('#cbd5e1');
+      const newestLabelTextRgb = parseTrailColorToRgb('#dcfce7');
       const pointStepDenominator = Math.max(1, points.length - 1);
       const segmentStepDenominator = Math.max(1, points.length - 1);
+      const derivedParkedDaysByPoint = buildTrailDerivedParkedDays(points);
+      const parkedStartTimeByPoint = buildTrailParkedStartTimeByPoint(points);
+      const segmentLabelEntries = [];
 
       for (let index = 0; index < points.length - 1; index += 1) {
         const fromPoint = points[index];
@@ -2741,6 +2991,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const arrowRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
         const arrowColor = rgbToRgba(arrowRgb, interpolateNumber(0.5, 0.82, segmentProgress));
         const bearing = getGpsTrailBearingDegrees(fromPoint, toPoint);
+        const segmentVisualPriority = 520 + index;
         L.marker([midpoint.lat, midpoint.lng], {
           icon: L.divIcon({
             className: 'gps-trail-arrow',
@@ -2749,23 +3000,83 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             iconAnchor: [6, 6]
           }),
           interactive: false,
-          zIndexOffset: 420
+          zIndexOffset: segmentVisualPriority
         }).addTo(gpsTrailLayer);
 
         const segmentDistanceKm = formatTrailSegmentDistanceKm(fromPoint, toPoint);
         if (!segmentDistanceKm) continue;
-        const labelBorder = rgbToRgba(arrowRgb, interpolateNumber(0.42, 0.74, segmentProgress));
-        const labelBackground = rgbToRgba(arrowRgb, interpolateNumber(0.14, 0.24, segmentProgress));
-        L.marker([midpoint.lat, midpoint.lng], {
+        const toPointIndex = index + 1;
+        const toPointMovement = getTrailPointMovementStatus(toPoint, fromPoint);
+        const explicitDaysParked = parseGpsRecordDaysParked(toPoint?.record || {});
+        const derivedDaysParked = Number.isFinite(derivedParkedDaysByPoint[toPointIndex])
+          ? derivedParkedDaysByPoint[toPointIndex]
+          : null;
+        const resolvedDaysParked = explicitDaysParked ?? derivedDaysParked;
+        const parkedStartMs = parkedStartTimeByPoint[toPointIndex];
+        const toPointTimeMs = Number(toPoint?.timeMs);
+        const parkedElapsedMs = (
+          toPointMovement === 'stopped'
+          && Number.isFinite(parkedStartMs)
+          && Number.isFinite(toPointTimeMs)
+        )
+          ? Math.max(0, toPointTimeMs - parkedStartMs)
+          : null;
+        const parkedElapsedWithDaysMs = Number.isFinite(resolvedDaysParked)
+          ? Math.max(parkedElapsedMs || 0, resolvedDaysParked * GPS_HISTORY_DAY_MS)
+          : parkedElapsedMs;
+        const segmentElapsedTime = toPointMovement === 'stopped'
+          ? formatTrailElapsedMs(parkedElapsedWithDaysMs)
+          : formatTrailSegmentElapsedTime(fromPoint, toPoint);
+        const parkedSuffix = toPointMovement === 'stopped'
+          ? ` · Parked${Number.isFinite(resolvedDaysParked) ? ` ${resolvedDaysParked}d` : ''}`
+          : '';
+        const segmentLabel = segmentElapsedTime
+          ? `${segmentDistanceKm} · ${segmentElapsedTime}`
+          : segmentDistanceKm;
+        const segmentLabelWithParked = `${segmentLabel}${parkedSuffix}`;
+        const labelToneRgb = interpolateTrailRgb(oldestLabelRgb, newestLabelRgb, segmentProgress);
+        const labelTextRgb = interpolateTrailRgb(oldestLabelTextRgb, newestLabelTextRgb, segmentProgress);
+        const labelBorder = rgbToRgba(labelToneRgb, interpolateNumber(0.46, 0.9, segmentProgress));
+        const labelBackground = rgbToRgba(labelToneRgb, interpolateNumber(0.24, 0.58, segmentProgress));
+        const labelTextColor = rgbToHex(labelTextRgb);
+        const labelShadow = rgbToRgba(labelToneRgb, interpolateNumber(0.2, 0.48, segmentProgress));
+        const labelFontWeight = Math.round(interpolateNumber(690, 820, segmentProgress));
+        const labelMarker = L.marker([midpoint.lat, midpoint.lng], {
           icon: L.divIcon({
             className: 'gps-trail-distance',
-            html: `<span class="gps-trail-distance-wrap"><span class="gps-trail-distance-badge" style="border-color:${labelBorder};background:${labelBackground};">${segmentDistanceKm}</span></span>`,
+            html: `<span class="gps-trail-distance-wrap"><span class="gps-trail-distance-badge" style="border-color:${labelBorder};background:${labelBackground};color:${labelTextColor};font-weight:${labelFontWeight};box-shadow:0 0 0 1px ${labelShadow};">${segmentLabelWithParked}</span></span>`,
             iconSize: [1, 1],
             iconAnchor: [0, 0]
           }),
           interactive: false,
-          zIndexOffset: 418
+          zIndexOffset: segmentVisualPriority + 1
         }).addTo(gpsTrailLayer);
+
+        const previousEntryIndex = segmentLabelEntries.findIndex((entry) => {
+          const distance = getGpsPointDistanceMeters(
+            { lat: entry.lat, lng: entry.lng },
+            midpoint
+          );
+          return Number.isFinite(distance) && distance <= GPS_TRAIL_LABEL_MERGE_RADIUS_METERS;
+        });
+
+        if (previousEntryIndex >= 0) {
+          const previousEntry = segmentLabelEntries[previousEntryIndex];
+          if (previousEntry?.marker) {
+            gpsTrailLayer.removeLayer(previousEntry.marker);
+          }
+          segmentLabelEntries[previousEntryIndex] = {
+            lat: midpoint.lat,
+            lng: midpoint.lng,
+            marker: labelMarker
+          };
+        } else {
+          segmentLabelEntries.push({
+            lat: midpoint.lat,
+            lng: midpoint.lng,
+            marker: labelMarker
+          });
+        }
       }
     };
 
@@ -3124,57 +3435,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const winnerScopedRecords = winnerSerial
         ? records.filter((record) => getRecordSerial(record) === winnerSerial)
         : records;
-      const todayRange = getLocalDayBoundsMs();
-      const configuredWinnerReadingToday = hasSerialReadingInRange({
-        records,
-        serial: configuredWinnerSerial,
-        getRecordSerial,
-        startMs: todayRange.start,
-        endMs: todayRange.end
-      });
-      const lockToConfiguredWinnerToday = Boolean(
-        configuredWinnerSerial
-        && winnerSerial
-        && configuredWinnerSerial === winnerSerial
-        && configuredWinnerReadingToday
-      );
 
       const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
-      const latestSerial = getMostRecentRecordSerial(records, getRecordSerial);
       const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records);
-      const latestSerialRecords = latestSerial
-        ? records.filter((record) => getRecordSerial(record) === latestSerial)
-        : [];
-      let trailSourceRecords = winnerScopedRecords;
-
-      if (!winnerScopedRecords.length) {
-        trailSourceRecords = latestSerialRecords.length ? latestSerialRecords : records;
-      } else if (!lockToConfiguredWinnerToday && latestSerialRecords.length && latestSerial !== winnerSerial) {
-        const vehicleAnchor = getVehicleTrailAnchorPoint(vehicle);
-        const winnerLatestPoint = getLatestTrailPointFromRecords(winnerScopedRecords);
-        const latestSerialPoint = getLatestTrailPointFromRecords(latestSerialRecords);
-        const winnerLatestTimestamp = winnerLatestPoint?.timestamp ?? Number.NEGATIVE_INFINITY;
-        const latestSerialTimestamp = latestSerialPoint?.timestamp ?? Number.NEGATIVE_INFINITY;
-        const latestSerialIsFresher = latestSerialTimestamp - winnerLatestTimestamp >= GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS;
-        const winnerDistance = vehicleAnchor && winnerLatestPoint
-          ? getGpsPointDistanceMeters(vehicleAnchor, winnerLatestPoint)
-          : Number.POSITIVE_INFINITY;
-        const latestSerialDistance = vehicleAnchor && latestSerialPoint
-          ? getGpsPointDistanceMeters(vehicleAnchor, latestSerialPoint)
-          : Number.POSITIVE_INFINITY;
-        const latestSerialIsCloser = latestSerialDistance + GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS < winnerDistance;
-        const winnerLooksStale = winnerDistance > GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS;
-
-        if ((winnerLooksStale && latestSerialIsCloser) || (!vehicleAnchor && latestSerialIsFresher)) {
-          trailSourceRecords = latestSerialRecords;
-        }
-      }
-
-      if (trailSourceRecords.length < 2 && records.length > trailSourceRecords.length) {
-        trailSourceRecords = records;
-      }
-
-      const latestRecords = [...trailSourceRecords]
+      const latestRecords = [...records]
         .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
         .slice(0, getCurrentTrailPointLimit());
 
@@ -4666,15 +4930,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
               }
               if (!vehicleSelectionChanged) {
-                const clickLatLng = payload?.marker?.getLatLng?.()
-                  || (hasValidCoords(currentVehicle) ? L.latLng(currentVehicle.lat, currentVehicle.lng) : null);
-                const didCycle = cycleOverlappingTargetsAtLatLng(clickLatLng, originalEvent || null);
-                if (!didCycle) {
-                  if (payload?.marker && typeof payload.marker.openPopup === 'function') {
-                    payload.marker.openPopup();
-                  } else {
-                    focusVehicle(currentVehicle);
-                  }
+                if (payload?.marker && typeof payload.marker.openPopup === 'function') {
+                  payload.marker.openPopup();
+                } else {
+                  focusVehicle(currentVehicle);
                 }
                 return;
               }
@@ -4689,13 +4948,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             vehicle.locationAccuracy = vehicle.locationAccuracy || 'exact';
             vehicle.locationNote = getLocationNote(vehicle.locationAccuracy);
             coords = { lat: vehicle.lat, lng: vehicle.lng };
-          } else if (vehicle.zipcode || vehicle.city || vehicle.state) {
-            const derived = resolveCoords(vehicle, { zip: vehicle.zipcode, city: vehicle.city, stateCode: vehicle.state });
-            coords = derived.coords;
-            vehicle.lat = coords.lat;
-            vehicle.lng = coords.lng;
-            vehicle.locationAccuracy = derived.accuracy;
-            vehicle.locationNote = getLocationNote(vehicle.locationAccuracy);
           } else {
             console.warn(`No location data for vehicle ${vehicle.vin || vehicle.id || 'unknown'}`);
           }
@@ -4721,15 +4973,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const gpsReasonClasses = hasNoGps ? 'text-[10px] text-red-200/90' : 'text-[10px] text-slate-400';
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
-          const shortAddress = String(vehicle.shortLocation || vehicle.lastLocation || '').trim();
-          const zipCode = String(vehicle.zipcode || '').trim();
-          const escapedZip = zipCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const zipIncludedInAddress = zipCode && escapedZip
-            ? new RegExp(`\\b${escapedZip}\\b`).test(shortAddress)
-            : false;
-          const locationDisplay = [shortAddress || 'No location provided', zipCode && !zipIncludedInAddress ? zipCode : '']
-            .filter(Boolean)
-            .join(' · ');
+          const locationDisplay = formatVehicleSidebarAddress(
+            vehicle.shortLocation || vehicle.lastLocation || '',
+            vehicle.zipcode || ''
+          );
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = currentVehicleKey;
           card.dataset.vehicleId = `${vehicle.id ?? ''}`;
@@ -5030,7 +5277,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function getDaysParkedDisplay(vehicle) {
       const days = getDaysParkedValue(vehicle);
       if (!Number.isFinite(days)) return '—';
-      return `${Math.max(0, Math.round(days))}`;
+      return `${Math.max(0, Math.floor(days))}`;
     }
 
     function sortVehiclesByDaysParked(list) {
@@ -5331,10 +5578,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function getVehicleList(query) {
-      if (selectedVehicleId !== null) {
+      if (selectedVehicleId !== null || selectedVehicleKey) {
         const selectedVehicle = getSelectedVehicleEntry();
         if (!selectedVehicle) return [];
-        return matchesVehicleFilters(selectedVehicle, query) ? [selectedVehicle] : [];
+        return [selectedVehicle];
       }
 
       let baseList = vehicles;
@@ -5444,6 +5691,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (vehicleId !== null && !syncingVehicleSelection) {
         setSelectedVehicle({
           id: resolvedVehicle?.id ?? vehicleId,
+          key: nextVehicleKey || '',
           vin: resolvedVehicle?.vin || '',
           customerId: resolvedVehicle?.customerId || ''
         });
@@ -5484,7 +5732,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       renderVehicles();
       renderVisibleSidebars();
       toggleSelectionBanner();
-      sidebarStateController?.setState?.('right', false);
     }
 
     function findNearestVehicle(point, maxDistanceMeters = 80000) {
@@ -5890,14 +6137,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <button type="button" class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300" data-gps-connection-status>
                   Checking connection
                 </button>
-                <div class="inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950/70 p-1">
-                  <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors" data-gps-view="winner">
-                    Winner only
-                  </button>
-                  <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-300 transition-colors" data-gps-view="all">
-                    All serials
-                  </button>
-                </div>
                 <input type="text" class="w-52 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200 placeholder-slate-500" placeholder="Search GPS records" data-gps-search />
                 <div class="relative">
                   <button type="button" class="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200 hover:border-slate-500" data-gps-columns-toggle>
@@ -5960,6 +6199,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const stopLoading = startLoading('Loading GPS history…');
       try {
         const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin });
+        await getGpsDeviceBlacklistSerials().catch(() => new Set());
         if (Array.isArray(records) && records.length) {
           const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records);
           if (movingOverrideChanged) {
