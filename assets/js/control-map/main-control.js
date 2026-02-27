@@ -674,6 +674,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     };
     let oldestOpenInvoiceLookupWarningShown = false;
+    let gpsReadBoundsLookupWarningShown = false;
 
     const fetchDealsByStockNumbers = async (stockNumbers = []) => {
       if (!supabaseClient?.from || !stockNumbers.length) return new Map();
@@ -836,6 +837,188 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         console.warn('Oldest open invoice lookup warning: invoice table not found.');
       }
       throw new Error('Invoice table not found.');
+    };
+
+    const fetchGpsReadBoundsByVins = async (vins = []) => {
+      if (!supabaseClient?.from || !vins.length) return new Map();
+      const unique = Array.from(new Set(vins.map((vin) => normalizeVin(vin)).filter(Boolean)));
+      if (!unique.length) return new Map();
+
+      const getCachedSelection = () => new Map(
+        unique
+          .map((vin) => [vin, gpsReadBoundsByVinCache.get(vin) || null])
+          .filter(([, value]) => Boolean(value))
+      );
+
+      const now = Date.now();
+      const cacheFresh = gpsReadBoundsByVinCacheUpdatedAt > 0
+        && (now - gpsReadBoundsByVinCacheUpdatedAt) <= GPS_READ_BOUNDS_CACHE_TTL_MS;
+      const hasAllCached = cacheFresh && unique.every((vin) => gpsReadBoundsByVinCache.has(vin));
+      if (hasAllCached) {
+        return getCachedSelection();
+      }
+
+      if (gpsReadBoundsByVinPending) {
+        try {
+          await gpsReadBoundsByVinPending;
+          const cacheNowFresh = gpsReadBoundsByVinCacheUpdatedAt > 0
+            && (Date.now() - gpsReadBoundsByVinCacheUpdatedAt) <= GPS_READ_BOUNDS_CACHE_TTL_MS;
+          const nowHasAllCached = cacheNowFresh && unique.every((vin) => gpsReadBoundsByVinCache.has(vin));
+          if (nowHasAllCached) return getCachedSelection();
+        } catch (_error) {
+          // Continue with a direct fetch attempt below.
+        }
+      }
+
+      const normalizeName = (value = '') => `${value}`.trim().toLowerCase();
+      const quoteColumn = (column = '') => {
+        const normalized = `${column || ''}`.trim();
+        if (!normalized) return '';
+        if (normalized.startsWith('"') && normalized.endsWith('"')) return normalized;
+        if (/^[a-z_][a-z0-9_]*$/i.test(normalized)) return normalized;
+        return `"${normalized.replace(/"/g, '""')}"`;
+      };
+      const resolveColumnKey = (availableKeys = [], candidates = []) => {
+        if (!Array.isArray(availableKeys) || !availableKeys.length) return '';
+        const lookup = new Map(availableKeys.map((key) => [normalizeName(key), key]));
+        for (const candidate of candidates) {
+          const hit = lookup.get(normalizeName(candidate));
+          if (hit) return hit;
+        }
+        return '';
+      };
+      const resolveColumnKeys = (availableKeys = [], candidates = []) => {
+        if (!Array.isArray(availableKeys) || !availableKeys.length) return [];
+        const lookup = new Map(availableKeys.map((key) => [normalizeName(key), key]));
+        const resolved = [];
+        candidates.forEach((candidate) => {
+          const hit = lookup.get(normalizeName(candidate));
+          if (hit && !resolved.includes(hit)) resolved.push(hit);
+        });
+        return resolved;
+      };
+      const parseTimestamp = (row = {}, dateKeys = []) => {
+        for (const key of dateKeys) {
+          const raw = row?.[key];
+          if (!raw) continue;
+          const parsed = Date.parse(raw);
+          if (!Number.isNaN(parsed)) return parsed;
+        }
+        return null;
+      };
+
+      const loadTask = (async () => {
+        const tableName = `${TABLES.gpsHistory || 'PT-LastPing'}`.trim();
+        const vinKeyCandidates = ['VIN', 'vin'];
+        const dateKeyCandidates = ['PT-LastPing', 'gps_time', 'Date', 'created_at', 'updated_at'];
+        const chunkSize = 250;
+        const pageSize = 1000;
+        const results = new Map();
+
+        const probe = await runWithTimeout(
+          supabaseClient.from(tableName).select('*').limit(1),
+          8000,
+          'GPS read bounds probe query timed out.'
+        );
+        if (probe.error) throw probe.error;
+        const probeRows = Array.isArray(probe.data) ? probe.data : [];
+        const availableKeys = probeRows.length ? Object.keys(probeRows[0] || {}) : [];
+        if (!availableKeys.length) {
+          const nextCache = new Map(gpsReadBoundsByVinCache);
+          unique.forEach((vin) => nextCache.set(vin, null));
+          gpsReadBoundsByVinCache = nextCache;
+          gpsReadBoundsByVinCacheUpdatedAt = Date.now();
+          return;
+        }
+
+        const vinKey = resolveColumnKey(availableKeys, vinKeyCandidates);
+        const dateKeys = resolveColumnKeys(availableKeys, dateKeyCandidates);
+        if (!vinKey || !dateKeys.length) {
+          const nextCache = new Map(gpsReadBoundsByVinCache);
+          unique.forEach((vin) => nextCache.set(vin, null));
+          gpsReadBoundsByVinCache = nextCache;
+          gpsReadBoundsByVinCacheUpdatedAt = Date.now();
+          return;
+        }
+
+        const vinColumn = quoteColumn(vinKey);
+        const selectColumns = [vinColumn, ...dateKeys.map((key) => quoteColumn(key))]
+          .filter(Boolean)
+          .join(',');
+
+        for (let index = 0; index < unique.length; index += chunkSize) {
+          const chunk = unique.slice(index, index + chunkSize);
+          let offset = 0;
+          let hasMore = true;
+
+          while (hasMore) {
+            const query = supabaseClient
+              .from(tableName)
+              .select(selectColumns)
+              .in(vinColumn, chunk)
+              .range(offset, offset + pageSize - 1);
+            const { data, error } = await runWithTimeout(
+              query,
+              8000,
+              'GPS read bounds query timed out.'
+            );
+            if (error) throw error;
+
+            const pageRows = Array.isArray(data) ? data : [];
+            pageRows.forEach((row) => {
+              const vin = normalizeVin(row?.[vinKey]);
+              if (!vin) return;
+              const timestamp = parseTimestamp(row, dateKeys);
+              if (!Number.isFinite(timestamp)) return;
+              const existing = results.get(vin) || {
+                firstTimestamp: Number.POSITIVE_INFINITY,
+                lastTimestamp: Number.NEGATIVE_INFINITY
+              };
+              if (timestamp < existing.firstTimestamp) existing.firstTimestamp = timestamp;
+              if (timestamp > existing.lastTimestamp) existing.lastTimestamp = timestamp;
+              results.set(vin, existing);
+            });
+
+            hasMore = pageRows.length === pageSize;
+            offset += pageSize;
+          }
+        }
+
+        const nextCache = new Map(gpsReadBoundsByVinCache);
+        unique.forEach((vin) => {
+          const value = results.get(vin);
+          if (!value) {
+            nextCache.set(vin, null);
+            return;
+          }
+          nextCache.set(vin, {
+            firstRead: Number.isFinite(value.firstTimestamp)
+              ? new Date(value.firstTimestamp).toISOString()
+              : '',
+            lastRead: Number.isFinite(value.lastTimestamp)
+              ? new Date(value.lastTimestamp).toISOString()
+              : ''
+          });
+        });
+        gpsReadBoundsByVinCache = nextCache;
+        gpsReadBoundsByVinCacheUpdatedAt = Date.now();
+      })();
+
+      gpsReadBoundsByVinPending = loadTask;
+      try {
+        await loadTask;
+        return getCachedSelection();
+      } catch (error) {
+        if (!gpsReadBoundsLookupWarningShown) {
+          gpsReadBoundsLookupWarningShown = true;
+          console.warn('GPS read bounds lookup warning: ' + (error?.message || error));
+        }
+        return getCachedSelection();
+      } finally {
+        if (gpsReadBoundsByVinPending === loadTask) {
+          gpsReadBoundsByVinPending = null;
+        }
+      }
     };
 
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
@@ -1346,6 +1529,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
     const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
     const GPS_DEVICE_BLACKLIST_CACHE_TTL_MS = 5 * 60 * 1000;
+    const GPS_READ_BOUNDS_CACHE_TTL_MS = 10 * 60 * 1000;
     const HOTSPOT_SHARED_MATCH_RADIUS_METERS = 320;
     const HOTSPOT_RELATED_VEHICLE_LIMIT = 8;
     const HOTSPOT_RELATED_CANDIDATE_LIMIT = 120;
@@ -1369,6 +1553,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let gpsDeviceBlacklistSerialsCache = new Set();
     let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
     let gpsDeviceBlacklistSerialsPending = null;
+    let gpsReadBoundsByVinCache = new Map();
+    let gpsReadBoundsByVinCacheUpdatedAt = 0;
+    let gpsReadBoundsByVinPending = null;
 
     const parseGpsNumericValue = (value) => {
       if (value === null || value === undefined) return null;
@@ -4132,14 +4319,19 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         let dealsByStockNo = new Map();
         let openInvoiceSummaryByStockNo = new Map();
         let invoiceSummaryAvailable = false;
+        let gpsReadBoundsByVin = new Map();
         if (supabaseClient) {
           const stockNumbers = normalizedVehicles
             .map((vehicle) => normalizeStockNumber(vehicle.stockNo))
             .filter(Boolean);
+          const vins = normalizedVehicles
+            .map((vehicle) => normalizeVin(vehicle.vin))
+            .filter(Boolean);
           try {
-            const [dealsResult, invoicesResult] = await Promise.allSettled([
+            const [dealsResult, invoicesResult, gpsReadBoundsResult] = await Promise.allSettled([
               fetchDealsByStockNumbers(stockNumbers),
-              fetchOpenInvoiceSummaryByStockNumbers(stockNumbers)
+              fetchOpenInvoiceSummaryByStockNumbers(stockNumbers),
+              fetchGpsReadBoundsByVins(vins)
             ]);
             if (dealsResult.status === 'fulfilled') {
               dealsByStockNo = dealsResult.value;
@@ -4151,6 +4343,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               invoiceSummaryAvailable = true;
             } else {
               console.warn('Invoices load warning: ' + (invoicesResult.reason?.message || invoicesResult.reason));
+            }
+            if (gpsReadBoundsResult.status === 'fulfilled') {
+              gpsReadBoundsByVin = gpsReadBoundsResult.value;
+            } else {
+              console.warn('GPS read bounds load warning: ' + (gpsReadBoundsResult.reason?.message || gpsReadBoundsResult.reason));
             }
           } catch (error) {
             console.warn('Vehicle financial enrich warning: ' + (error?.message || error));
@@ -4177,10 +4374,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             : openBalance;
           const payKpi = effectiveOpenBalance !== null && regularAmount ? effectiveOpenBalance / regularAmount : null;
           const oldestOpenInvoice = openInvoiceSummary ?? null;
+          const normalizedVin = normalizeVin(vehicle.vin);
+          const gpsReadBounds = gpsReadBoundsByVin.get(normalizedVin) ?? null;
           vehicle.payKpi = payKpi;
           vehicle.payKpiDisplay = formatPayKpi(payKpi);
           vehicle.oldestOpenInvoiceDate = oldestOpenInvoice?.value || '';
           vehicle.oldestOpenInvoiceDateDisplay = formatInvoiceDate(vehicle.oldestOpenInvoiceDate);
+          vehicle.firstRead = gpsReadBounds?.firstRead || vehicle.firstRead || '';
           return true;
         });
 
@@ -5150,6 +5350,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
           const oldestOpenInvoiceDateLabel = escapeHTML(vehicle.oldestOpenInvoiceDateDisplay || '—');
+          const ptLastReadLabel = formatDateTime(vehicle.lastRead);
+          const ptFirstReadLabel = formatDateTime(vehicle.firstRead);
           const locationDisplay = formatVehicleSidebarAddress(
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
@@ -5218,8 +5420,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 </div>
               </div>
               <div class="flex items-center justify-between text-[11px] text-slate-400">
-                <span class="flex items-center gap-2 font-semibold text-slate-200">${svgIcon('clock', 'h-3 w-3')} PT Last Read ${formatDateTime(vehicle.lastRead)}</span>
+                <span class="flex items-center gap-2 font-semibold text-slate-200">${svgIcon('clock', 'h-3 w-3')} PT Last Read ${ptLastReadLabel}</span>
                 <span class="text-slate-400">${vehicle.payment || ''}</span>
+              </div>
+              <div class="flex items-center text-[10px] text-slate-400">
+                <span class="flex items-center gap-2">${svgIcon('clock', 'h-3 w-3')} PT First Read ${ptFirstReadLabel}</span>
               </div>
               <div class="flex items-center justify-between text-[10px] text-slate-400">
                 <span>Lat <span class="text-slate-200">${latLabel}</span></span>
