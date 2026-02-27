@@ -4,6 +4,8 @@ export const initializeControlMapRealtime = ({
   supabaseClient,
   tables,
   onVehiclesChange,
+  onDealsChange,
+  onInvoicesChange,
   onHotspotsChange,
   onBlacklistChange,
   onServicesChange
@@ -12,20 +14,25 @@ export const initializeControlMapRealtime = ({
     return { stop: () => {} };
   }
 
-  const channel = supabaseClient
-    .channel(CONTROL_MAP_CHANNEL)
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.vehicles }, (payload) => {
-      onVehiclesChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.hotspots }, (payload) => {
-      onHotspotsChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.blacklist }, (payload) => {
-      onBlacklistChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.services }, (payload) => {
-      onServicesChange?.(payload);
-    });
+  let channel = supabaseClient.channel(CONTROL_MAP_CHANNEL);
+
+  const bindTable = (table, handler) => {
+    if (!table || typeof handler !== 'function') return;
+    channel = channel.on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table },
+      (payload) => {
+        handler(payload);
+      }
+    );
+  };
+
+  bindTable(tables?.vehicles, onVehiclesChange);
+  bindTable(tables?.deals, onDealsChange);
+  bindTable(tables?.invoices, onInvoicesChange);
+  bindTable(tables?.hotspots, onHotspotsChange);
+  bindTable(tables?.blacklist, onBlacklistChange);
+  bindTable(tables?.services, onServicesChange);
 
   channel.subscribe();
 

@@ -660,6 +660,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (value === null || value === undefined || !Number.isFinite(value)) return '—';
       return value.toFixed(2);
     };
+    const formatInvoiceDate = (value) => {
+      if (!value) return '—';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '—';
+      return parsed.toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: '2-digit'
+      });
+    };
+    let oldestOpenInvoiceLookupWarningShown = false;
 
     const fetchDealsByStockNumbers = async (stockNumbers = []) => {
       if (!supabaseClient?.from || !stockNumbers.length) return new Map();
@@ -690,6 +701,138 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       }
       return results;
+    };
+
+    const fetchOpenInvoiceSummaryByStockNumbers = async (stockNumbers = []) => {
+      if (!supabaseClient?.from || !stockNumbers.length) return new Map();
+      const unique = Array.from(new Set(stockNumbers.filter(Boolean)));
+      if (!unique.length) return new Map();
+      const tableCandidates = Array.from(new Set([
+        `${TABLES.invoices || ''}`.trim(),
+        'NS-Invoices&pays'
+      ].filter(Boolean)));
+      const stockKeyCandidates = ['Current Stock No', 'current_stock_no', 'Stock No', 'stock_no', 'stock'];
+      const remainingKeyCandidates = ['Amount Remaining', 'amount_remaining', 'Remaining Balance', 'remaining_balance', 'Open Balance', 'open_balance', 'remaining'];
+      const dateKeyCandidates = ['Date', 'date', 'Invoice Date', 'invoice_date', 'created_at', 'updated_at'];
+      const normalizeName = (value = '') => `${value}`.trim().toLowerCase();
+      const quoteColumn = (column = '') => {
+        const normalized = `${column || ''}`.trim();
+        if (!normalized) return '';
+        if (normalized.startsWith('"') && normalized.endsWith('"')) return normalized;
+        if (/^[a-z_][a-z0-9_]*$/i.test(normalized)) return normalized;
+        return `"${normalized.replace(/"/g, '""')}"`;
+      };
+      const resolveColumnKey = (availableKeys = [], candidates = []) => {
+        if (!Array.isArray(availableKeys) || !availableKeys.length) return '';
+        const lookup = new Map(availableKeys.map((key) => [normalizeName(key), key]));
+        for (const candidate of candidates) {
+          const hit = lookup.get(normalizeName(candidate));
+          if (hit) return hit;
+        }
+        return '';
+      };
+
+      const chunkSize = 500;
+      const pageSize = 1000;
+      for (const tableName of tableCandidates) {
+        try {
+          const probe = await runWithTimeout(
+            supabaseClient.from(tableName).select('*').limit(1),
+            8000,
+            'Invoice probe query timed out.'
+          );
+          if (probe.error) throw probe.error;
+          const probeRows = Array.isArray(probe.data) ? probe.data : [];
+          const availableKeys = probeRows.length ? Object.keys(probeRows[0] || {}) : [];
+          if (!availableKeys.length) return new Map();
+
+          const stockKey = resolveColumnKey(availableKeys, stockKeyCandidates);
+          const remainingKey = resolveColumnKey(availableKeys, remainingKeyCandidates);
+          const dateKey = resolveColumnKey(availableKeys, dateKeyCandidates);
+
+          if (!stockKey || !remainingKey || !dateKey) return new Map();
+
+          const stockColumn = quoteColumn(stockKey);
+          const remainingColumn = quoteColumn(remainingKey);
+          const dateColumn = quoteColumn(dateKey);
+          const selectColumns = [stockColumn, dateColumn, remainingColumn].filter(Boolean).join(',');
+          const results = new Map();
+
+          for (let i = 0; i < unique.length; i += chunkSize) {
+            const chunk = unique.slice(i, i + chunkSize);
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+              let query = supabaseClient
+                .from(tableName)
+                .select(selectColumns)
+                .in(stockColumn, chunk)
+                .range(offset, offset + pageSize - 1);
+
+              if (remainingColumn) {
+                query = query.gt(remainingColumn, 0);
+              }
+
+              const { data, error } = await runWithTimeout(
+                query,
+                8000,
+                'Invoice query timed out.'
+              );
+              if (error) throw error;
+
+              const pageRows = Array.isArray(data) ? data : [];
+              pageRows.forEach((row) => {
+                const stockNo = normalizeStockNumber(row?.[stockKey]);
+                if (!stockNo) return;
+
+                const remaining = parseNumber(row?.[remainingKey]);
+                if (remainingColumn && (!Number.isFinite(remaining) || remaining <= 0)) return;
+
+                const dateRaw = row?.[dateKey];
+                if (!dateRaw) return;
+                const timestamp = Date.parse(dateRaw);
+                if (Number.isNaN(timestamp)) return;
+
+                const existing = results.get(stockNo) || {
+                  timestamp: null,
+                  value: '',
+                  openBalanceSum: 0
+                };
+                existing.openBalanceSum += remaining;
+                if (existing.timestamp === null || timestamp < existing.timestamp) {
+                  existing.timestamp = timestamp;
+                  existing.value = new Date(timestamp).toISOString();
+                }
+                results.set(stockNo, existing);
+              });
+
+              hasMore = pageRows.length === pageSize;
+              offset += pageSize;
+            }
+          }
+
+          return results;
+        } catch (lastError) {
+          const code = `${lastError?.code || ''}`.trim();
+          const message = `${lastError?.message || ''}`.toLowerCase();
+          const missingTable = code === 'PGRST205' || message.includes('could not find the table');
+          if (missingTable) {
+            continue;
+          }
+          if (!oldestOpenInvoiceLookupWarningShown) {
+            oldestOpenInvoiceLookupWarningShown = true;
+            console.warn('Oldest open invoice lookup warning: ' + (lastError?.message || lastError));
+          }
+          throw lastError;
+        }
+      }
+
+      if (!oldestOpenInvoiceLookupWarningShown) {
+        oldestOpenInvoiceLookupWarningShown = true;
+        console.warn('Oldest open invoice lookup warning: invoice table not found.');
+      }
+      throw new Error('Invoice table not found.');
     };
 
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
@@ -3980,14 +4123,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         );
 
         let dealsByStockNo = new Map();
+        let openInvoiceSummaryByStockNo = new Map();
+        let invoiceSummaryAvailable = false;
         if (supabaseClient) {
+          const stockNumbers = normalizedVehicles
+            .map((vehicle) => normalizeStockNumber(vehicle.stockNo))
+            .filter(Boolean);
           try {
-            const stockNumbers = normalizedVehicles
-              .map((vehicle) => normalizeStockNumber(vehicle.stockNo))
-              .filter(Boolean);
-            dealsByStockNo = await fetchDealsByStockNumbers(stockNumbers);
+            const [dealsResult, invoicesResult] = await Promise.allSettled([
+              fetchDealsByStockNumbers(stockNumbers),
+              fetchOpenInvoiceSummaryByStockNumbers(stockNumbers)
+            ]);
+            if (dealsResult.status === 'fulfilled') {
+              dealsByStockNo = dealsResult.value;
+            } else {
+              console.warn('DealsJP1 load warning: ' + (dealsResult.reason?.message || dealsResult.reason));
+            }
+            if (invoicesResult.status === 'fulfilled') {
+              openInvoiceSummaryByStockNo = invoicesResult.value;
+              invoiceSummaryAvailable = true;
+            } else {
+              console.warn('Invoices load warning: ' + (invoicesResult.reason?.message || invoicesResult.reason));
+            }
           } catch (error) {
-            console.warn('DealsJP1 load warning: ' + (error?.message || error));
+            console.warn('Vehicle financial enrich warning: ' + (error?.message || error));
           }
         }
 
@@ -4002,9 +4161,19 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
           const regularAmount = dealValues?.regularAmount ?? null;
           const openBalance = dealValues?.openBalance ?? null;
-          const payKpi = openBalance !== null && regularAmount ? openBalance / regularAmount : null;
+          const openInvoiceSummary = openInvoiceSummaryByStockNo.get(stockNo) ?? null;
+          const invoiceOpenBalance = Number.isFinite(openInvoiceSummary?.openBalanceSum)
+            ? openInvoiceSummary.openBalanceSum
+            : null;
+          const effectiveOpenBalance = invoiceSummaryAvailable
+            ? (invoiceOpenBalance ?? 0)
+            : openBalance;
+          const payKpi = effectiveOpenBalance !== null && regularAmount ? effectiveOpenBalance / regularAmount : null;
+          const oldestOpenInvoice = openInvoiceSummary ?? null;
           vehicle.payKpi = payKpi;
           vehicle.payKpiDisplay = formatPayKpi(payKpi);
+          vehicle.oldestOpenInvoiceDate = oldestOpenInvoice?.value || '';
+          vehicle.oldestOpenInvoiceDateDisplay = formatInvoiceDate(vehicle.oldestOpenInvoiceDate);
           return true;
         });
 
@@ -4973,6 +5142,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const gpsReasonClasses = hasNoGps ? 'text-[10px] text-red-200/90' : 'text-[10px] text-slate-400';
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
+          const oldestOpenInvoiceDateLabel = escapeHTML(vehicle.oldestOpenInvoiceDateDisplay || '—');
           const locationDisplay = formatVehicleSidebarAddress(
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
@@ -5025,6 +5195,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
                   <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
                   <p class="text-[11px] font-semibold text-slate-100">${vehicle.payKpiDisplay || '—'}</p>
+                  <p class="text-[9px] text-slate-400 mt-0.5">${oldestOpenInvoiceDateLabel}</p>
                 </div>
                 <div class="rounded border px-2 py-1.5 ${prepStatusStyles.card}">
                   <p class="text-[9px] uppercase font-bold ${prepStatusStyles.label}">Prep</p>
@@ -6925,6 +7096,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             tables: TABLES,
             handlers: {
               vehicles: refreshVehicles,
+              deals: refreshVehicles,
+              invoices: refreshVehicles,
               hotspots: refreshHotspots,
               blacklist: refreshBlacklist,
               services: refreshServices
