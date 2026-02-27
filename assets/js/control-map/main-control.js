@@ -1333,7 +1333,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_MOVING_MOVING_TOTAL_DISTANCE_METERS = 1300;
     const GPS_MOVING_MOVING_NET_DISTANCE_METERS = 420;
     const GPS_MOVING_MOVING_MAX_SEGMENT_METERS = 320;
-    const GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 10000;
+    const GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 25000;
     const GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
@@ -1627,11 +1627,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const latestMovementRecord = [...movementSourceRecords]
         .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))[0] || null;
       const explicitLatestStationaryDays = parseGpsRecordDaysParked(latestMovementRecord || {});
-      const stationaryDays = Number.isFinite(explicitLatestStationaryDays)
-        ? explicitLatestStationaryDays
-        : inferStationaryDaysFromRecords(movementSourceRecords);
+      const inferredStationaryDays = inferStationaryDaysFromRecords(movementSourceRecords);
+      let stationaryDays = Number.isFinite(inferredStationaryDays)
+        ? inferredStationaryDays
+        : (Number.isFinite(explicitLatestStationaryDays) ? explicitLatestStationaryDays : null);
       const currentMovingOverride = `${vehicle?.historyMovingOverride || ''}`.trim().toLowerCase();
       const normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
+      if (normalizedOverride === 'moving') {
+        stationaryDays = 0;
+      }
       const movingOverrideChanged = currentMovingOverride !== normalizedOverride;
       const currentDaysRaw = vehicle?.historyDaysStationaryOverride ?? vehicle?.details?.historyDaysStationaryOverride;
       const currentDays = Number.isFinite(Number(currentDaysRaw)) ? Number(currentDaysRaw) : null;

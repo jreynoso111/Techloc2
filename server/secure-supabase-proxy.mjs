@@ -86,6 +86,31 @@ const json = (res, statusCode, payload) => {
   res.end(JSON.stringify(payload));
 };
 
+const CLIENT_RUNTIME_CONFIG_GLOBAL = '__TECHLOC_RUNTIME_CONFIG__';
+
+const buildClientRuntimeConfig = () => ({
+  supabaseUrl: SUPABASE_URL,
+  supabaseAnonKey: SUPABASE_ANON_KEY,
+  supabaseProjectRef: SUPABASE_PROJECT_REF,
+});
+
+const renderClientRuntimeConfigScript = () => {
+  const payload = JSON.stringify(buildClientRuntimeConfig()).replace(/</g, '\\u003c');
+  return `<script>window.${CLIENT_RUNTIME_CONFIG_GLOBAL}=${payload};</script>`;
+};
+
+const injectRuntimeConfigIntoHtml = (html = '') => {
+  if (!html) return html;
+  const scriptTag = renderClientRuntimeConfigScript();
+  if (/<\/head>/i.test(html)) {
+    return html.replace(/<\/head>/i, `${scriptTag}\n</head>`);
+  }
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${scriptTag}\n</body>`);
+  }
+  return `${scriptTag}\n${html}`;
+};
+
 const normalizeVin = (value) =>
   String(value || '')
     .toUpperCase()
@@ -194,7 +219,7 @@ const decodeJwtPayload = (token) => {
 const validateConfig = () => {
   const missing = [];
   if (!SUPABASE_URL) missing.push('SUPABASE_URL');
-  if (!SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+  if (!SUPABASE_ANON_KEY) missing.push('SUPABASE_ANON_KEY (or SUPABASE_PUBLISHABLE_KEY)');
   if (missing.length) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
@@ -210,11 +235,21 @@ const validateConfig = () => {
     throw new Error(`Blocked SUPABASE_URL host: ${host}. Expected ${expectedHost}.`);
   }
 
-  const tokenPayload = decodeJwtPayload(SUPABASE_SERVICE_ROLE_KEY);
-  const tokenRef = String(tokenPayload?.ref || '').trim();
-  if (tokenRef && tokenRef !== SUPABASE_PROJECT_REF) {
+  if (SUPABASE_SERVICE_ROLE_KEY) {
+    const tokenPayload = decodeJwtPayload(SUPABASE_SERVICE_ROLE_KEY);
+    const tokenRef = String(tokenPayload?.ref || '').trim();
+    if (tokenRef && tokenRef !== SUPABASE_PROJECT_REF) {
+      throw new Error(
+        `Blocked SUPABASE_SERVICE_ROLE_KEY ref: ${tokenRef}. Expected ${SUPABASE_PROJECT_REF}.`
+      );
+    }
+  }
+
+  const anonPayload = decodeJwtPayload(SUPABASE_ANON_KEY);
+  const anonRef = String(anonPayload?.ref || '').trim();
+  if (anonRef && anonRef !== SUPABASE_PROJECT_REF) {
     throw new Error(
-      `Blocked SUPABASE_SERVICE_ROLE_KEY ref: ${tokenRef}. Expected ${SUPABASE_PROJECT_REF}.`
+      `Blocked SUPABASE_ANON_KEY ref: ${anonRef}. Expected ${SUPABASE_PROJECT_REF}.`
     );
   }
 };
@@ -573,6 +608,9 @@ const serveStatic = async (req, res, pathname) => {
     const ext = path.extname(targetPath).toLowerCase();
     const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
     const content = await readFile(targetPath);
+    const responseBody = ext === '.html'
+      ? Buffer.from(injectRuntimeConfigIntoHtml(content.toString('utf8')), 'utf8')
+      : content;
     res.writeHead(200, {
       'content-type': mimeType,
       'cache-control': 'no-store',
@@ -581,7 +619,7 @@ const serveStatic = async (req, res, pathname) => {
       res.end();
       return;
     }
-    res.end(content);
+    res.end(responseBody);
   } catch (_error) {
     json(res, 404, { error: { message: 'File not found.' } });
   }
