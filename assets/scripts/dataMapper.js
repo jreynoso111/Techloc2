@@ -158,6 +158,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
       'Serial Winner'
     ),
     encoreSerial: field(row, 'Encore Serial', 'encore_serial'),
+    firstRead: field(row, 'PT First Read', 'pt_first_read'),
     lastRead: field(row, 'PT Last Read', 'pt_last_read'),
     daysStationary: field(row, 'days_stationary', 'Days Stationary', 'Days stationary', 'Days Stationary (Calc)', 'Days Parked'),
     stockNo: field(row, 'Current Stock No', 'current_stock_no', 'Stock No', 'Stock'),
