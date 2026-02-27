@@ -1,3 +1,7 @@
+const DEFAULT_SUPABASE_URL = 'https://lnfmogsjvdkqgwprlmtn.supabase.co';
+const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_HhPw8JLinAfDtUNWXnQg8Q_KhXvprNM';
+const DEFAULT_SUPABASE_PROJECT_REF = 'lnfmogsjvdkqgwprlmtn';
+
 const getRuntimeConfig = () => {
   const browserConfig = (
     typeof window !== 'undefined'
@@ -15,7 +19,11 @@ const getRuntimeConfig = () => {
     }
     : null;
 
-  return browserConfig || nodeConfig || {};
+  return {
+    supabaseUrl: browserConfig?.supabaseUrl || nodeConfig?.supabaseUrl || DEFAULT_SUPABASE_URL,
+    supabaseAnonKey: browserConfig?.supabaseAnonKey || nodeConfig?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+    supabaseProjectRef: browserConfig?.supabaseProjectRef || nodeConfig?.supabaseProjectRef || DEFAULT_SUPABASE_PROJECT_REF
+  };
 };
 
 const runtimeConfig = getRuntimeConfig();
