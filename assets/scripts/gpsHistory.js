@@ -80,6 +80,7 @@ const getRecordSerial = (record = {}) => {
 const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
 const GPS_STATIONARY_CLUSTER_RADIUS_METERS = 220;
+const GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS = 220;
 
 const parseCoordinate = (record = {}, key = 'lat') => {
   const candidates = key === 'lat'
@@ -92,6 +93,103 @@ const parseCoordinate = (record = {}, key = 'lat') => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return null;
+};
+
+const isWiredSerial = (serial = '') => /^[0-7]/.test(normalizeSerial(serial));
+
+const isWirelessSerial = (serial = '') => /^8/.test(normalizeSerial(serial));
+
+const getLocalDayKeyFromMs = (timeMs) => {
+  if (!Number.isFinite(timeMs) || timeMs <= 0) return '';
+  const date = new Date(timeMs);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const resolveSerialMovementStateForDayPoints = (points = []) => {
+  if (!Array.isArray(points) || points.length < 2) return 'unknown';
+  const ordered = [...points].sort((a, b) => a.timestamp - b.timestamp);
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+
+  let totalDistanceMeters = 0;
+  let maxSegmentMeters = 0;
+  for (let index = 1; index < ordered.length; index += 1) {
+    const segmentDistance = getPointDistanceMeters(ordered[index - 1], ordered[index]);
+    if (!Number.isFinite(segmentDistance)) continue;
+    totalDistanceMeters += segmentDistance;
+    if (segmentDistance > maxSegmentMeters) maxSegmentMeters = segmentDistance;
+  }
+
+  const netDistanceMeters = getPointDistanceMeters(first, last);
+  const moved = (
+    maxSegmentMeters > GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS
+    || netDistanceMeters > GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS
+    || totalDistanceMeters > (GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS * 1.2)
+  );
+  return moved ? 'moving' : 'stopped';
+};
+
+const detectWirelessSerialMovementAlarms = (
+  records = [],
+  { isSerialBlacklisted = null } = {}
+) => {
+  if (!Array.isArray(records) || !records.length) return new Set();
+  const isBlacklisted = typeof isSerialBlacklisted === 'function'
+    ? (serial) => {
+      try {
+        return Boolean(isSerialBlacklisted(serial));
+      } catch (_error) {
+        return false;
+      }
+    }
+    : () => false;
+
+  const daySerialPoints = new Map();
+  records.forEach((record) => {
+    const serial = getRecordSerial(record);
+    if (!serial) return;
+    const timestamp = getRecordTimestampMs(record);
+    const dayKey = getLocalDayKeyFromMs(timestamp);
+    if (!dayKey) return;
+    const lat = parseCoordinate(record, 'lat');
+    const lng = parseCoordinate(record, 'long');
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const dayEntry = daySerialPoints.get(dayKey) || new Map();
+    const serialPoints = dayEntry.get(serial) || [];
+    serialPoints.push({ lat, lng, timestamp });
+    dayEntry.set(serial, serialPoints);
+    daySerialPoints.set(dayKey, dayEntry);
+  });
+
+  const alarmSerials = new Set();
+  daySerialPoints.forEach((serialMap) => {
+    let hasWiredMoving = false;
+    const wirelessStoppedSerials = [];
+
+    serialMap.forEach((points, serial) => {
+      const movementState = resolveSerialMovementStateForDayPoints(points);
+      if (movementState === 'moving' && isWiredSerial(serial)) {
+        hasWiredMoving = true;
+      }
+      if (
+        movementState === 'stopped'
+        && isWirelessSerial(serial)
+        && !isBlacklisted(serial)
+      ) {
+        wirelessStoppedSerials.push(serial);
+      }
+    });
+
+    if (!hasWiredMoving || !wirelessStoppedSerials.length) return;
+    wirelessStoppedSerials.forEach((serial) => alarmSerials.add(serial));
+  });
+
+  return alarmSerials;
 };
 
 const toLocalDayStartMs = (timeMs) => {
@@ -198,6 +296,24 @@ const getRecordTimestampMs = (record = {}) => {
   return Number.isFinite(numericId) ? numericId : Number.NEGATIVE_INFINITY;
 };
 
+const GPS_DATE_COLUMN_CANDIDATES = [
+  'PT-LastPing',
+  'Date',
+  'gps_time',
+  'created_at',
+  'updated_at'
+];
+
+const getPreferredDateColumnKey = (keys = []) => {
+  if (!Array.isArray(keys) || !keys.length) return '';
+  const normalized = new Map(keys.map((key) => [`${key}`.toLowerCase(), key]));
+  for (const candidate of GPS_DATE_COLUMN_CANDIDATES) {
+    const hit = normalized.get(candidate.toLowerCase());
+    if (hit) return hit;
+  }
+  return '';
+};
+
 const getLocalDayBoundsMs = (referenceMs = Date.now()) => {
   const referenceDate = new Date(referenceMs);
   const dayStart = new Date(
@@ -211,15 +327,25 @@ const getLocalDayBoundsMs = (referenceMs = Date.now()) => {
   };
 };
 
-const getMostRecentSerialFromRecords = (records = [], { excludeSerial = '' } = {}) => {
+const getMostRecentSerialFromRecords = (
+  records = [],
+  {
+    excludeSerial = '',
+    isSerialAllowed = null
+  } = {}
+) => {
   if (!Array.isArray(records) || !records.length) return '';
   const excluded = normalizeSerial(excludeSerial);
+  const canUseSerial = typeof isSerialAllowed === 'function'
+    ? (serial) => Boolean(isSerialAllowed(serial))
+    : () => true;
   let selectedSerial = '';
   let selectedTimestamp = Number.NEGATIVE_INFINITY;
   records.forEach((record) => {
     const serial = getRecordSerial(record);
     if (!serial) return;
     if (excluded && serial === excluded) return;
+    if (!canUseSerial(serial)) return;
     const timestamp = getRecordTimestampMs(record);
     if (timestamp >= selectedTimestamp) {
       selectedTimestamp = timestamp;
@@ -229,35 +355,94 @@ const getMostRecentSerialFromRecords = (records = [], { excludeSerial = '' } = {
   return selectedSerial;
 };
 
-const resolveVehicleWinnerSerialFromRecords = (vehicle = {}, records = [], { nowMs = Date.now() } = {}) => {
+const GPS_WINNER_STICKY_WINDOW_MS = 2 * 60 * 60 * 1000;
+
+const resolveVehicleWinnerSerialFromRecords = (
+  vehicle = {},
+  records = [],
+  {
+    nowMs = Date.now(),
+    isSerialBlacklisted = null
+  } = {}
+) => {
   const configuredWinnerSerial = getVehicleWinnerSerial(vehicle);
   if (!Array.isArray(records) || !records.length) return configuredWinnerSerial;
+  const isBlocked = typeof isSerialBlacklisted === 'function'
+    ? (serial) => {
+      try {
+        return Boolean(isSerialBlacklisted(serial));
+      } catch (_error) {
+        return false;
+      }
+    }
+    : () => false;
+  const isAllowed = (serial) => serial && !isBlocked(serial);
+  const recentWindowStart = nowMs - GPS_WINNER_RECENCY_WINDOW_MS;
+  const { start: todayStart, end: todayEnd } = getLocalDayBoundsMs(nowMs);
 
-  if (configuredWinnerSerial) {
-    const { start, end } = getLocalDayBoundsMs(nowMs);
-    const winnerHasReadingToday = records.some((record) => {
-      const serial = getRecordSerial(record);
-      if (!serial || serial !== configuredWinnerSerial) return false;
-      const timestamp = getRecordTimestampMs(record);
-      return Number.isFinite(timestamp) && timestamp >= start && timestamp < end;
-    });
-    if (winnerHasReadingToday) return configuredWinnerSerial;
+  const serialStats = new Map();
+  records.forEach((record) => {
+    const serial = getRecordSerial(record);
+    if (!serial || !isAllowed(serial)) return;
+    const timestamp = getRecordTimestampMs(record);
+    if (!Number.isFinite(timestamp)) return;
+    const existing = serialStats.get(serial) || {
+      latestTimestamp: Number.NEGATIVE_INFINITY,
+      hasReadingToday: false,
+      hasRecentReading: false
+    };
+    if (timestamp >= existing.latestTimestamp) {
+      existing.latestTimestamp = timestamp;
+    }
+    if (timestamp >= todayStart && timestamp < todayEnd) {
+      existing.hasReadingToday = true;
+    }
+    if (timestamp >= recentWindowStart) {
+      existing.hasRecentReading = true;
+    }
+    serialStats.set(serial, existing);
+  });
 
-    const recentWindowStart = nowMs - GPS_WINNER_RECENCY_WINDOW_MS;
-    const winnerHasRecentReading = records.some((record) => {
-      const serial = getRecordSerial(record);
-      if (!serial || serial !== configuredWinnerSerial) return false;
-      const timestamp = getRecordTimestampMs(record);
-      return Number.isFinite(timestamp) && timestamp >= recentWindowStart;
-    });
-    if (winnerHasRecentReading) return configuredWinnerSerial;
+  const freshestAllowedSerial = [...serialStats.entries()]
+    .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
+    .map(([serial]) => serial)[0] || '';
+  const freshestAllowedTodaySerial = [...serialStats.entries()]
+    .filter(([, stats]) => stats.hasReadingToday)
+    .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
+    .map(([serial]) => serial)[0] || '';
 
-    const winnerHasAnyReading = records.some((record) => getRecordSerial(record) === configuredWinnerSerial);
-    if (winnerHasAnyReading) return configuredWinnerSerial;
+  if (configuredWinnerSerial && isAllowed(configuredWinnerSerial)) {
+    const configuredStats = serialStats.get(configuredWinnerSerial);
+    if (configuredStats?.hasReadingToday) {
+      return configuredWinnerSerial;
+    }
 
-    const fallbackSerial = getMostRecentSerialFromRecords(records, { excludeSerial: configuredWinnerSerial });
-    if (fallbackSerial) return fallbackSerial;
+    // If configured serial has no reading today, prefer the freshest serial from today.
+    if (freshestAllowedTodaySerial && freshestAllowedTodaySerial !== configuredWinnerSerial) {
+      return freshestAllowedTodaySerial;
+    }
+
+    if (configuredStats?.hasRecentReading && freshestAllowedSerial) {
+      const freshestStats = serialStats.get(freshestAllowedSerial);
+      if (!freshestStats || freshestAllowedSerial === configuredWinnerSerial) {
+        return configuredWinnerSerial;
+      }
+
+      const freshnessGap = freshestStats.latestTimestamp - configuredStats.latestTimestamp;
+      // Avoid flapping when both serials are effectively tied in recency.
+      if (freshnessGap <= GPS_WINNER_STICKY_WINDOW_MS) {
+        return configuredWinnerSerial;
+      }
+    }
   }
+
+  if (freshestAllowedTodaySerial) return freshestAllowedTodaySerial;
+  if (freshestAllowedSerial) return freshestAllowedSerial;
+
+  const fallbackSerial = getMostRecentSerialFromRecords(records, {
+    isSerialAllowed: (serial) => !isBlocked(serial)
+  });
+  if (fallbackSerial) return fallbackSerial;
 
   return getMostRecentSerialFromRecords(records);
 };
@@ -268,12 +453,30 @@ const createGpsHistoryManager = ({
   runWithTimeout,
   timeoutMs = 10000,
   tableName,
+  isSerialBlacklisted,
   escapeHTML,
   formatDateTime
 } = {}) => {
   const helpers = getDefaultHelpers();
   const safeEscape = escapeHTML || helpers.escapeHTML;
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
+  const serialIsBlacklisted = (serial = '') => {
+    if (typeof isSerialBlacklisted !== 'function') return false;
+    try {
+      const normalized = normalizeSerial(serial);
+      if (!normalized) return false;
+      return Boolean(isSerialBlacklisted(normalized));
+    } catch (_error) {
+      return false;
+    }
+  };
+
+  const resolveWinnerSerial = (vehicle = {}, records = [], options = {}) => (
+    resolveVehicleWinnerSerialFromRecords(vehicle, records, {
+      ...options,
+      isSerialBlacklisted: options?.isSerialBlacklisted || serialIsBlacklisted
+    })
+  );
 
   const fetchGpsHistory = async ({ vin, vehicleId } = {}) => {
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
@@ -371,10 +574,13 @@ const createGpsHistoryManager = ({
     let activeHeaderDragKey = '';
     let suppressSortUntil = 0;
     let headerDragEnabledBeforeResize = [];
-    let viewMode = winnerSerial ? 'winner' : 'all';
+    let viewMode = 'all';
+    const serialSectionState = new Map();
 
-    const COLUMN_STORAGE_KEY = 'gpsHistoryColumnPrefs';
-    const WIDTH_STORAGE_KEY = 'gpsHistoryColumnWidths';
+    const COLUMN_STORAGE_KEY_BASE = 'gpsHistoryColumnPrefs';
+    const WIDTH_STORAGE_KEY_BASE = 'gpsHistoryColumnWidths';
+    const SERIAL_UNASSIGNED = '__UNASSIGNED_SERIAL__';
+    let preferenceScope = 'anonymous';
     const MIN_COLUMN_WIDTH = 80;
     const MAX_COLUMN_WIDTH = 1200;
 
@@ -395,6 +601,8 @@ const createGpsHistoryManager = ({
     const titleCase = (value) => value
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (match) => match.toUpperCase());
+
+    const getStorageKey = (baseKey) => `${baseKey}:${preferenceScope}`;
 
     const parseWidthValue = (value) => {
       const parsed = Number.parseInt(`${value || ''}`.trim(), 10);
@@ -448,30 +656,56 @@ const createGpsHistoryManager = ({
       return records.filter((record) => getRecordSerial(record) === winnerSerial);
     };
 
+    const resolvePreferenceScope = async () => {
+      if (!supabaseClient?.auth?.getSession) return;
+      try {
+        const { data, error } = await supabaseClient.auth.getSession();
+        if (error) return;
+        const userId = `${data?.session?.user?.id || ''}`.trim();
+        if (!userId || userId === preferenceScope) return;
+        preferenceScope = userId;
+        loadPreferences();
+        buildColumns(gpsCache);
+        renderColumnsList();
+        renderTableHead();
+        renderHistory(gpsCache);
+      } catch (_error) {
+        // best effort
+      }
+    };
+
     const loadPreferences = () => {
       let savedPrefs = {};
       let savedWidths = {};
-      try {
-        savedPrefs = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '{}');
-      } catch (error) {
-        savedPrefs = {};
-      }
-      try {
-        savedWidths = JSON.parse(localStorage.getItem(WIDTH_STORAGE_KEY) || '{}');
-      } catch (error) {
-        savedWidths = {};
-      }
+      const parseStored = (storageKey) => {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey) || '{}');
+        } catch (_error) {
+          return null;
+        }
+      };
+      savedPrefs = parseStored(getStorageKey(COLUMN_STORAGE_KEY_BASE))
+        || parseStored(COLUMN_STORAGE_KEY_BASE)
+        || {};
+      savedWidths = parseStored(getStorageKey(WIDTH_STORAGE_KEY_BASE))
+        || parseStored(WIDTH_STORAGE_KEY_BASE)
+        || {};
       columnVisibility = savedPrefs.visibility || {};
       columnOrder = savedPrefs.order || [];
       columnWidths = savedWidths || {};
     };
 
     const savePreferences = () => {
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({
+      localStorage.setItem(getStorageKey(COLUMN_STORAGE_KEY_BASE), JSON.stringify({
         visibility: columnVisibility,
         order: columnOrder
       }));
-      localStorage.setItem(WIDTH_STORAGE_KEY, JSON.stringify(columnWidths));
+      localStorage.setItem(getStorageKey(WIDTH_STORAGE_KEY_BASE), JSON.stringify(columnWidths));
+    };
+
+    const ensureDateDescendingSort = (keys = []) => {
+      sortKey = getPreferredDateColumnKey(keys);
+      sortDirection = 'desc';
     };
 
     const buildColumnsFromKeys = (keys = []) => {
@@ -497,6 +731,7 @@ const createGpsHistoryManager = ({
           columnWidths[col.key] = '';
         }
       });
+      ensureDateDescendingSort(ordered);
       savePreferences();
     };
 
@@ -627,19 +862,45 @@ const createGpsHistoryManager = ({
     };
 
     const getSortedRecords = (records) => {
-      if (!sortKey) return records;
-      const direction = sortDirection === 'asc' ? 1 : -1;
       return [...records].sort((a, b) => {
+        const timestampA = getRecordTimestampMs(a);
+        const timestampB = getRecordTimestampMs(b);
+        if (timestampA !== timestampB) return timestampB - timestampA;
+        if (!sortKey) return 0;
         const valueA = a?.[sortKey];
         const valueB = b?.[sortKey];
-        if (valueA === valueB) return 0;
-        if (valueA === null || valueA === undefined || valueA === '') return 1 * direction;
-        if (valueB === null || valueB === undefined || valueB === '') return -1 * direction;
-        if (typeof valueA === 'number' && typeof valueB === 'number') {
-          return (valueA - valueB) * direction;
-        }
-        return `${valueA}`.localeCompare(`${valueB}`, undefined, { numeric: true, sensitivity: 'base' }) * direction;
+        return `${valueA ?? ''}`.localeCompare(`${valueB ?? ''}`, undefined, { numeric: true, sensitivity: 'base' });
       });
+    };
+
+    const getSerialGroupKey = (record) => getRecordSerial(record) || SERIAL_UNASSIGNED;
+
+    const getDateDisplayFromRecord = (record = {}) => {
+      if (sortKey && record?.[sortKey]) return safeFormatDateTime(record[sortKey]);
+      const timestamp = getRecordTimestampMs(record);
+      if (!Number.isFinite(timestamp)) return 'N/A';
+      return safeFormatDateTime(new Date(timestamp).toISOString());
+    };
+
+    const buildSerialGroups = (records = []) => {
+      const grouped = new Map();
+      records.forEach((record) => {
+        const groupKey = getSerialGroupKey(record);
+        const groupRecords = grouped.get(groupKey) || [];
+        groupRecords.push(record);
+        grouped.set(groupKey, groupRecords);
+      });
+
+      return [...grouped.entries()]
+        .map(([serial, groupRecords]) => ({
+          serial,
+          records: groupRecords,
+          latestTimestamp: getRecordTimestampMs(groupRecords[0])
+        }))
+        .sort((a, b) => {
+          if (a.latestTimestamp !== b.latestTimestamp) return b.latestTimestamp - a.latestTimestamp;
+          return `${a.serial}`.localeCompare(`${b.serial}`);
+        });
     };
 
     const renderHistory = (records = []) => {
@@ -654,12 +915,19 @@ const createGpsHistoryManager = ({
         ? applyWinnerDisplayOverrides(modeRecords)
         : modeRecords;
       const filteredRecords = getSortedRecords(getFilteredRecords(displayRecords));
+      const serialGroups = buildSerialGroups(filteredRecords);
+      const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {
+        isSerialBlacklisted: serialIsBlacklisted
+      });
 
       if (statusText) {
         const modeSuffix = viewMode === 'winner' && winnerSerial
           ? ` (winner serial ${winnerSerial})`
           : '';
-        statusText.textContent = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown${modeSuffix}.`;
+        const alertSuffix = wirelessAlarmSerials.size
+          ? ` · ${wirelessAlarmSerials.size} wireless alarm${wirelessAlarmSerials.size === 1 ? '' : 's'}`
+          : '';
+        statusText.textContent = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in ${serialGroups.length} serial section${serialGroups.length === 1 ? '' : 's'}${modeSuffix}${alertSuffix}.`;
       }
 
       if (!filteredRecords.length) {
@@ -674,24 +942,52 @@ const createGpsHistoryManager = ({
         `;
         return;
       }
-      historyBody.innerHTML = filteredRecords.map((record) => `
-        <tr>
-          ${visibleColumns.map((col) => {
-            const width = columnWidths[col.key];
-            const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
-            const rawValue = record?.[col.key];
-            const displayValue = getDisplayValue(record, col.key, rawValue);
-            const normalizedKey = `${col.key || ''}`.toLowerCase();
-            const tooltipValue = isAddressColumn(normalizedKey)
-              ? stripAddressCountrySuffix(displayValue)
-              : displayValue;
-            const tooltip = displayValue === null || displayValue === undefined || displayValue === ''
-              ? ''
-              : safeEscape(typeof tooltipValue === 'object' ? JSON.stringify(tooltipValue) : `${tooltipValue}`);
-            return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, displayValue)}</div></td>`;
-          }).join('')}
-        </tr>
-      `).join('');
+      const colSpan = Math.max(visibleColumns.length, 1);
+      historyBody.innerHTML = serialGroups.map((group) => {
+        const serialLabel = group.serial === SERIAL_UNASSIGNED ? 'No serial' : group.serial;
+        const isWinnerSerial = Boolean(winnerSerial) && group.serial === winnerSerial;
+        const hasWirelessAlarm = wirelessAlarmSerials.has(group.serial);
+        const expanded = serialSectionState.get(group.serial) === true;
+        const latestLabel = getDateDisplayFromRecord(group.records[0]);
+        const oldestLabel = getDateDisplayFromRecord(group.records[group.records.length - 1]);
+        const rowsMarkup = expanded
+          ? group.records.map((record) => `
+            <tr class="gps-history-record-row" data-gps-serial-row="${safeEscape(group.serial)}">
+              ${visibleColumns.map((col) => {
+                const width = columnWidths[col.key];
+                const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
+                const rawValue = record?.[col.key];
+                const displayValue = getDisplayValue(record, col.key, rawValue);
+                const normalizedKey = `${col.key || ''}`.toLowerCase();
+                const tooltipValue = isAddressColumn(normalizedKey)
+                  ? stripAddressCountrySuffix(displayValue)
+                  : displayValue;
+                const tooltip = displayValue === null || displayValue === undefined || displayValue === ''
+                  ? ''
+                  : safeEscape(typeof tooltipValue === 'object' ? JSON.stringify(tooltipValue) : `${tooltipValue}`);
+                return `<td class="py-1.5 pr-3 text-slate-300 align-top" ${widthStyle}><div class="gps-history-cell-clamp" title="${tooltip}">${formatValue(col.key, displayValue)}</div></td>`;
+              }).join('')}
+            </tr>
+          `).join('')
+          : '';
+
+        return `
+          <tr class="gps-history-serial-section-row">
+            <td colspan="${colSpan}" class="py-0 pr-0">
+              <button type="button" class="gps-history-serial-toggle${isWinnerSerial ? ' is-winner' : ''}${hasWirelessAlarm ? ' is-alarm' : ''}" data-gps-serial-toggle="${safeEscape(group.serial)}" aria-expanded="${expanded ? 'true' : 'false'}">
+                <span class="gps-history-serial-toggle-main">
+                  <span class="gps-history-serial-chevron">${expanded ? '▼' : '▶'}</span>
+                  <span class="gps-history-serial-label">Serial: ${safeEscape(serialLabel)}</span>
+                  ${isWinnerSerial ? '<span class="gps-history-serial-winner-badge" title="Winner serial" aria-label="Winner serial"></span>' : ''}
+                  ${hasWirelessAlarm ? '<span class="gps-history-serial-alarm-badge">ALARM</span>' : ''}
+                </span>
+                <span class="gps-history-serial-stats">${group.records.length} row${group.records.length === 1 ? '' : 's'} · Latest: ${safeEscape(`${latestLabel}`)} · Oldest: ${safeEscape(`${oldestLabel}`)}</span>
+              </button>
+            </td>
+          </tr>
+          ${rowsMarkup}
+        `;
+      }).join('');
     };
 
     const renderColumnsList = () => {
@@ -927,7 +1223,7 @@ const createGpsHistoryManager = ({
     };
 
     const finalizeRender = (records, error) => {
-      winnerSerial = resolveVehicleWinnerSerialFromRecords(vehicle, records);
+      winnerSerial = resolveWinnerSerial(vehicle, records);
       syncViewControls();
       renderHistory(records);
       if (statusText && error) statusText.textContent = 'Unable to load GPS history.';
@@ -968,6 +1264,7 @@ const createGpsHistoryManager = ({
     };
 
     loadPreferences();
+    resolvePreferenceScope();
     syncViewControls();
     if (statusText) statusText.textContent = 'Loading GPS history...';
     loadColumnMetadata();
@@ -1152,12 +1449,20 @@ const createGpsHistoryManager = ({
         if (!button) return;
         const nextSortKey = button.dataset.gpsSort;
         if (!nextSortKey) return;
-        if (sortKey === nextSortKey) {
-          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-          sortKey = nextSortKey;
-          sortDirection = 'asc';
-        }
+        if (!sortKey || nextSortKey !== sortKey) return;
+        sortDirection = 'desc';
+        renderHistory(gpsCache);
+      }, { signal });
+    }
+
+    if (historyBody) {
+      historyBody.addEventListener('click', (event) => {
+        const toggle = event.target.closest('[data-gps-serial-toggle]');
+        if (!toggle) return;
+        const serial = toggle.dataset.gpsSerialToggle;
+        if (!serial) return;
+        const isExpanded = serialSectionState.get(serial) === true;
+        serialSectionState.set(serial, !isExpanded);
         renderHistory(gpsCache);
       }, { signal });
     }
@@ -1178,7 +1483,7 @@ const createGpsHistoryManager = ({
     getVehicleId,
     getVehicleVin,
     getVehicleWinnerSerial,
-    resolveVehicleWinnerSerialFromRecords,
+    resolveVehicleWinnerSerialFromRecords: resolveWinnerSerial,
     getRecordSerial,
     fetchGpsHistory,
     setupGpsHistoryUI

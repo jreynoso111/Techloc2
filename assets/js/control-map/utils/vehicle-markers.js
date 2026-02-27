@@ -23,7 +23,10 @@ export const syncVehicleMarkers = ({
     return;
   }
 
-  const activeIds = new Set();
+  // Rebuild marker cluster every sync to avoid stale/ghost cluster positions
+  // when vehicles move between refreshes.
+  vehicleLayer.clearLayers();
+  vehicleMarkers.clear();
 
   vehiclesWithCoords.forEach(({ vehicle, coords, focusHandler }) => {
     if (!coords) return;
@@ -36,57 +39,32 @@ export const syncVehicleMarkers = ({
     const borderColor = getVehicleMarkerBorderColor(markerColor);
     const isStopped = isVehicleNotMoving(vehicle);
     const icon = createVehicleMarkerIcon(markerColor, borderColor, isStopped);
-
-    const stored = vehicleMarkers.get(markerKey);
-    let marker = stored?.marker;
-
-    if (marker) {
-      marker.setLatLng([coords.lat, coords.lng]);
-      marker.setIcon(icon);
-      marker.setZIndexOffset(isStopped ? 500 : 0);
-      marker.options.vehicleData = vehicle;
-      marker.options.focusHandler = focusHandler;
-      marker.options.markerColor = markerColor;
-      marker.options.isStopped = isStopped;
-      marker.options.vehicleKey = markerKey;
-      marker.options.cycleRole = 'vehicle';
-      marker.options.cycleKey = `vehicle-${markerKey}`;
-    } else {
-      marker = L.marker(
-        [coords.lat, coords.lng],
-        {
-          icon,
-          zIndexOffset: isStopped ? 500 : 0,
-          vehicleData: vehicle,
-          focusHandler,
-          markerColor,
-          isStopped,
-          vehicleKey: markerKey,
-          cycleRole: 'vehicle',
-          cycleKey: `vehicle-${markerKey}`
-        }
-      ).addTo(vehicleLayer);
-      marker.on('click', (event) => {
-        const activeVehicle = marker?.options?.vehicleData || vehicle;
-        const activeFocusHandler = marker?.options?.focusHandler || focusHandler;
-        const activeMarkerKey = `${marker?.options?.vehicleKey || markerKey}`;
-        if (event?.originalEvent) {
-          event.originalEvent.handledByMarker = true;
-          event.originalEvent.cycleRole = 'vehicle';
-          event.originalEvent.cycleKey = `vehicle-${activeMarkerKey}`;
-        }
-        activeFocusHandler({ event, marker, vehicle: activeVehicle });
-      });
-    }
+    const marker = L.marker(
+      [coords.lat, coords.lng],
+      {
+        icon,
+        zIndexOffset: isStopped ? 500 : 0,
+        vehicleData: vehicle,
+        focusHandler,
+        markerColor,
+        isStopped,
+        vehicleKey: markerKey,
+        cycleRole: 'vehicle',
+        cycleKey: `vehicle-${markerKey}`
+      }
+    ).addTo(vehicleLayer);
+    marker.on('click', (event) => {
+      const activeVehicle = marker?.options?.vehicleData || vehicle;
+      const activeFocusHandler = marker?.options?.focusHandler || focusHandler;
+      const activeMarkerKey = `${marker?.options?.vehicleKey || markerKey}`;
+      if (event?.originalEvent) {
+        event.originalEvent.handledByMarker = true;
+        event.originalEvent.cycleRole = 'vehicle';
+        event.originalEvent.cycleKey = `vehicle-${activeMarkerKey}`;
+      }
+      activeFocusHandler({ event, marker, vehicle: activeVehicle });
+    });
 
     vehicleMarkers.set(markerKey, { marker });
-    activeIds.add(markerKey);
-  });
-
-  [...vehicleMarkers.keys()].forEach((id) => {
-    if (activeIds.has(id)) return;
-    const stored = vehicleMarkers.get(id);
-    if (stored?.marker) vehicleLayer.removeLayer(stored.marker);
-    vehicleMarkers.delete(id);
   });
 };

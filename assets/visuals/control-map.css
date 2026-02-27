@@ -71,6 +71,92 @@ body {
   background: rgba(148, 163, 184, 0.8);
 }
 
+.gps-history-serial-section-row td {
+  border-top: 1px solid rgba(51, 65, 85, 0.65);
+}
+
+.gps-history-serial-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.6rem;
+  background: rgba(2, 6, 23, 0.65);
+  color: #cbd5e1;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.gps-history-serial-toggle:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.gps-history-serial-toggle.is-winner {
+  border-left: 2px solid rgba(34, 197, 94, 0.85);
+}
+
+.gps-history-serial-toggle.is-alarm {
+  border-right: 2px solid rgba(239, 68, 68, 0.9);
+}
+
+.gps-history-serial-toggle-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.gps-history-serial-chevron {
+  color: #94a3b8;
+  width: 0.65rem;
+}
+
+.gps-history-serial-label {
+  letter-spacing: 0.02em;
+  color: #e2e8f0;
+}
+
+.gps-history-serial-winner-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.45rem;
+  height: 0.45rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.9);
+  background: rgba(34, 197, 94, 0.95);
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.55);
+}
+
+.gps-history-serial-alarm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.75);
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.gps-history-serial-stats {
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gps-history-record-row td {
+  border-top: 1px solid rgba(30, 41, 59, 0.6);
+}
+
 body.gps-column-resizing {
   cursor: col-resize !important;
   user-select: none;
@@ -459,7 +545,7 @@ body.gps-column-resizing {
     .gps-trail-distance-wrap {
       position: relative;
       left: -50%;
-      top: -12px;
+      top: -14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -469,15 +555,15 @@ body.gps-column-resizing {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 30px;
-      padding: 1px 4px;
+      min-width: 46px;
+      padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid rgba(71, 85, 105, 0.8);
       background: rgba(15, 23, 42, 0.62);
       color: #e2e8f0;
-      font-size: 8px;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.01em;
+      letter-spacing: 0.02em;
       line-height: 1.1;
       white-space: nowrap;
       text-shadow: 0 1px 2px rgba(2, 6, 23, 0.9);
