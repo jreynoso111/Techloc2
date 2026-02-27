@@ -10,6 +10,7 @@ export const TABLES = {
   services: SERVICE_TABLE,
   vehicles: 'vehicles',
   deals: 'DealsJP1',
+  invoices: 'NS-Invoices&pays',
   hotspots: 'Hotspots',
   blacklist: 'Services_Blacklist',
   gpsDeviceBlacklist: 'gps_blacklist',
