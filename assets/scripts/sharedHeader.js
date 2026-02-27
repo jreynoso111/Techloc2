@@ -1,11 +1,31 @@
 import { initGlobalAlerts } from './globalAlerts.js';
 import { initGlobalActivityTracker } from './globalActivityTracker.js';
 
-initGlobalAlerts();
-initGlobalActivityTracker();
+const scheduleNonCriticalBoot = (task) => {
+  if (typeof window === 'undefined' || typeof task !== 'function') return;
+  const run = () => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => task(), { timeout: 1500 });
+      return;
+    }
+    setTimeout(task, 0);
+  };
+  if (document.readyState === 'complete') {
+    run();
+    return;
+  }
+  window.addEventListener('load', run, { once: true });
+};
+
+scheduleNonCriticalBoot(() => {
+  initGlobalAlerts();
+  initGlobalActivityTracker();
+});
 
 const headerSlot = document.querySelector('[data-shared-header]');
 const HEADER_TEMPLATE_CACHE_KEY = 'techloc:shared-header-template:v1';
+const HEADER_TEMPLATE_CACHE_TS_KEY = `${HEADER_TEMPLATE_CACHE_KEY}:ts`;
+const HEADER_TEMPLATE_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const getBasePath = () => {
   const bodyBase = document.body?.dataset.basePath;
@@ -92,9 +112,13 @@ const setupContactDropdown = (container) => {
 
 const readCachedHeaderTemplate = () => {
   try {
-    return window.sessionStorage?.getItem(HEADER_TEMPLATE_CACHE_KEY) || '';
+    const template = window.sessionStorage?.getItem(HEADER_TEMPLATE_CACHE_KEY) || '';
+    const cachedAtRaw = window.sessionStorage?.getItem(HEADER_TEMPLATE_CACHE_TS_KEY) || '0';
+    const cachedAt = Number.parseInt(cachedAtRaw, 10);
+    const isFresh = Boolean(template) && Number.isFinite(cachedAt) && (Date.now() - cachedAt) < HEADER_TEMPLATE_CACHE_TTL_MS;
+    return { template, isFresh };
   } catch (_error) {
-    return '';
+    return { template: '', isFresh: false };
   }
 };
 
@@ -102,6 +126,7 @@ const writeCachedHeaderTemplate = (template) => {
   if (!template) return;
   try {
     window.sessionStorage?.setItem(HEADER_TEMPLATE_CACHE_KEY, template);
+    window.sessionStorage?.setItem(HEADER_TEMPLATE_CACHE_TS_KEY, String(Date.now()));
   } catch (_error) {
     // Cache failures are non-blocking.
   }
@@ -126,9 +151,10 @@ const hydrateHeader = async () => {
   const activeNav = document.body?.dataset.activeNav || '';
   const renderContext = { basePath, pageTitle, activeNav };
 
-  const cachedTemplate = readCachedHeaderTemplate();
+  const { template: cachedTemplate, isFresh } = readCachedHeaderTemplate();
   if (cachedTemplate) {
     renderHeaderTemplate(cachedTemplate, renderContext);
+    if (isFresh) return;
   }
 
   try {
