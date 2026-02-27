@@ -79,7 +79,8 @@ const getRecordSerial = (record = {}) => {
 
 const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
-const GPS_STATIONARY_CLUSTER_RADIUS_METERS = 220;
+const GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 25000;
+const GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 1000;
 const GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS = 220;
 
 const parseCoordinate = (record = {}, key = 'lat') => {
@@ -216,22 +217,26 @@ const getPointDistanceMeters = (fromPoint, toPoint) => {
   return earthRadiusMeters * c;
 };
 
-const applyWinnerDisplayOverrides = (records = []) => {
-  if (!Array.isArray(records) || !records.length) return records;
+const isTruckOrTrailerUnit = (vehicle = {}) => {
+  const unitType = `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`
+    .trim()
+    .toLowerCase();
+  if (!unitType) return false;
+  return unitType.includes('truck') || unitType.includes('trailer');
+};
 
-  const entries = records.map((record, index) => {
-    const timestamp = getRecordTimestampMs(record);
-    return {
-      record,
-      index,
-      timestamp,
-      lat: parseCoordinate(record, 'lat'),
-      lng: parseCoordinate(record, 'long'),
-      dayStartMs: toLocalDayStartMs(timestamp),
-      derivedMoved: null,
-      derivedDaysStationary: null
-    };
-  });
+const getStationaryClusterRadiusMetersForVehicle = (vehicle = {}) => (
+  isTruckOrTrailerUnit(vehicle)
+    ? GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS
+    : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS
+);
+
+const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusMeters } = {}) => {
+  if (!Array.isArray(entries) || !entries.length) return entries;
+
+  const threshold = Number.isFinite(stationaryClusterRadiusMeters) && stationaryClusterRadiusMeters > 0
+    ? stationaryClusterRadiusMeters
+    : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS;
 
   const ordered = [...entries].sort((a, b) => {
     if (a.timestamp === b.timestamp) return a.index - b.index;
@@ -247,7 +252,7 @@ const applyWinnerDisplayOverrides = (records = []) => {
       ? getPointDistanceMeters({ lat: previous.lat, lng: previous.lng }, { lat: entry.lat, lng: entry.lng })
       : Number.POSITIVE_INFINITY;
 
-    if (!previous || !Number.isFinite(distance) || distance > GPS_STATIONARY_CLUSTER_RADIUS_METERS) {
+    if (!previous || !Number.isFinite(distance) || distance > threshold) {
       entry.derivedMoved = previous ? 'Moving' : 'Parked';
       sessionStartDayMs = entry.dayStartMs;
     } else {
@@ -267,7 +272,39 @@ const applyWinnerDisplayOverrides = (records = []) => {
     previous = entry;
   });
 
-  const byRecord = new Map(ordered.map((entry) => [entry.record, entry]));
+  return ordered;
+};
+
+const applyDisplayOverrides = (records = [], { vehicle = null } = {}) => {
+  if (!Array.isArray(records) || !records.length) return records;
+
+  const entriesBySerial = new Map();
+  records.forEach((record, index) => {
+    const serial = getRecordSerial(record) || '__UNASSIGNED_SERIAL__';
+    const bucket = entriesBySerial.get(serial) || [];
+    const timestamp = getRecordTimestampMs(record);
+    bucket.push({
+      record,
+      index,
+      timestamp,
+      lat: parseCoordinate(record, 'lat'),
+      lng: parseCoordinate(record, 'long'),
+      dayStartMs: toLocalDayStartMs(timestamp),
+      derivedMoved: null,
+      derivedDaysStationary: null
+    });
+    entriesBySerial.set(serial, bucket);
+  });
+
+  const threshold = getStationaryClusterRadiusMetersForVehicle(vehicle);
+  const byRecord = new Map();
+  entriesBySerial.forEach((entries) => {
+    const normalized = applyDisplayOverridesToEntries(entries, {
+      stationaryClusterRadiusMeters: threshold
+    });
+    normalized.forEach((entry) => byRecord.set(entry.record, entry));
+  });
+
   return records.map((record) => {
     const entry = byRecord.get(record);
     if (!entry) return record;
@@ -806,11 +843,26 @@ const createGpsHistoryManager = ({
     };
 
     const normalizeColumnKey = (key = '') => `${key}`.trim().toLowerCase().replace(/\s+/g, '_');
-    const isMovedColumnKey = (normalizedKey = '') => normalizedKey === 'moved';
+    const toLooseColumnKey = (normalizedKey = '') => `${normalizedKey}`.replace(/[^a-z0-9_]/g, '');
+    const isMovedColumnKey = (normalizedKey = '') => {
+      const loose = toLooseColumnKey(normalizedKey);
+      return (
+        loose === 'moved'
+        || loose === 'move'
+        || loose === 'moving'
+        || loose === 'moving_calc'
+        || loose === 'movingcalc'
+        || loose === 'gps_moving'
+        || loose === 'gpsmoving'
+      );
+    };
     const isDaysStationaryColumnKey = (normalizedKey = '') =>
-      normalizedKey === 'days_stationary'
-      || normalizedKey === 'days_parked'
-      || normalizedKey === 'days_stationary_calc';
+      toLooseColumnKey(normalizedKey) === 'days_stationary'
+      || toLooseColumnKey(normalizedKey) === 'days_parked'
+      || toLooseColumnKey(normalizedKey) === 'days_stationary_calc'
+      || toLooseColumnKey(normalizedKey) === 'daysstationary'
+      || toLooseColumnKey(normalizedKey) === 'daysparked'
+      || toLooseColumnKey(normalizedKey) === 'daysstationarycalc';
 
     const getDisplayValue = (record, key, rawValue) => {
       const normalizedKey = normalizeColumnKey(key);
@@ -911,9 +963,7 @@ const createGpsHistoryManager = ({
       renderTableHead();
       const visibleColumns = getVisibleColumns();
       const modeRecords = getModeFilteredRecords(records);
-      const displayRecords = (viewMode === 'winner' && winnerSerial)
-        ? applyWinnerDisplayOverrides(modeRecords)
-        : modeRecords;
+      const displayRecords = applyDisplayOverrides(modeRecords, { vehicle });
       const filteredRecords = getSortedRecords(getFilteredRecords(displayRecords));
       const serialGroups = buildSerialGroups(filteredRecords);
       const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {

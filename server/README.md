@@ -1,6 +1,6 @@
 # Secure Supabase Proxy
 
-This server keeps `SUPABASE_SERVICE_ROLE_KEY` on the backend and never exposes it to the browser.
+This server keeps `SUPABASE_SERVICE_ROLE_KEY` on the backend and injects frontend Supabase runtime config from environment variables (no hardcoded keys in repo).
 
 ## 1) Set environment variables
 
@@ -12,6 +12,11 @@ export SUPABASE_ANON_KEY="<your-anon-key>"
 export SUPABASE_SERVICE_ROLE_KEY="<your-service-role-key>"
 export PORT="8080"
 ```
+
+You can also copy values from `/.env.example` into a local `.env` file (ignored by git) and export them in your shell.
+
+`SUPABASE_SERVICE_ROLE_KEY` is required for privileged proxy endpoints (`/api/repair-history`, `/api/admin/password-reset`).  
+The frontend can still boot with only `SUPABASE_URL` + `SUPABASE_ANON_KEY`.
 
 Optional:
 
@@ -42,6 +47,7 @@ http://127.0.0.1:8080
 
 - Do not commit `SUPABASE_SERVICE_ROLE_KEY` to git.
 - Do not place `SUPABASE_SERVICE_ROLE_KEY` in frontend files.
+- Do not commit `.env` files or any credential JSON files.
 - If the key was shared in chat, rotate it in Supabase Dashboard.
 
 ## 4) Admin password reset endpoint
