@@ -219,100 +219,104 @@
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
         </div>
-        <div class="vehicle-filter-panel mt-2 space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
-          <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
-            <span>Vehicle filters</span>
-            <div class="flex items-center gap-2">
-              <button id="vehicle-filters-collapse" type="button" class="vehicle-filters-collapse-btn text-cyan-300 hover:text-cyan-200 text-[9px] font-bold uppercase tracking-wide" aria-expanded="true">Hide</button>
-              <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[9px] font-bold uppercase tracking-wide">Reset</button>
+        <div class="vehicle-filter-panel mt-1.5 space-y-1.5 rounded-lg border border-slate-800 bg-slate-900/70 p-2">
+          <div class="flex items-center justify-between text-[10px] font-semibold text-slate-300">
+            <span class="text-[9px] uppercase tracking-wide text-slate-400">Vehicle filters</span>
+            <div class="flex items-center gap-1.5">
+              <button id="filter-kpi-positive-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false">
+                <span class="vehicle-filter-value">KPI &gt; 0</span>
+                <span class="text-slate-500" data-kpi-filter-state>Off</span>
+              </button>
+              <button id="vehicle-filters-collapse" type="button" class="vehicle-filters-collapse-btn text-cyan-300 hover:text-cyan-200 text-[8px] font-bold uppercase tracking-wide" aria-expanded="true">Hide</button>
+              <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[8px] font-bold uppercase tracking-wide">Reset</button>
             </div>
           </div>
           <div id="vehicle-filters-body" class="vehicle-filters-body">
-            <div class="vehicle-filter-grid grid grid-cols-2 gap-1.5 text-[10px]">
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">Inv. Prep. Stat</span>
+            <div class="vehicle-filter-grid grid grid-cols-2 gap-1 text-[9px]">
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Inv. Prep. Stat</span>
               <div class="relative">
-                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-invprep" class="grid gap-1.5"></div>
+                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-invprep" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">Physical Location</span>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Physical Location</span>
               <div class="relative">
-                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-physloc" class="grid gap-1.5"></div>
+                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-physloc" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">GPS Fix</span>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">GPS Fix</span>
               <div class="relative">
-                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-gps" class="grid gap-1.5"></div>
+                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-gps" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">Moving</span>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Moving</span>
               <div class="relative">
-                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-moving" class="grid gap-1.5"></div>
+                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-moving" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">Deal status</span>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal status</span>
               <div class="relative">
-                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-deal-status" class="grid gap-1.5"></div>
+                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-deal-status" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <div class="vehicle-filter-field space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">PT Status</span>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">PT Status</span>
               <div class="relative">
-                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-[10px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-40 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-2 shadow-lg">
-                  <div id="filter-pt" class="grid gap-1.5"></div>
+                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                  <div id="filter-pt" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <label class="vehicle-filter-field vehicle-filter-range space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">Deal completion %</span>
-              <div class="vehicle-filter-range-row flex items-center gap-1.5 text-[10px] text-slate-300">
-                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
+            <label class="vehicle-filter-field vehicle-filter-range space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal completion %</span>
+              <div class="vehicle-filter-range-row flex items-center gap-1 text-[9px] text-slate-300">
+                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
                 <span class="text-slate-500">to</span>
-                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
+                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
               </div>
             </label>
-            <label class="vehicle-filter-field vehicle-filter-range col-span-2 space-y-0.5">
-              <span class="vehicle-filter-label block text-slate-400 font-semibold">History points</span>
-              <div class="vehicle-filter-range-row flex items-center gap-2 text-[10px] text-slate-300">
-                <input id="filter-trail-points" type="number" min="1" max="120" step="1" class="vehicle-filter-range-input w-24 rounded-md border border-slate-800 bg-slate-950 px-2 py-1 text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" value="10">
+            <label class="vehicle-filter-field vehicle-filter-range col-span-2 space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">History points</span>
+              <div class="vehicle-filter-range-row flex items-center gap-1.5 text-[9px] text-slate-300">
+                <input id="filter-trail-points" type="number" min="1" max="120" step="1" class="vehicle-filter-range-input w-20 rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" value="10">
                 <span class="text-slate-500">Points shown when selecting a vehicle route</span>
               </div>
             </label>

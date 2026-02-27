@@ -100,6 +100,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       dealMin: 0,
       dealMax: 100,
       trailPoints: DEFAULT_GPS_TRAIL_POINT_LIMIT,
+      payKpiPositiveOnly: false,
     };
     let gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
     let vehicleFiltersCollapsed = false;
@@ -123,6 +124,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const trailPoints = Number.isFinite(parsedTrailPoints)
         ? Math.max(MIN_GPS_TRAIL_POINT_LIMIT, Math.min(parsedTrailPoints, MAX_GPS_TRAIL_POINT_LIMIT))
         : DEFAULT_GPS_TRAIL_POINT_LIMIT;
+      const payKpiPositiveOnly = Boolean(payload.payKpiPositiveOnly);
 
       return {
         invPrep: toArray(payload.invPrep),
@@ -134,6 +136,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         dealMin: Math.min(min, max),
         dealMax: max,
         trailPoints,
+        payKpiPositiveOnly,
       };
     };
 
@@ -5413,6 +5416,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movingStatus = getMovingStatus(vehicle);
       if (vehicleFilters.moving.length && !vehicleFilters.moving.includes(movingStatus)) return false;
 
+      if (vehicleFilters.payKpiPositiveOnly) {
+        const payKpi = Number(vehicle?.payKpi);
+        if (!Number.isFinite(payKpi) || payKpi <= 0) return false;
+      }
+
       return true;
     }
 
@@ -5469,6 +5477,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return [...list].sort((a, b) => Number(isVehicleOnRevChecked(b)) - Number(isVehicleOnRevChecked(a)));
     }
 
+    function getPayKpiValue(vehicle) {
+      const value = Number(vehicle?.payKpi);
+      return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+    }
+
+    function sortVehiclesByPayKpiDesc(list) {
+      return [...list].sort((a, b) => getPayKpiValue(b) - getPayKpiValue(a));
+    }
+
     function getUniqueVehicleValues(field, { includeEmpty = false } = {}) {
       const values = new Set();
       let hasEmpty = false;
@@ -5506,7 +5523,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       container.innerHTML = '';
       if (!values.length) {
         const empty = document.createElement('p');
-        empty.className = 'text-[10px] text-slate-600';
+        empty.className = 'text-[9px] text-slate-600';
         empty.textContent = 'No options';
         container.appendChild(empty);
         return;
@@ -5514,13 +5531,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       values.forEach((value) => {
         const label = document.createElement('label');
-        label.className = 'flex items-center gap-1.5 text-[10px] text-slate-200';
+        label.className = 'flex items-center gap-1 text-[9px] text-slate-200';
 
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.value = value;
         input.checked = selections.includes(value);
-        input.className = 'h-3 w-3 rounded border border-slate-700 bg-slate-950 text-amber-400 focus:ring-1 focus:ring-amber-400';
+        input.className = 'h-2.5 w-2.5 rounded border border-slate-700 bg-slate-950 text-amber-400 focus:ring-1 focus:ring-amber-400';
 
         const span = document.createElement('span');
         span.textContent = labelResolver(value);
@@ -5596,6 +5613,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const minInput = document.getElementById('filter-deal-min');
       const maxInput = document.getElementById('filter-deal-max');
       const trailPointsInput = document.getElementById('filter-trail-points');
+      const kpiPositiveToggle = document.getElementById('filter-kpi-positive-toggle');
 
       const syncCheckboxes = (container, selections) => {
         if (!container) return;
@@ -5613,6 +5631,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (minInput) minInput.value = vehicleFilters.dealMin;
       if (maxInput) maxInput.value = vehicleFilters.dealMax;
       if (trailPointsInput) trailPointsInput.value = String(vehicleFilters.trailPoints);
+      if (kpiPositiveToggle) {
+        const isActive = Boolean(vehicleFilters.payKpiPositiveOnly);
+        const stateLabel = kpiPositiveToggle.querySelector('[data-kpi-filter-state]');
+        kpiPositiveToggle.setAttribute('aria-pressed', String(isActive));
+        kpiPositiveToggle.classList.toggle('border-emerald-400/60', isActive);
+        kpiPositiveToggle.classList.toggle('bg-emerald-500/20', isActive);
+        kpiPositiveToggle.classList.toggle('text-emerald-100', isActive);
+        kpiPositiveToggle.classList.toggle('border-slate-800', !isActive);
+        kpiPositiveToggle.classList.toggle('bg-slate-950', !isActive);
+        kpiPositiveToggle.classList.toggle('text-slate-300', !isActive);
+        if (stateLabel) {
+          stateLabel.textContent = isActive ? 'On' : 'Off';
+          stateLabel.classList.toggle('text-emerald-200', isActive);
+          stateLabel.classList.toggle('text-slate-500', !isActive);
+        }
+      }
       updateVehicleFilterLabels();
     }
 
@@ -5626,6 +5660,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       vehicleFilters.dealMin = 0;
       vehicleFilters.dealMax = 100;
       vehicleFilters.trailPoints = DEFAULT_GPS_TRAIL_POINT_LIMIT;
+      vehicleFilters.payKpiPositiveOnly = false;
       gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
       syncVehicleFilterInputs();
       renderVehicles();
@@ -5736,6 +5771,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         trailPointsInput.addEventListener('blur', applyTrailPoints);
       }
 
+      const kpiPositiveToggle = document.getElementById('filter-kpi-positive-toggle');
+      if (kpiPositiveToggle) {
+        kpiPositiveToggle.addEventListener('click', () => {
+          vehicleFilters.payKpiPositiveOnly = !vehicleFilters.payKpiPositiveOnly;
+          syncVehicleFilterInputs();
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
+
       const resetBtn = document.getElementById('vehicle-filters-reset');
       resetBtn?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -5767,11 +5812,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const filtered = filterVehicles(baseList, query);
+      const shouldSortByPayKpiDesc = vehicleFilters.payKpiPositiveOnly;
       const shouldSortByDaysParked = vehicleFilters.moving.includes('stopped');
       const shouldPrioritizeOnRev = vehicleFilters.invPrep.includes('available for deals')
-        && vehicleFilters.moving.includes('moving');
+        && vehicleFilters.moving.includes('moving')
+        && !shouldSortByPayKpiDesc;
 
-      let list = shouldSortByDaysParked ? sortVehiclesByDaysParked(filtered) : filtered;
+      let list = shouldSortByPayKpiDesc
+        ? sortVehiclesByPayKpiDesc(filtered)
+        : (shouldSortByDaysParked ? sortVehiclesByDaysParked(filtered) : filtered);
       if (shouldPrioritizeOnRev) {
         list = sortVehiclesByOnRevChecked(list);
       }
