@@ -528,31 +528,48 @@ const createGpsHistoryManager = ({
     try {
       await ensureSupabaseSession?.();
       const sourceTable = tableName || 'PT-LastPing';
-      const records = [];
       const pageSize = 1000;
-      let offset = 0;
-      let hasMore = true;
+      const fetchRecordsByFilter = async (column, value) => {
+        const records = [];
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const pageQuery = supabaseClient
+            .from(sourceTable)
+            .select('*')
+            .eq(column, value)
+            .range(offset, offset + pageSize - 1);
+          const { data, error } = await runWithTimeout(
+            pageQuery,
+            timeoutMs,
+            'GPS history request timed out.'
+          );
+          if (error) throw error;
+          const pageRows = Array.isArray(data) ? data : [];
+          if (!pageRows.length) break;
+          records.push(...pageRows);
+          hasMore = pageRows.length === pageSize;
+          offset += pageSize;
+        }
+        return records;
+      };
 
-      while (hasMore) {
-        const pageBaseQuery = supabaseClient
-          .from(sourceTable)
-          .select('*')
-          .range(offset, offset + pageSize - 1);
-        const pageQuery = normalizedVin
-          ? pageBaseQuery.eq('VIN', normalizedVin)
-          : pageBaseQuery.eq('vehicle_id', normalizedVehicleId);
-        const { data, error } = await runWithTimeout(
-          pageQuery,
-          timeoutMs,
-          'GPS history request timed out.'
-        );
-        if (error) throw error;
-        const pageRows = Array.isArray(data) ? data : [];
-        if (!pageRows.length) break;
-        records.push(...pageRows);
-        hasMore = pageRows.length === pageSize;
-        offset += pageSize;
+      const lookupFilters = [];
+      if (normalizedVehicleId) lookupFilters.push({ column: 'vehicle_id', value: normalizedVehicleId });
+      if (normalizedVin) lookupFilters.push({ column: 'VIN', value: normalizedVin });
+
+      let records = [];
+      let lastError = null;
+      for (const filter of lookupFilters) {
+        try {
+          records = await fetchRecordsByFilter(filter.column, filter.value);
+          if (records.length) break;
+        } catch (error) {
+          lastError = error;
+          if (lookupFilters.length === 1) throw error;
+        }
       }
+      if (!records.length && lastError) throw lastError;
 
       records.sort((a, b) => {
         const idA = a?.id;

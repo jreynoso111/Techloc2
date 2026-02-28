@@ -674,6 +674,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     };
     let oldestOpenInvoiceLookupWarningShown = false;
+    const GPS_READ_BOUNDS_CACHE_TTL_MS = 10 * 60 * 1000;
+    let gpsReadBoundsByVinCache = new Map();
+    let gpsReadBoundsByVinCacheUpdatedAt = 0;
+    let gpsReadBoundsByVinPending = null;
 
     const fetchDealsByStockNumbers = async (stockNumbers = []) => {
       if (!supabaseClient?.from || !stockNumbers.length) return new Map();
@@ -836,6 +840,619 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         console.warn('Oldest open invoice lookup warning: invoice table not found.');
       }
       throw new Error('Invoice table not found.');
+    };
+
+    const normalizeVehicleIdKey = (value) => `${value ?? ''}`.trim();
+    const normalizeVinKey = (value) => `${value ?? ''}`.trim().toUpperCase();
+    const normalizeVinComparableKey = (value) => normalizeVinKey(value).replace(/[^A-Z0-9]/g, '');
+    const getVinSuffixKey = (value) => {
+      const normalized = normalizeVinComparableKey(value);
+      if (!normalized) return '';
+      return normalized.slice(-6);
+    };
+    const getVehicleVinSuffixKey = (vehicle = {}) => {
+      const candidates = [
+        vehicle?.shortVin,
+        vehicle?.shortvin,
+        vehicle?.details?.shortvin,
+        vehicle?.details?.ShortVIN,
+        vehicle?.details?.['ShortVIN'],
+        vehicle?.details?.['Short Vin'],
+        getVehicleVin(vehicle),
+        vehicle?.vin,
+        vehicle?.details?.VIN
+      ];
+      for (const candidate of candidates) {
+        const suffix = getVinSuffixKey(candidate);
+        if (suffix) return suffix;
+      }
+      return '';
+    };
+    const parseGpsReadBoundsTimestamp = (record = {}) => {
+      const candidates = [
+        record?.Date,
+        record?.['Date'],
+        record?.gps_time,
+        record?.created_at,
+        record?.updated_at
+      ];
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return Number.NaN;
+    };
+
+    const updateGpsReadTimestampBounds = (targetMap, key, timestampMs) => {
+      if (!(targetMap instanceof Map) || !key || !Number.isFinite(timestampMs)) return;
+      const current = targetMap.get(key) || {
+        firstTimestamp: Number.POSITIVE_INFINITY,
+        lastTimestamp: Number.NEGATIVE_INFINITY
+      };
+      if (timestampMs < current.firstTimestamp) current.firstTimestamp = timestampMs;
+      if (timestampMs > current.lastTimestamp) current.lastTimestamp = timestampMs;
+      targetMap.set(key, current);
+    };
+
+    const normalizeGpsReadBoundsMap = (rawBounds = new Map()) => {
+      const normalized = new Map();
+      if (!(rawBounds instanceof Map)) return normalized;
+      rawBounds.forEach((value, key) => {
+        const firstRead = Number.isFinite(value?.firstTimestamp)
+          ? new Date(value.firstTimestamp).toISOString()
+          : '';
+        const lastRead = Number.isFinite(value?.lastTimestamp)
+          ? new Date(value.lastTimestamp).toISOString()
+          : '';
+        if (firstRead || lastRead) {
+          normalized.set(key, { firstRead, lastRead });
+        }
+      });
+      return normalized;
+    };
+
+    const fetchGpsReadBoundsByVehicleIds = async (vehicleIds = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vehicleIds) || !vehicleIds.length) return new Map();
+      await ensureSupabaseSession();
+      const uniqueVehicleIds = Array.from(new Set(
+        vehicleIds.map((value) => normalizeVehicleIdKey(value)).filter(Boolean)
+      ));
+      if (!uniqueVehicleIds.length) return new Map();
+
+      const pageSize = 1000;
+      const idChunkSize = 20;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsByVehicleId = new Map();
+
+      for (let index = 0; index < uniqueVehicleIds.length; index += idChunkSize) {
+        const idChunk = uniqueVehicleIds.slice(index, index + idChunkSize);
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const query = supabaseClient
+            .from(TABLES.gpsHistory)
+            .select('*')
+            .in('vehicle_id', idChunk)
+            .range(offset, offset + pageSize - 1);
+
+          const { data, error } = await runWithTimeout(
+            query,
+            gpsReadBoundsTimeoutMs,
+            'GPS read-bound lookup timed out.'
+          );
+          if (error) throw error;
+
+          const rows = Array.isArray(data) ? data : [];
+          rows.forEach((row) => {
+            const vehicleId = normalizeVehicleIdKey(row?.vehicle_id);
+            if (!vehicleId) return;
+            const timestamp = parseGpsReadBoundsTimestamp(row);
+            if (!Number.isFinite(timestamp)) return;
+            updateGpsReadTimestampBounds(boundsByVehicleId, vehicleId, timestamp);
+          });
+
+          hasMore = rows.length === pageSize;
+          offset += pageSize;
+        }
+      }
+
+      return normalizeGpsReadBoundsMap(boundsByVehicleId);
+    };
+
+    const fetchGpsReadBoundsByVins = async (vins = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vins) || !vins.length) return new Map();
+      await ensureSupabaseSession();
+      const uniqueVins = Array.from(new Set(vins.map((value) => normalizeVinKey(value)).filter(Boolean)));
+      if (!uniqueVins.length) return new Map();
+
+      const pageSize = 1000;
+      const vinChunkSize = 25;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsByVin = new Map();
+
+      for (let index = 0; index < uniqueVins.length; index += vinChunkSize) {
+        const vinChunk = uniqueVins.slice(index, index + vinChunkSize);
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const query = supabaseClient
+            .from(TABLES.gpsHistory)
+            .select('*')
+            .in('VIN', vinChunk)
+            .range(offset, offset + pageSize - 1);
+
+          const { data, error } = await runWithTimeout(
+            query,
+            gpsReadBoundsTimeoutMs,
+            'GPS read-bound VIN lookup timed out.'
+          );
+          if (error) throw error;
+
+          const rows = Array.isArray(data) ? data : [];
+          rows.forEach((row) => {
+            const vin = normalizeVinKey(row?.VIN ?? row?.vin);
+            if (!vin) return;
+            const timestamp = parseGpsReadBoundsTimestamp(row);
+            if (!Number.isFinite(timestamp)) return;
+            updateGpsReadTimestampBounds(boundsByVin, vin, timestamp);
+          });
+
+          hasMore = rows.length === pageSize;
+          offset += pageSize;
+        }
+      }
+
+      return normalizeGpsReadBoundsMap(boundsByVin);
+    };
+
+    const fetchGpsReadBoundsByVinSuffixes = async (vinSuffixes = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vinSuffixes) || !vinSuffixes.length) return new Map();
+      await ensureSupabaseSession();
+
+      const uniqueSuffixes = Array.from(new Set(
+        vinSuffixes
+          .map((value) => getVinSuffixKey(value))
+          .filter((value) => value.length === 6)
+      ));
+      if (!uniqueSuffixes.length) return new Map();
+
+      const targetSuffixes = new Set(uniqueSuffixes);
+      const pageSize = 1000;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsBySuffix = new Map();
+
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const query = supabaseClient
+          .from(TABLES.gpsHistory)
+          .select('VIN,Date')
+          .not('VIN', 'is', null)
+          .range(offset, offset + pageSize - 1);
+
+        const { data, error } = await runWithTimeout(
+          query,
+          gpsReadBoundsTimeoutMs,
+          'GPS read-bound VIN suffix lookup timed out.'
+        );
+        if (error) throw error;
+
+        const rows = Array.isArray(data) ? data : [];
+        rows.forEach((row) => {
+          const suffix = getVinSuffixKey(row?.VIN ?? row?.vin);
+          if (!suffix || !targetSuffixes.has(suffix)) return;
+          const timestamp = parseGpsReadBoundsTimestamp(row);
+          if (!Number.isFinite(timestamp)) return;
+          updateGpsReadTimestampBounds(boundsBySuffix, suffix, timestamp);
+        });
+
+        hasMore = rows.length === pageSize;
+        offset += pageSize;
+      }
+
+      return normalizeGpsReadBoundsMap(boundsBySuffix);
+    };
+
+    const hasParsableTime = (value) => {
+      if (!value) return false;
+      return Number.isFinite(Date.parse(value));
+    };
+
+    const fetchGpsReadBoundsByHistoryManager = async (vehicleList = [], { concurrency = 3 } = {}) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+      if (!gpsHistoryManager || typeof gpsHistoryManager.fetchGpsHistory !== 'function') return new Map();
+
+      const results = new Map();
+      const pendingVehicles = vehicleList.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && (!hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead));
+      });
+      if (!pendingVehicles.length) return results;
+
+      const workerCount = Math.max(1, Math.min(Number(concurrency) || 3, pendingVehicles.length));
+      let cursor = 0;
+      const runWorker = async () => {
+        while (cursor < pendingVehicles.length) {
+          const index = cursor;
+          cursor += 1;
+          const vehicle = pendingVehicles[index];
+          const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+          if (!vehicleId) continue;
+          const vin = getVehicleVin(vehicle);
+          const historyVehicleId = normalizeVehicleIdKey(gpsHistoryManager.getVehicleId(vehicle) || vehicleId);
+          if (!vin && !historyVehicleId) continue;
+          try {
+            const { records, error } = await gpsHistoryManager.fetchGpsHistory({
+              vin,
+              vehicleId: historyVehicleId
+            });
+            if (error || !Array.isArray(records) || !records.length) continue;
+            const bounds = { firstTimestamp: Number.POSITIVE_INFINITY, lastTimestamp: Number.NEGATIVE_INFINITY };
+            records.forEach((record) => {
+              const timestamp = parseGpsReadBoundsTimestamp(record);
+              if (!Number.isFinite(timestamp)) return;
+              if (timestamp < bounds.firstTimestamp) bounds.firstTimestamp = timestamp;
+              if (timestamp > bounds.lastTimestamp) bounds.lastTimestamp = timestamp;
+            });
+            if (!Number.isFinite(bounds.firstTimestamp) && !Number.isFinite(bounds.lastTimestamp)) continue;
+            results.set(vehicleId, {
+              firstRead: Number.isFinite(bounds.firstTimestamp) ? new Date(bounds.firstTimestamp).toISOString() : '',
+              lastRead: Number.isFinite(bounds.lastTimestamp) ? new Date(bounds.lastTimestamp).toISOString() : ''
+            });
+          } catch (_error) {
+            // Best-effort fallback path.
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+      return results;
+    };
+
+    const fetchVehicleFirstReadsByTargetedQueries = async (vehicleList = [], { concurrency = 6 } = {}) => {
+      if (!supabaseClient?.from || !Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+      await ensureSupabaseSession();
+
+      const normalizeSerialKey = (value = '') => `${value ?? ''}`.trim().toUpperCase();
+      const resolveVehicleWinnerSerial = (vehicle = {}) => {
+        const managerSerial = typeof gpsHistoryManager?.getVehicleWinnerSerial === 'function'
+          ? normalizeSerialKey(gpsHistoryManager.getVehicleWinnerSerial(vehicle))
+          : '';
+        if (managerSerial) return managerSerial;
+        const details = vehicle?.details || {};
+        const candidates = [
+          vehicle?.winnerSerial,
+          vehicle?.winningSerial,
+          vehicle?.serialWinner,
+          details?.winner_serial,
+          details?.winning_serial,
+          details?.serial_winner,
+          details?.['Winner Serial'],
+          details?.['Winning Serial'],
+          vehicle?.ptSerial,
+          details?.['PT Serial'],
+          details?.['PT Serial '],
+          details?.pt_serial,
+          vehicle?.encoreSerial,
+          details?.['Encore Serial'],
+          details?.encore_serial,
+        ];
+        for (const candidate of candidates) {
+          const normalized = normalizeSerialKey(candidate);
+          if (normalized) return normalized;
+        }
+        return '';
+      };
+
+      const getFirstTimestampFromRows = (rows = []) => {
+        if (!Array.isArray(rows) || !rows.length) return Number.NaN;
+        let firstTimestamp = Number.POSITIVE_INFINITY;
+        rows.forEach((row) => {
+          const timestamp = parseGpsReadBoundsTimestamp(row);
+          if (!Number.isFinite(timestamp)) return;
+          if (timestamp < firstTimestamp) firstTimestamp = timestamp;
+        });
+        return Number.isFinite(firstTimestamp) ? firstTimestamp : Number.NaN;
+      };
+
+      const pendingVehicles = vehicleList.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId);
+      });
+      if (!pendingVehicles.length) return new Map();
+
+      const results = new Map();
+      const workerCount = Math.max(1, Math.min(Number(concurrency) || 6, pendingVehicles.length));
+      let cursor = 0;
+
+      const runWorker = async () => {
+        while (cursor < pendingVehicles.length) {
+          const index = cursor;
+          cursor += 1;
+          const vehicle = pendingVehicles[index];
+          const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+          if (!vehicleId) continue;
+
+          let firstTimestamp = Number.NaN;
+          try {
+            const firstByIdQuery = supabaseClient
+              .from(TABLES.gpsHistory)
+              .select('Date')
+              .eq('vehicle_id', vehicleId)
+              .not('Date', 'is', null)
+              .order('Date', { ascending: true })
+              .limit(1);
+            const { data: firstByIdData, error: firstByIdError } = await runWithTimeout(
+              firstByIdQuery,
+              12000,
+              'GPS first-read by vehicle_id lookup timed out.'
+            );
+            if (!firstByIdError) {
+              firstTimestamp = getFirstTimestampFromRows(firstByIdData);
+            }
+          } catch (_error) {
+            // fallback path below
+          }
+
+          const vinSuffix = getVehicleVinSuffixKey(vehicle);
+          const winnerSerial = resolveVehicleWinnerSerial(vehicle);
+          if (!Number.isFinite(firstTimestamp) && vinSuffix) {
+            if (winnerSerial) {
+              try {
+                const firstBySuffixWinnerQuery = supabaseClient
+                  .from(TABLES.gpsHistory)
+                  .select('Date,VIN,Serial')
+                  .ilike('VIN', `%${vinSuffix}`)
+                  .eq('Serial', winnerSerial)
+                  .not('Date', 'is', null)
+                  .order('Date', { ascending: true })
+                  .limit(1);
+                const { data: firstBySuffixWinnerData, error: firstBySuffixWinnerError } = await runWithTimeout(
+                  firstBySuffixWinnerQuery,
+                  12000,
+                  'GPS first-read by winner serial lookup timed out.'
+                );
+                if (!firstBySuffixWinnerError) {
+                  firstTimestamp = getFirstTimestampFromRows(firstBySuffixWinnerData);
+                }
+              } catch (_error) {
+                // fallback without winner serial
+              }
+            }
+
+            if (!Number.isFinite(firstTimestamp)) {
+              try {
+                const firstBySuffixQuery = supabaseClient
+                  .from(TABLES.gpsHistory)
+                  .select('Date,VIN')
+                  .ilike('VIN', `%${vinSuffix}`)
+                  .not('Date', 'is', null)
+                  .order('Date', { ascending: true })
+                  .limit(1);
+                const { data: firstBySuffixData, error: firstBySuffixError } = await runWithTimeout(
+                  firstBySuffixQuery,
+                  12000,
+                  'GPS first-read by VIN suffix lookup timed out.'
+                );
+                if (!firstBySuffixError) {
+                  firstTimestamp = getFirstTimestampFromRows(firstBySuffixData);
+                }
+              } catch (_error) {
+                // no-op
+              }
+            }
+          }
+
+          if (Number.isFinite(firstTimestamp)) {
+            results.set(vehicleId, new Date(firstTimestamp).toISOString());
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+      return results;
+    };
+
+    const fetchGpsReadBoundsByVehicles = async (vehicleList = []) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+
+      const pendingVehicles = vehicleList.filter((vehicle) => (
+        !hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead)
+      ));
+      if (!pendingVehicles.length) return new Map();
+
+      const results = new Map();
+      const requestedVehicleIds = Array.from(new Set(
+        pendingVehicles.map((vehicle) => normalizeVehicleIdKey(vehicle?.id)).filter(Boolean)
+      ));
+      let boundsByVehicleId = new Map();
+      try {
+        boundsByVehicleId = await fetchGpsReadBoundsByVehicleIds(requestedVehicleIds);
+      } catch (error) {
+        console.warn('GPS read-bounds by vehicle_id warning: ' + (error?.message || error));
+      }
+      pendingVehicles.forEach((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return;
+        const byId = boundsByVehicleId.get(vehicleId);
+        if (byId) results.set(vehicleId, byId);
+      });
+
+      const unresolvedVehicles = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return false;
+        return !results.has(vehicleId);
+      });
+      if (!unresolvedVehicles.length) return results;
+
+      const unresolvedVinSuffixes = Array.from(new Set(
+        unresolvedVehicles.map((vehicle) => getVehicleVinSuffixKey(vehicle)).filter((value) => value.length === 6)
+      ));
+      if (unresolvedVinSuffixes.length) {
+        try {
+          const boundsBySuffix = await fetchGpsReadBoundsByVinSuffixes(unresolvedVinSuffixes);
+          unresolvedVehicles.forEach((vehicle) => {
+            const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+            const suffix = getVehicleVinSuffixKey(vehicle);
+            if (!vehicleId || !suffix) return;
+            const bySuffix = boundsBySuffix.get(suffix);
+            if (bySuffix) results.set(vehicleId, bySuffix);
+          });
+        } catch (error) {
+          console.warn('GPS read-bounds by VIN suffix warning: ' + (error?.message || error));
+        }
+      }
+
+      const stillUnresolvedAfterSuffix = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && !results.has(vehicleId);
+      });
+      if (!stillUnresolvedAfterSuffix.length) return results;
+
+      const unresolvedVins = Array.from(new Set(
+        stillUnresolvedAfterSuffix.map((vehicle) => getVehicleVin(vehicle)).filter(Boolean)
+      ));
+      if (unresolvedVins.length) {
+        try {
+          const boundsByVin = await fetchGpsReadBoundsByVins(unresolvedVins);
+          stillUnresolvedAfterSuffix.forEach((vehicle) => {
+            const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+            const vin = getVehicleVin(vehicle);
+            if (!vehicleId || !vin) return;
+            const byVin = boundsByVin.get(vin);
+            if (byVin) results.set(vehicleId, byVin);
+          });
+        } catch (error) {
+          console.warn('GPS read-bounds by VIN warning: ' + (error?.message || error));
+        }
+      }
+
+      const vehiclesMissingFirstRead = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return false;
+        const currentReadBounds = results.get(vehicleId);
+        return !hasParsableTime(currentReadBounds?.firstRead);
+      });
+      if (vehiclesMissingFirstRead.length) {
+        const targetedFirstReads = await fetchVehicleFirstReadsByTargetedQueries(vehiclesMissingFirstRead, {
+          concurrency: 6
+        });
+        targetedFirstReads.forEach((firstRead, vehicleId) => {
+          if (!hasParsableTime(firstRead)) return;
+          const existing = results.get(vehicleId) || { firstRead: '', lastRead: '' };
+          results.set(vehicleId, {
+            ...existing,
+            firstRead
+          });
+        });
+      }
+
+      const stillUnresolved = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && !results.has(vehicleId);
+      });
+      if (stillUnresolved.length) {
+        const fallbackBounds = await fetchGpsReadBoundsByHistoryManager(stillUnresolved, { concurrency: 3 });
+        fallbackBounds.forEach((value, vehicleId) => results.set(vehicleId, value));
+      }
+
+      return results;
+    };
+
+    const applyGpsReadBoundsToVehicleList = (vehicleList = [], boundsByVin = new Map()) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length || !(boundsByVin instanceof Map)) return false;
+      let changed = false;
+
+      vehicleList.forEach((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (!vehicleId) return;
+        const readBounds = boundsByVin.get(vehicleId);
+        if (!readBounds) return;
+
+        if (readBounds.firstRead && !hasParsableTime(vehicle?.firstRead)) {
+          vehicle.firstRead = readBounds.firstRead;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.pt_first_read = readBounds.firstRead;
+            vehicle.details['PT First Read'] = readBounds.firstRead;
+          }
+          changed = true;
+        }
+
+        if (readBounds.lastRead && !hasParsableTime(vehicle?.lastRead)) {
+          vehicle.lastRead = readBounds.lastRead;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.pt_last_read = readBounds.lastRead;
+            vehicle.details['PT Last Read'] = readBounds.lastRead;
+          }
+          changed = true;
+        }
+      });
+
+      return changed;
+    };
+
+    const hydrateVehiclePtReadsInBackground = async (vehicleList = []) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return;
+
+      const vehicleIdsNeedingBounds = Array.from(new Set(
+        vehicleList
+          .filter((vehicle) => !hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead))
+          .map((vehicle) => `${vehicle?.id ?? ''}`.trim())
+          .filter(Boolean)
+      ));
+      if (!vehicleIdsNeedingBounds.length) return;
+
+      const cacheIsFresh = (Date.now() - gpsReadBoundsByVinCacheUpdatedAt) <= GPS_READ_BOUNDS_CACHE_TTL_MS;
+      const cacheHasAllNeeded = cacheIsFresh && vehicleList.every((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (!vehicleId || !vehicleIdsNeedingBounds.includes(vehicleId)) return true;
+        const cachedBounds = gpsReadBoundsByVinCache.get(vehicleId) || {};
+        const hasFirstRead = hasParsableTime(vehicle?.firstRead) || hasParsableTime(cachedBounds?.firstRead);
+        const hasLastRead = hasParsableTime(vehicle?.lastRead) || hasParsableTime(cachedBounds?.lastRead);
+        return hasFirstRead && hasLastRead;
+      });
+      if (cacheHasAllNeeded) {
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        return;
+      }
+
+      if (gpsReadBoundsByVinPending) {
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        await gpsReadBoundsByVinPending;
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        return;
+      }
+
+      gpsReadBoundsByVinPending = (async () => {
+        try {
+          const vehiclesNeedingBounds = vehicleList.filter((vehicle) => (
+            vehicleIdsNeedingBounds.includes(`${vehicle?.id ?? ''}`.trim())
+          ));
+          const fetchedBounds = await fetchGpsReadBoundsByVehicles(vehiclesNeedingBounds);
+          if (fetchedBounds instanceof Map && fetchedBounds.size) {
+            const merged = new Map(gpsReadBoundsByVinCache);
+            fetchedBounds.forEach((value, vehicleId) => merged.set(vehicleId, value));
+            gpsReadBoundsByVinCache = merged;
+            gpsReadBoundsByVinCacheUpdatedAt = Date.now();
+          }
+        } catch (error) {
+          console.warn('GPS read-bounds load warning: ' + (error?.message || error));
+        } finally {
+          gpsReadBoundsByVinPending = null;
+        }
+      })();
+
+      await gpsReadBoundsByVinPending;
+      if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+        renderVehicles();
+      }
     };
 
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
@@ -1643,6 +2260,68 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return Number.isFinite(latestEntry?.derivedDaysStationary) ? latestEntry.derivedDaysStationary : null;
     };
 
+    const toComparableTimeMs = (value) => {
+      if (!value) return null;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const applyVehiclePtReadBoundsFromRecords = (
+      vehicle,
+      records = [],
+      {
+        winnerSerial = '',
+        getRecordSerial = () => ''
+      } = {}
+    ) => {
+      if (!vehicle || !Array.isArray(records) || !records.length) return false;
+
+      const scopedRecords = winnerSerial
+        ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === winnerSerial)
+        : records;
+      const sourceRecords = scopedRecords.length ? scopedRecords : records;
+
+      let earliestMs = Number.POSITIVE_INFINITY;
+      let latestMs = Number.NEGATIVE_INFINITY;
+      sourceRecords.forEach((record) => {
+        const timeMs = parseGpsTrailTimeMs(record);
+        if (!Number.isFinite(timeMs)) return;
+        if (timeMs < earliestMs) earliestMs = timeMs;
+        if (timeMs > latestMs) latestMs = timeMs;
+      });
+
+      const nextFirstRead = Number.isFinite(earliestMs) ? new Date(earliestMs).toISOString() : null;
+      const nextLastRead = Number.isFinite(latestMs) ? new Date(latestMs).toISOString() : null;
+
+      const currentFirstMs = toComparableTimeMs(vehicle?.firstRead ?? vehicle?.details?.pt_first_read ?? vehicle?.details?.['PT First Read']);
+      const currentLastMs = toComparableTimeMs(vehicle?.lastRead ?? vehicle?.details?.pt_last_read ?? vehicle?.details?.['PT Last Read']);
+      const nextFirstMs = Number.isFinite(earliestMs) ? earliestMs : null;
+      const nextLastMs = Number.isFinite(latestMs) ? latestMs : null;
+
+      const firstChanged = (currentFirstMs ?? null) !== (nextFirstMs ?? null);
+      const lastChanged = (currentLastMs ?? null) !== (nextLastMs ?? null);
+      if (!firstChanged && !lastChanged) return false;
+
+      if (nextFirstRead) {
+        vehicle.firstRead = nextFirstRead;
+      }
+      if (nextLastRead) {
+        vehicle.lastRead = nextLastRead;
+      }
+      if (vehicle?.details && typeof vehicle.details === 'object') {
+        if (nextFirstRead) {
+          vehicle.details.pt_first_read = nextFirstRead;
+          vehicle.details['PT First Read'] = nextFirstRead;
+        }
+        if (nextLastRead) {
+          vehicle.details.pt_last_read = nextLastRead;
+          vehicle.details['PT Last Read'] = nextLastRead;
+        }
+      }
+
+      return true;
+    };
+
     const applyVehicleMovingOverrideFromGpsHistory = (vehicle, records = []) => {
       if (!vehicle || !Array.isArray(records) || !records.length) return false;
       const getRecordSerial = typeof gpsHistoryManager?.getRecordSerial === 'function'
@@ -1658,6 +2337,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movementSourceRecords = winnerSerial
         ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === winnerSerial)
         : records;
+      const ptReadBoundsChanged = applyVehiclePtReadBoundsFromRecords(vehicle, records, {
+        winnerSerial,
+        getRecordSerial
+      });
 
       const latestSerial = getMostRecentRecordSerial(movementSourceRecords, getRecordSerial);
       const serialCountsBySerial = countGpsHistoryRecordsBySerial(movementSourceRecords, getRecordSerial);
@@ -1706,7 +2389,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const daysChanged = (currentDays === null && nextDays !== null)
         || (currentDays !== null && nextDays === null)
         || (currentDays !== null && nextDays !== null && currentDays !== nextDays);
-      if (!movingOverrideChanged && !daysChanged) return false;
+      if (!movingOverrideChanged && !daysChanged && !ptReadBoundsChanged) return false;
 
       if (normalizedOverride) {
         vehicle.historyMovingOverride = normalizedOverride;
@@ -4369,6 +5052,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         updateVehicleFilterOptions();
         syncVehicleFilterInputs();
         renderVehicles();
+        // PT read bounds now come from vehicles table columns.
         syncVehicleSelectionFromStore(getSelectedVehicle(), { shouldFocus: true });
       } catch (err) {
         if (err?.message === 'Vehicle data provider unavailable.') {
@@ -5321,8 +6005,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
           const oldestOpenInvoiceDateLabel = escapeHTML(vehicle.oldestOpenInvoiceDateDisplay || '—');
-          const ptLastReadLabel = formatDateTime(vehicle.lastRead);
-          const ptFirstReadLabel = formatDateTime(vehicle.firstRead);
+          const ptLastReadLabel = formatDateTime(
+            vehicle.lastRead
+            ?? vehicle?.details?.pt_last_read
+            ?? vehicle?.details?.['PT Last Read']
+          );
+          const ptFirstReadLabel = formatDateTime(
+            vehicle.firstRead
+            ?? vehicle?.details?.pt_first_read
+            ?? vehicle?.details?.['PT First Read']
+            ?? vehicle?.details?.pt_first_trip
+            ?? vehicle?.details?.['PT First Trip']
+          );
           const locationDisplay = formatVehicleSidebarAddress(
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
@@ -5562,7 +6256,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function matchesRange(value, min, max) {
       const pct = parseDealCompletion(value);
-      if (!Number.isFinite(pct)) return min <= 0; // allow unknowns only when the range starts at 0
+      // Vehicles with unknown completion should remain visible in the map list.
+      if (!Number.isFinite(pct)) return true;
       return pct >= min && pct <= max;
     }
 
