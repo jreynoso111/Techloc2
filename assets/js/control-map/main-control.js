@@ -7062,6 +7062,263 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       map.flyTo([location.lat, location.lng], 13, { duration: 1.5 });
     }
 
+    const GLOBAL_SEARCH_ZIP_REGEX = /^\d{5}(?:-\d{4})?$/;
+
+    const normalizeGlobalSearchText = (value = '') => `${value || ''}`.trim().toLowerCase();
+
+    const normalizeGlobalSearchCompact = (value = '') => normalizeGlobalSearchText(value).replace(/[^a-z0-9]/g, '');
+
+    const findVehicleByGlobalSearch = (query = '') => {
+      const normalizedQuery = normalizeGlobalSearchText(query);
+      const compactQuery = normalizeGlobalSearchCompact(query);
+      if (!normalizedQuery) return null;
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      vehicles.forEach((vehicle) => {
+        const vin = normalizeGlobalSearchText(vehicle?.vin || vehicle?.VIN || '');
+        const compactVin = normalizeGlobalSearchCompact(vin);
+        const customerId = normalizeGlobalSearchText(vehicle?.customerId || '');
+        const customerName = normalizeGlobalSearchText(vehicle?.customerName || '');
+        const searchBlob = normalizeGlobalSearchText(vehicle?._searchBlob || '');
+        let score = 0;
+
+        if (vin && vin === normalizedQuery) score = Math.max(score, 560);
+        if (compactVin && compactQuery && compactVin === compactQuery) score = Math.max(score, 580);
+        if (customerId && customerId === normalizedQuery) score = Math.max(score, 500);
+        if (customerName && customerName === normalizedQuery) score = Math.max(score, 460);
+        if (vin && vin.includes(normalizedQuery)) score = Math.max(score, 420);
+        if (customerId && customerId.includes(normalizedQuery)) score = Math.max(score, 390);
+        if (customerName && customerName.includes(normalizedQuery)) score = Math.max(score, 370);
+        if (searchBlob && searchBlob.includes(normalizedQuery)) score = Math.max(score, 310);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = vehicle;
+        }
+      });
+
+      return bestMatch;
+    };
+
+    const getServiceGlobalSearchHaystack = (partner = {}, type = 'tech') => {
+      const noteText = type === 'tech' ? getTechNoteText(partner) : getPartnerNoteText(partner);
+      return [
+        partner.company,
+        partner.name,
+        partner.contact,
+        partner.vendor,
+        partner.city,
+        partner.state,
+        partner.region,
+        partner.zip,
+        partner.zipcode,
+        partner.phone,
+        partner.email,
+        partner.availability,
+        partner.authorization,
+        partner.categoryLabel,
+        partner.category,
+        noteText
+      ]
+        .map((value) => normalizeGlobalSearchText(value))
+        .join(' ');
+    };
+
+    const collectServiceGlobalSearchEntries = () => {
+      const entries = [];
+      technicians.forEach((partner) => entries.push({ type: 'tech', partner }));
+      resellers.forEach((partner) => entries.push({ type: 'reseller', partner }));
+      repairShops.forEach((partner) => entries.push({ type: 'repair', partner }));
+      customServices.forEach((partner) => entries.push({ type: 'custom', partner }));
+      return entries;
+    };
+
+    const findServiceByGlobalSearch = (query = '') => {
+      const normalizedQuery = normalizeGlobalSearchText(query);
+      if (!normalizedQuery) return null;
+
+      const entries = collectServiceGlobalSearchEntries();
+      let bestMatch = null;
+      let bestScore = 0;
+
+      entries.forEach((entry) => {
+        const partner = entry?.partner || {};
+        const company = normalizeGlobalSearchText(partner.company || partner.name);
+        const zip = normalizeGlobalSearchText(partner.zip || partner.zipcode);
+        const haystack = getServiceGlobalSearchHaystack(partner, entry.type);
+        let score = 0;
+
+        if (company && company === normalizedQuery) score = Math.max(score, 440);
+        if (zip && zip === normalizedQuery) score = Math.max(score, 420);
+        if (company && company.includes(normalizedQuery)) score = Math.max(score, 360);
+        if (haystack && haystack.includes(normalizedQuery)) score = Math.max(score, 290);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = entry;
+        }
+      });
+
+      return bestMatch;
+    };
+
+    const focusGlobalServiceMatch = (entry = null) => {
+      const type = `${entry?.type || ''}`.trim();
+      const partner = entry?.partner || null;
+      if (!type || !partner) return false;
+
+      if (type === 'custom' && partner.categoryKey) {
+        selectedCustomCategoryKey = partner.categoryKey;
+        renderCategorySidebar(selectedCustomCategoryKey, customServices);
+      }
+
+      const sidebarKey = SERVICE_SIDEBAR_KEYS[type] || (type === 'custom' ? 'custom' : 'left');
+      sidebarStateController?.setState?.(sidebarKey, true);
+      selectedServiceByType[type] = partner;
+      filterSidebarForPartner(type, partner);
+      renderVisibleSidebars();
+
+      if (hasValidCoords(partner) && map) {
+        map.flyTo([partner.lat, partner.lng], 15, { duration: 1.2 });
+        showServicePreviewCard(partner);
+      }
+
+      const origin = getCurrentOrigin() || partner;
+      if (origin) {
+        showServicesFromOrigin(origin, { forceType: type });
+      }
+      return true;
+    };
+
+    const setLegendSearchFeedback = (feedbackEl, message = '', tone = 'neutral') => {
+      if (!feedbackEl) return;
+      feedbackEl.textContent = message;
+      feedbackEl.classList.remove('text-slate-400', 'text-cyan-300', 'text-emerald-300', 'text-amber-300', 'text-rose-300');
+      if (tone === 'location') {
+        feedbackEl.classList.add('text-cyan-300');
+      } else if (tone === 'vehicle') {
+        feedbackEl.classList.add('text-emerald-300');
+      } else if (tone === 'service') {
+        feedbackEl.classList.add('text-amber-300');
+      } else if (tone === 'error') {
+        feedbackEl.classList.add('text-rose-300');
+      } else {
+        feedbackEl.classList.add('text-slate-400');
+      }
+    };
+
+    const executeLegendGlobalSearch = async (rawQuery = '', feedbackEl = null) => {
+      const query = `${rawQuery || ''}`.trim();
+      if (!query) {
+        setLegendSearchFeedback(feedbackEl, 'Type a ZIP, VIN, customer, or company.', 'neutral');
+        return false;
+      }
+
+      const activeType = isAnyServiceSidebarOpen() ? getActivePartnerType() : 'tech';
+
+      if (GLOBAL_SEARCH_ZIP_REGEX.test(query)) {
+        const location = await geocodeAddress(query);
+        if (!location) {
+          setLegendSearchFeedback(feedbackEl, `ZIP ${query} not found.`, 'error');
+          return false;
+        }
+        processLocation(location, location.name || query, activeType);
+        setLegendSearchFeedback(feedbackEl, `Located ZIP ${query}.`, 'location');
+        return true;
+      }
+
+      const vehicleMatch = findVehicleByGlobalSearch(query);
+      if (vehicleMatch) {
+        if (vehicleMarkersVisible) {
+          focusVehicle(vehicleMatch);
+        } else {
+          const coords = getVehicleMapCoords(vehicleMatch);
+          if (map && coords) {
+            map.flyTo([coords.lat, coords.lng], 14, { duration: 1.2 });
+          }
+          applySelection(vehicleMatch.id, null, getVehicleKey(vehicleMatch));
+        }
+        const vehicleLabel = `${vehicleMatch?.vin || vehicleMatch?.model || 'Vehicle'}`;
+        setLegendSearchFeedback(feedbackEl, `Vehicle found: ${vehicleLabel}`, 'vehicle');
+        return true;
+      }
+
+      let serviceMatch = findServiceByGlobalSearch(query);
+      if (!serviceMatch) {
+        await Promise.allSettled([loadAllServices(), loadTechnicians()]);
+        serviceMatch = findServiceByGlobalSearch(query);
+      }
+      if (serviceMatch && focusGlobalServiceMatch(serviceMatch)) {
+        const serviceName = serviceMatch?.partner?.company || serviceMatch?.partner?.name || 'Service';
+        setLegendSearchFeedback(feedbackEl, `Service found: ${serviceName}`, 'service');
+        return true;
+      }
+
+      const locationMatch = await geocodeAddress(query);
+      if (locationMatch) {
+        processLocation(locationMatch, locationMatch.name || query, activeType);
+        setLegendSearchFeedback(feedbackEl, `Location found: ${locationMatch.name || query}`, 'location');
+        return true;
+      }
+
+      setLegendSearchFeedback(feedbackEl, 'No matches found for that search.', 'error');
+      return false;
+    };
+
+    function setupLegendGlobalSearch() {
+      const toggle = document.getElementById('legend-search-toggle');
+      const panel = document.getElementById('legend-search-panel');
+      const chevron = document.getElementById('legend-search-chevron');
+      const form = document.getElementById('legend-search-form');
+      const input = document.getElementById('legend-search-input');
+      const button = document.getElementById('legend-search-btn');
+      const status = document.getElementById('legend-search-status');
+      const feedback = document.getElementById('legend-search-feedback');
+      if (!toggle || !panel || !chevron || !form || !input || !button) return;
+
+      const setExpanded = (expanded) => {
+        panel.classList.toggle('hidden', !expanded);
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        chevron.textContent = expanded ? '▾' : '▸';
+      };
+
+      setExpanded(false);
+
+      toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        setExpanded(!expanded);
+        if (!expanded) {
+          input.focus();
+        }
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const query = input.value.trim();
+        if (!query) {
+          setLegendSearchFeedback(feedback, 'Type a ZIP, VIN, customer, or company.', 'neutral');
+          return;
+        }
+
+        const originalButtonLabel = button.textContent;
+        status?.classList.remove('hidden');
+        button.textContent = '...';
+        button.disabled = true;
+        const stopLoading = startLoading('Searching map…');
+
+        try {
+          await executeLegendGlobalSearch(query, feedback);
+        } finally {
+          stopLoading();
+          status?.classList.add('hidden');
+          button.textContent = originalButtonLabel;
+          button.disabled = false;
+        }
+      });
+    }
+
     function setupAddressSearch({ formId, inputId, buttonId, statusId, partnerType }) {
       const form = document.getElementById(formId);
       const input = document.getElementById(inputId);
@@ -7900,6 +8157,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function setupSidebarToggles() {
       const leftSidebar = document.getElementById('left-sidebar');
       const rightSidebar = document.getElementById('right-sidebar');
+      const floatingSearchShell = document.getElementById('floating-search-shell');
       const resellerSidebar = document.getElementById('reseller-sidebar');
       const repairSidebar = document.getElementById('repair-sidebar');
       const customSidebar = document.getElementById('dynamic-service-sidebar');
@@ -8020,6 +8278,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           ? defaultRightOffset
           : getSidebarWidth(configs.right.sidebar) + defaultRightOffset;
 
+        if (floatingSearchShell) {
+          floatingSearchShell.classList.toggle('hidden', !rightSidebarIsCollapsed);
+        }
+
         const rightToggleGroup = document.getElementById('right-toggle-group');
         if (rightToggleGroup) {
           rightToggleGroup.style.right = `${anchorRight}px`;
@@ -8130,6 +8392,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           setupResizableSidebars();
           setupSidebarToggles();
           setupLayerToggles();
+          setupLegendGlobalSearch();
           bindVehicleFilterHandlers();
           syncVehicleFilterInputs();
           const filterConfigs = [

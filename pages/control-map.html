@@ -83,6 +83,29 @@
       <button id="toggle-blacklist" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Blacklist Marks</button>
       <button id="toggle-vehicle-markers" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Vehicles Marks</button>
     </div>
+    <div id="floating-search-shell" class="pointer-events-none absolute top-16 right-4 z-[510] flex flex-col items-end gap-2">
+      <button id="legend-search-toggle" type="button" class="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/85 text-slate-200 shadow-lg shadow-slate-950/50 hover:border-cyan-400/70 hover:text-cyan-200 transition-colors" aria-expanded="false" aria-label="Toggle map search">
+        <span id="legend-search-chevron">▸</span>
+      </button>
+      <div id="legend-search-panel" class="pointer-events-auto hidden w-[min(86vw,340px)] rounded-xl border border-slate-800/90 bg-slate-950/92 px-2.5 py-2 shadow-xl shadow-slate-950/60 backdrop-blur">
+        <form id="legend-search-form" class="relative">
+          <input
+            id="legend-search-input"
+            type="text"
+            class="block w-full rounded-lg border border-slate-700 bg-slate-800 pl-2.5 pr-20 py-1.5 text-[11px] text-white placeholder-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 outline-none transition-all"
+            placeholder="ZIP, VIN, customer, company..."
+            autocomplete="off"
+          >
+          <button id="legend-search-btn" type="submit" class="absolute inset-y-0.5 right-0.5 rounded-md bg-cyan-600 px-2.5 text-[9px] font-bold uppercase tracking-[0.08em] text-white hover:bg-cyan-500 transition-colors">
+            Search
+          </button>
+        </form>
+        <div class="mt-1.5 flex items-center justify-between gap-2">
+          <p id="legend-search-status" class="hidden text-[9px] font-medium text-cyan-300">Searching...</p>
+          <p id="legend-search-feedback" class="text-[9px] text-slate-400">33101, VIN, customer ID, Techloc</p>
+        </div>
+      </div>
+    </div>
     <div id="right-toggle-group" class="sidebar-toggle-group right-3 items-end">
       <button id="open-right-sidebar" class="sidebar-toggle-btn text-[11px]">Show Vehicles</button>
     </div>
