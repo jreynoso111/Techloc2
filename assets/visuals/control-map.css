@@ -649,6 +649,43 @@ body.gps-column-resizing {
       font-weight: 800;
       color: #bfdbfe;
       letter-spacing: 0.01em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .vehicle-history-hotspot-level {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.25;
+      border: 1px solid transparent;
+      text-transform: uppercase;
+    }
+
+    .vehicle-history-hotspot-level.is-l1 {
+      color: #cffafe;
+      border-color: rgba(34, 211, 238, 0.8);
+      background: rgba(8, 145, 178, 0.34);
+    }
+
+    .vehicle-history-hotspot-level.is-l2 {
+      color: #dbeafe;
+      border-color: rgba(96, 165, 250, 0.82);
+      background: rgba(30, 64, 175, 0.3);
+    }
+
+    .vehicle-history-hotspot-level.is-l3 {
+      color: #e2e8f0;
+      border-color: rgba(148, 163, 184, 0.58);
+      background: rgba(51, 65, 85, 0.32);
     }
 
     .vehicle-history-hotspot-metrics {

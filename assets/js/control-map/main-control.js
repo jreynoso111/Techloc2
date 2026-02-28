@@ -62,6 +62,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let hotspotsVisible = false;
     let blacklistMarkersVisible = false;
     let routeLinesVisible = true;
+    const ROUTE_LAYER_VISIBILITY_MODE = Object.freeze({
+      ALL: 'all',
+      LABELS_HIDDEN: 'labels-hidden',
+      HIDDEN: 'hidden'
+    });
+    let routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.ALL;
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
     let selectedVehicleKey = null;
@@ -263,6 +269,81 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const hasVisibleParkingSpotPopup = () => Boolean(document.querySelector('.vehicle-history-hotspot-popup'));
     const hasVisibleRoutePointPopup = () => Boolean(document.querySelector('.gps-record-popup'));
+
+    const getRouteToggleLabel = (mode = routeLayerVisibilityMode) => {
+      if (mode === ROUTE_LAYER_VISIBILITY_MODE.ALL) return 'Hide Route Labels';
+      if (mode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN) return 'Hide Route Lines';
+      return 'Show Route Lines';
+    };
+
+    const isGpsTrailDistanceLabelLayer = (layer) => {
+      const className = `${layer?.options?.icon?.options?.className || ''}`.trim();
+      return className.split(/\s+/).includes('gps-trail-distance');
+    };
+
+    const updateRouteLayerToggleUi = () => {
+      const toggle = document.getElementById('toggle-route-lines');
+      if (!toggle) return;
+      const routesVisible = routeLayerVisibilityMode !== ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      const buttonLabel = getRouteToggleLabel(routeLayerVisibilityMode);
+      toggle.textContent = buttonLabel;
+      toggle.classList.toggle('active', routesVisible);
+      toggle.setAttribute('aria-pressed', routesVisible ? 'true' : 'false');
+      toggle.setAttribute('aria-label', buttonLabel);
+    };
+
+    const applyRouteLayerVisibilityMode = () => {
+      routeLinesVisible = routeLayerVisibilityMode !== ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      const hideLabelsOnly = routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN;
+      const hideEverything = routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+
+      if (gpsTrailLayer && map) {
+        if (hideEverything) {
+          if (map.hasLayer(gpsTrailLayer)) map.removeLayer(gpsTrailLayer);
+        } else if (!map.hasLayer(gpsTrailLayer)) {
+          gpsTrailLayer.addTo(map);
+        }
+
+        gpsTrailLayer.eachLayer((layer) => {
+          if (!isGpsTrailDistanceLabelLayer(layer)) return;
+          if (typeof layer.setOpacity === 'function') {
+            layer.setOpacity(hideLabelsOnly ? 0 : 1);
+          }
+          const layerElement = typeof layer.getElement === 'function' ? layer.getElement() : null;
+          if (layerElement) {
+            layerElement.style.display = hideLabelsOnly ? 'none' : '';
+          }
+        });
+      }
+
+      updateRouteLayerToggleUi();
+    };
+
+    const cycleRouteLayerVisibilityMode = () => {
+      if (routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.ALL) {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN;
+      } else if (routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN) {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      } else {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.ALL;
+      }
+      applyRouteLayerVisibilityMode();
+    };
+
+    const bindRouteLayerToggle = () => {
+      const toggle = document.getElementById('toggle-route-lines');
+      if (!toggle) return;
+      if (toggle.dataset.routeCycleBound === '1') {
+        applyRouteLayerVisibilityMode();
+        return;
+      }
+      toggle.dataset.routeCycleBound = '1';
+      toggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        cycleRouteLayerVisibilityMode();
+      });
+      applyRouteLayerVisibilityMode();
+    };
 
     const getOverlapHitRadiusMeters = (latlng) => {
       if (!map || !latlng) return 45;
@@ -1976,6 +2057,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS = 2;
     const GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS = 1;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
+    const GPS_HISTORY_HOTSPOT_HIERARCHY_VISIT_WEIGHT = 10;
+    const GPS_HISTORY_HOTSPOT_HIERARCHY_TOTAL_DAYS_WEIGHT = 14;
+    const GPS_HISTORY_HOTSPOT_LEVEL_PRIMARY_THRESHOLD = 0.78;
+    const GPS_HISTORY_HOTSPOT_LEVEL_SECONDARY_THRESHOLD = 0.48;
     const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
     const GPS_MOVING_UNKNOWN_STALE_READ_MS = 3 * GPS_HISTORY_DAY_MS;
     const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
@@ -2984,6 +3069,26 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           + (Math.min(safeLongestDurationDays, 60) * 8.5);
       };
 
+      const computeParkingHierarchyScore = ({
+        visits = 0,
+        totalParkedDays = 0
+      } = {}) => {
+        const safeVisits = Number.isFinite(visits) ? Math.max(0, visits) : 0;
+        const safeTotalParkedDays = Number.isFinite(totalParkedDays) ? Math.max(0, totalParkedDays) : 0;
+        return (safeVisits * GPS_HISTORY_HOTSPOT_HIERARCHY_VISIT_WEIGHT)
+          + (safeTotalParkedDays * GPS_HISTORY_HOTSPOT_HIERARCHY_TOTAL_DAYS_WEIGHT);
+      };
+
+      const resolveParkingHierarchyLevel = (ratio = 0) => {
+        if (Number.isFinite(ratio) && ratio >= GPS_HISTORY_HOTSPOT_LEVEL_PRIMARY_THRESHOLD) {
+          return { code: 'L1', label: 'Primary parking' };
+        }
+        if (Number.isFinite(ratio) && ratio >= GPS_HISTORY_HOTSPOT_LEVEL_SECONDARY_THRESHOLD) {
+          return { code: 'L2', label: 'Frequent parking' };
+        }
+        return { code: 'L3', label: 'Occasional parking' };
+      };
+
       const normalizedHotspots = clusters
         .map((cluster, index) => {
           const sessions = buildHotspotSessions(cluster.points);
@@ -3029,6 +3134,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               type: isWiredGpsSerial(serial) ? 'wired' : 'wireless'
             }));
           const longestDurationDays = longestDurationMs / GPS_HISTORY_DAY_MS;
+          const totalParkedDays = totalDurationMs / GPS_HISTORY_DAY_MS;
           const longestStayActiveDays = sessions.reduce((maxDays, session) => {
             const activeDays = Number.isFinite(session?.activeDays) ? session.activeDays : 0;
             return Math.max(maxDays, activeDays);
@@ -3045,6 +3151,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             totalDurationMs,
             longestDurationDays
           });
+          const hierarchyScore = computeParkingHierarchyScore({
+            visits,
+            totalParkedDays
+          });
 
           return {
             id: `vehicle-history-hotspot-${index + 1}`,
@@ -3060,13 +3170,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             lastSeen: lastSeenTimeMs,
             radiusMeters,
             totalDurationMs,
+            totalParkedDays,
             avgDurationMs,
             longestDurationMs,
             longestDurationDays,
             lastStayDurationMs,
             longestStayActiveDays,
             multiDayStayCount,
-            score
+            score,
+            hierarchyScore
           };
         });
 
@@ -3078,14 +3190,35 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
 
       let candidates = strictHotspots;
-
-      return candidates
+      candidates = candidates
         .sort((a, b) => {
+          if (b.hierarchyScore !== a.hierarchyScore) return b.hierarchyScore - a.hierarchyScore;
+          if (b.visits !== a.visits) return b.visits - a.visits;
+          if (b.totalParkedDays !== a.totalParkedDays) return b.totalParkedDays - a.totalParkedDays;
           if (b.score !== a.score) return b.score - a.score;
           if (b.lastSeen !== a.lastSeen) return b.lastSeen - a.lastSeen;
           return b.points - a.points;
         })
         .slice(0, GPS_HISTORY_HOTSPOT_MAX);
+
+      const topHierarchyScore = candidates.reduce((bestScore, hotspot) => {
+        const value = Number.isFinite(hotspot?.hierarchyScore) ? hotspot.hierarchyScore : 0;
+        return Math.max(bestScore, value);
+      }, 0);
+
+      return candidates.map((hotspot, index) => {
+        const hierarchyRatio = topHierarchyScore > 0
+          ? hotspot.hierarchyScore / topHierarchyScore
+          : 0;
+        const hierarchyLevel = resolveParkingHierarchyLevel(hierarchyRatio);
+        return {
+          ...hotspot,
+          hierarchyRank: index + 1,
+          hierarchyRatio,
+          hierarchyLevel: hierarchyLevel.code,
+          hierarchyLevelLabel: hierarchyLevel.label
+        };
+      });
     };
 
     const buildVehicleHistoryHotspotPopupKey = (vehicleId, hotspot, index = 0) => {
@@ -4104,8 +4237,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return formatDateTime(value);
     };
 
+    const formatHotspotTotalParkedDays = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return '0.0d';
+      return `${Math.max(0, value).toFixed(1)}d`;
+    };
+
+    const formatHotspotHierarchyScore = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return '0';
+      return `${Math.round(value)}`;
+    };
+
     const buildVehicleHistoryHotspotPopup = (hotspot, index = 0) => {
-      const rank = index + 1;
+      const rank = Number.isFinite(Number(hotspot?.hierarchyRank))
+        ? Math.max(1, Number(hotspot.hierarchyRank))
+        : (index + 1);
+      const hierarchyLevel = `${hotspot?.hierarchyLevel || 'L3'}`.trim().toUpperCase() || 'L3';
+      const hierarchyLevelLabel = `${hotspot?.hierarchyLevelLabel || 'Occasional parking'}`.trim() || 'Occasional parking';
+      const hierarchyLevelClass = hierarchyLevel === 'L1'
+        ? 'is-l1'
+        : (hierarchyLevel === 'L2' ? 'is-l2' : 'is-l3');
       const coords = `${Number(hotspot.lat).toFixed(5)}, ${Number(hotspot.lng).toFixed(5)}`;
       const serialsLabel = (Array.isArray(hotspot?.serials) ? hotspot.serials : [])
         .map((entry) => {
@@ -4122,14 +4272,19 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const mapsLinkHtml = buildGoogleMapsLinkHtml(hotspot.lat, hotspot.lng, { tight: true });
       return `
         <div class="vehicle-history-hotspot-card">
-          <p class="vehicle-history-hotspot-card-title">Parking Spot #${rank}</p>
+          <p class="vehicle-history-hotspot-card-title">
+            <span>Parking Spot #${rank}</span>
+            <span class="vehicle-history-hotspot-level ${hierarchyLevelClass}">${escapeHTML(`${hierarchyLevel} · ${hierarchyLevelLabel}`)}</span>
+          </p>
           <div class="vehicle-history-hotspot-metrics">
             <p><span class="vehicle-history-hotspot-k">Pings</span><span class="vehicle-history-hotspot-v">${hotspot.pingCount || hotspot.points}</span></p>
-            <p><span class="vehicle-history-hotspot-k">Days</span><span class="vehicle-history-hotspot-v">${hotspot.uniqueDays || 0}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Active days</span><span class="vehicle-history-hotspot-v">${hotspot.uniqueDays || 0}</span></p>
             <p><span class="vehicle-history-hotspot-k">Visits</span><span class="vehicle-history-hotspot-v">${hotspot.visits}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Total parked</span><span class="vehicle-history-hotspot-v">${formatHotspotTotalParkedDays(hotspot.totalParkedDays)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Avg stay</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.avgDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Longest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
             <p><span class="vehicle-history-hotspot-k">Latest</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.lastStayDurationMs)}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Hierarchy</span><span class="vehicle-history-hotspot-v">${formatHotspotHierarchyScore(hotspot.hierarchyScore)}</span></p>
           </div>
           <div class="vehicle-history-hotspot-meta">
             <p><span>First</span><span>${formatHotspotDateTime(hotspot.firstSeen)}</span></p>
@@ -4192,7 +4347,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const list = document.getElementById('vehicle-list');
       if (!list) return;
       const card = [...list.querySelectorAll('[data-type="vehicle"]')]
-        .find((node) => `${node?.dataset?.id ?? ''}` === `${vehicleKey}`);
+        .find((node) => (
+          `${node?.dataset?.vehicleKey ?? ''}` === `${vehicleKey}`
+          || `${node?.dataset?.id ?? ''}` === `${vehicleKey}`
+        ));
       if (!card) return;
       card.scrollIntoView({ behavior: 'smooth', block: 'center' });
       card.classList.add('vehicle-hotspot-related-target');
@@ -4311,16 +4469,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       hotspots.forEach((hotspot, index) => {
         const hotspotStrength = Math.min(1, hotspot.points / 12);
-        const visualRadiusMeters = Math.max(320, Math.round(hotspot.radiusMeters * 1.9));
+        const hierarchyRatioRaw = Number(hotspot?.hierarchyRatio);
+        const hierarchyRatio = Number.isFinite(hierarchyRatioRaw)
+          ? Math.max(0, Math.min(1, hierarchyRatioRaw))
+          : 0;
+        const visualStrength = Math.max(hotspotStrength, hierarchyRatio * 0.82);
+        const hotspotLevel = `${hotspot?.hierarchyLevel || ''}`.trim().toUpperCase();
+        const hotspotColor = hotspotLevel === 'L1'
+          ? '#22d3ee'
+          : (hotspotLevel === 'L2' ? GPS_HISTORY_HOTSPOT_COLOR : '#475569');
+        const visualRadiusMeters = Math.max(300, Math.round(hotspot.radiusMeters * (1.55 + (visualStrength * 0.55))));
         const popupHtml = buildVehicleHistoryHotspotPopup(hotspot, index);
 
         const halo = L.circle([hotspot.lat, hotspot.lng], {
           radius: Math.round(visualRadiusMeters * 1.35),
-          color: GPS_HISTORY_HOTSPOT_COLOR,
+          color: hotspotColor,
           weight: 0.9,
-          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
-          fillOpacity: 0.02 + (hotspotStrength * 0.03),
-          opacity: 0.18 + (hotspotStrength * 0.08),
+          fillColor: hotspotColor,
+          fillOpacity: 0.02 + (visualStrength * 0.03),
+          opacity: 0.18 + (visualStrength * 0.08),
           interactive: false,
           className: 'vehicle-history-hotspot-glass-halo'
         }).addTo(highlightLayer);
@@ -4328,11 +4495,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         const ring = L.circle([hotspot.lat, hotspot.lng], {
           radius: visualRadiusMeters,
-          color: GPS_HISTORY_HOTSPOT_COLOR,
-          weight: 1.2 + (hotspotStrength * 0.6),
-          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
-          fillOpacity: 0.05 + (hotspotStrength * 0.06),
-          opacity: 0.42 + (hotspotStrength * 0.14),
+          color: hotspotColor,
+          weight: 1.2 + (visualStrength * 0.6),
+          fillColor: hotspotColor,
+          fillOpacity: 0.05 + (visualStrength * 0.06),
+          opacity: 0.42 + (visualStrength * 0.14),
           interactive: true,
           className: 'vehicle-history-hotspot-ring',
           cycleRole: 'parking-spot',
@@ -4357,10 +4524,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
 
         const coreHalo = L.circleMarker([hotspot.lat, hotspot.lng], {
-          radius: 11 + (hotspotStrength * 2),
-          color: '#64748b',
+          radius: 11 + (visualStrength * 2),
+          color: hotspotColor,
           weight: 1.2,
-          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillColor: hotspotColor,
           fillOpacity: 0.14,
           opacity: 0.45,
           interactive: false,
@@ -4368,10 +4535,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         }).addTo(highlightLayer);
 
         const core = L.circleMarker([hotspot.lat, hotspot.lng], {
-          radius: 7.8 + (hotspotStrength * 1.8),
+          radius: 7.8 + (visualStrength * 1.8),
           color: '#cbd5e1',
           weight: 1.8,
-          fillColor: GPS_HISTORY_HOTSPOT_COLOR,
+          fillColor: hotspotColor,
           fillOpacity: 0.45,
           opacity: 0.72,
           interactive: true,
@@ -4488,11 +4655,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           syncFocusedVehicleNotMovingBadge(vehicle);
         }
       }
-      if (!trailPoints.length && !historyHotspots.length) return;
+      if (!trailPoints.length && !historyHotspots.length) {
+        applyRouteLayerVisibilityMode();
+        return;
+      }
       drawVehicleHistoryHotspots(historyHotspots);
       if (trailPoints.length) {
         drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle), vehicle);
       }
+      applyRouteLayerVisibilityMode();
     };
 
     const ICON_PATHS = {
@@ -5724,7 +5895,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const selectCheckbox = target?.closest('[data-action="vehicle-select-checkbox"]') || findInPath('vehicle-select-checkbox');
       if (!card || !container.contains(card)) return;
 
-      const vehicle = findVehicleById(card.dataset.id);
+      const cardVehicleId = `${card.dataset.vehicleId || ''}`.trim();
+      const cardVehicleKey = `${card.dataset.vehicleKey || card.dataset.id || ''}`.trim();
+      const vehicle = vehicles.find((item) => `${item?.id ?? ''}` === cardVehicleId)
+        || (cardVehicleKey ? findVehicleByKey(cardVehicleKey) : null)
+        || findVehicleById(card.dataset.id);
       if (!vehicle) return;
 
       if (viewMoreBtn) {
@@ -5756,7 +5931,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
-      applySelection(vehicle.id, null, getVehicleKey(vehicle));
       focusVehicle(vehicle);
     }
 
@@ -5814,23 +5988,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function setupLayerToggles() {
-      createLayerToggle({
-        toggleId: 'toggle-route-lines',
-        labelOn: 'Hide Route Lines',
-        labelOff: 'Show Route Lines',
-        getVisible: () => routeLinesVisible,
-        setVisible: (value) => {
-          routeLinesVisible = value;
-        },
-        onShow: () => {
-          if (!gpsTrailLayer || !map) return;
-          if (!map.hasLayer(gpsTrailLayer)) gpsTrailLayer.addTo(map);
-        },
-        onHide: () => {
-          if (!gpsTrailLayer || !map) return;
-          if (map.hasLayer(gpsTrailLayer)) map.removeLayer(gpsTrailLayer);
-        }
-      });
+      bindRouteLayerToggle();
 
       createLayerToggle({
         toggleId: 'toggle-hotspots',
@@ -5967,7 +6125,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 }
                 return;
               }
-              applySelection(currentVehicle.id, null, currentVehicleKey);
               focusVehicle(currentVehicle);
             },
             [currentVehicleKey]
@@ -6023,6 +6180,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           );
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = currentVehicleKey;
+          card.dataset.vehicleKey = currentVehicleKey;
           card.dataset.vehicleId = `${vehicle.id ?? ''}`;
           card.dataset.type = 'vehicle';
           card.innerHTML = `
@@ -6232,9 +6390,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       setTimeout(attachPopupHandlers, 50);
 
       showServicesFromOrigin(vehicle, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
-
-      applySelection(vehicle.id, null, vehicleKey);
+      const needsSelectionUpdate = (
+        `${selectedVehicleId ?? ''}` !== `${vehicle.id ?? ''}`
+        || `${selectedVehicleKey ?? ''}` !== `${vehicleKey}`
+      );
       void renderVehicleGpsTrail(vehicle, trailRequestId);
+      if (needsSelectionUpdate) {
+        applySelection(vehicle.id, null, vehicleKey);
+      }
     }
 
     function vehicleCard(vehicle) {
