@@ -129,6 +129,17 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
   const vehicleStatus = field(row, 'Vehicle Status', 'vehicle status', 'vehicle_status');
   const physicalLocation = field(row, 'Physical Location', 'phys_loc', 'physical_location');
   const shortLocation = field(row, 'short_location', 'Short Location', 'short location');
+  const customerName = field(
+    row,
+    'Customer Name',
+    'customer_name',
+    'Customer',
+    'customer',
+    'CustomerName',
+    'customername',
+    'Borrower Name',
+    'borrower_name'
+  );
   const v = {
     id: row?.id ?? idx,
     status: dealStatus || 'ACTIVE',
@@ -171,6 +182,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     lng: coords.lng,
     locationAccuracy: accuracy,
     customerId: field(row, 'Customer ID', 'Customer', 'customer_id'),
+    customerName: customerName || '',
     customer: field(row, 'PT City', 'City', 'city')
       ? `${field(row, 'PT City', 'City', 'city')}, ${stateCode || 'US'}`
       : stateCode || 'Unknown area',
@@ -183,7 +195,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
   const normalizedVin = `${v.vin ?? ''}`.trim().toUpperCase();
   const normalizedStock = `${v.stockNo ?? ''}`.trim().toUpperCase();
   v.uiKey = [normalizedId, normalizedVin, normalizedStock, `${idx}`].join('::');
-  v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.shortLocation} ${v.physicalLocation} ${v.customerId} ${v.customer}`.toLowerCase();
+  v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.shortLocation} ${v.physicalLocation} ${v.customerId} ${v.customerName} ${v.customer}`.toLowerCase();
 
   return v;
 };

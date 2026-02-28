@@ -160,7 +160,9 @@ const parseStationaryDays = (...candidates) => {
 };
 
 export const getMovingStatus = (vehicle = {}) => {
-  // Prefer stationary-day signals when present: 0 days means moving, >0 means stopped.
+  const historyOverride = `${vehicle?.historyMovingOverride || vehicle?.details?.historyMovingOverride || ''}`
+    .trim()
+    .toLowerCase();
   const stationaryDays = parseStationaryDays(
     vehicle?.historyDaysStationaryOverride,
     vehicle?.daysStationary,
@@ -170,16 +172,6 @@ export const getMovingStatus = (vehicle = {}) => {
     vehicle?.details?.['Days stationary'],
     vehicle?.details?.['Days Parked']
   );
-  if (stationaryDays !== null) {
-    return stationaryDays <= 0 ? 'moving' : 'stopped';
-  }
-
-  const historyOverride = `${vehicle?.historyMovingOverride || vehicle?.details?.historyMovingOverride || ''}`
-    .trim()
-    .toLowerCase();
-  if (historyOverride === 'moving' || historyOverride === 'stopped' || historyOverride === 'unknown') {
-    return historyOverride;
-  }
 
   const explicitStatus = parseMovingIndicator(
     vehicle?.moving,
@@ -192,6 +184,26 @@ export const getMovingStatus = (vehicle = {}) => {
     vehicle?.details?.['Moving (Calc)'],
     vehicle?.details?.['GPS Moving']
   );
+
+  // Strong "stopped" evidence should win over stale/unknown overrides.
+  if ((stationaryDays !== null && stationaryDays > 0) || explicitStatus === 'stopped' || historyOverride === 'stopped') {
+    return 'stopped';
+  }
+
+  // Preserve unknown when stale and there is no strong parked signal.
+  if (historyOverride === 'unknown') {
+    return 'unknown';
+  }
+
+  // 0 parked days means fresh movement unless explicit status says otherwise.
+  if (stationaryDays !== null) {
+    return stationaryDays <= 0 ? 'moving' : 'stopped';
+  }
+
+  if (historyOverride === 'moving' || historyOverride === 'stopped') {
+    return historyOverride;
+  }
+
   if (explicitStatus) return explicitStatus;
 
   const ptReadStatus = getPtLastReadStatus(vehicle?.lastRead);

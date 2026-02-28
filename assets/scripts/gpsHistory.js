@@ -100,6 +100,20 @@ const isWiredSerial = (serial = '') => /^[0-7]/.test(normalizeSerial(serial));
 
 const isWirelessSerial = (serial = '') => /^8/.test(normalizeSerial(serial));
 
+const resolveSerialBlacklistState = (
+  isSerialBlacklisted,
+  serial = '',
+  timestampMs = Date.now(),
+  record = null
+) => {
+  if (typeof isSerialBlacklisted !== 'function') return false;
+  try {
+    return Boolean(isSerialBlacklisted(serial, timestampMs, record));
+  } catch (_error) {
+    return false;
+  }
+};
+
 const getLocalDayKeyFromMs = (timeMs) => {
   if (!Number.isFinite(timeMs) || timeMs <= 0) return '';
   const date = new Date(timeMs);
@@ -139,21 +153,16 @@ const detectWirelessSerialMovementAlarms = (
   { isSerialBlacklisted = null } = {}
 ) => {
   if (!Array.isArray(records) || !records.length) return new Set();
-  const isBlacklisted = typeof isSerialBlacklisted === 'function'
-    ? (serial) => {
-      try {
-        return Boolean(isSerialBlacklisted(serial));
-      } catch (_error) {
-        return false;
-      }
-    }
-    : () => false;
+  const isBlacklisted = (serial, timestampMs, record) => (
+    resolveSerialBlacklistState(isSerialBlacklisted, serial, timestampMs, record)
+  );
 
   const daySerialPoints = new Map();
   records.forEach((record) => {
     const serial = getRecordSerial(record);
     if (!serial) return;
     const timestamp = getRecordTimestampMs(record);
+    if (isBlacklisted(serial, timestamp, record)) return;
     const dayKey = getLocalDayKeyFromMs(timestamp);
     if (!dayKey) return;
     const lat = parseCoordinate(record, 'lat');
@@ -180,7 +189,6 @@ const detectWirelessSerialMovementAlarms = (
       if (
         movementState === 'stopped'
         && isWirelessSerial(serial)
-        && !isBlacklisted(serial)
       ) {
         wirelessStoppedSerials.push(serial);
       }
@@ -374,7 +382,7 @@ const getMostRecentSerialFromRecords = (
   if (!Array.isArray(records) || !records.length) return '';
   const excluded = normalizeSerial(excludeSerial);
   const canUseSerial = typeof isSerialAllowed === 'function'
-    ? (serial) => Boolean(isSerialAllowed(serial))
+    ? (serial, record, timestamp) => Boolean(isSerialAllowed(serial, record, timestamp))
     : () => true;
   let selectedSerial = '';
   let selectedTimestamp = Number.NEGATIVE_INFINITY;
@@ -382,8 +390,8 @@ const getMostRecentSerialFromRecords = (
     const serial = getRecordSerial(record);
     if (!serial) return;
     if (excluded && serial === excluded) return;
-    if (!canUseSerial(serial)) return;
     const timestamp = getRecordTimestampMs(record);
+    if (!canUseSerial(serial, record, timestamp)) return;
     if (timestamp >= selectedTimestamp) {
       selectedTimestamp = timestamp;
       selectedSerial = serial;
@@ -404,23 +412,20 @@ const resolveVehicleWinnerSerialFromRecords = (
 ) => {
   const configuredWinnerSerial = getVehicleWinnerSerial(vehicle);
   if (!Array.isArray(records) || !records.length) return configuredWinnerSerial;
-  const isBlocked = typeof isSerialBlacklisted === 'function'
-    ? (serial) => {
-      try {
-        return Boolean(isSerialBlacklisted(serial));
-      } catch (_error) {
-        return false;
-      }
-    }
-    : () => false;
-  const isAllowed = (serial) => serial && !isBlocked(serial);
+  const isBlocked = (serial, timestampMs, record) => (
+    resolveSerialBlacklistState(isSerialBlacklisted, serial, timestampMs, record)
+  );
+  const isAllowedNow = (serial) => serial && !isBlocked(serial, nowMs);
   const recentWindowStart = nowMs - GPS_WINNER_RECENCY_WINDOW_MS;
   const { start: todayStart, end: todayEnd } = getLocalDayBoundsMs(nowMs);
 
   const serialStats = new Map();
   records.forEach((record) => {
     const serial = getRecordSerial(record);
-    if (!serial || !isAllowed(serial)) return;
+    if (!serial) return;
+    // Winner selection must ignore serials blacklisted as of "now",
+    // even if some of their older readings are before effective_from.
+    if (!isAllowedNow(serial)) return;
     const timestamp = getRecordTimestampMs(record);
     if (!Number.isFinite(timestamp)) return;
     const existing = serialStats.get(serial) || {
@@ -448,7 +453,7 @@ const resolveVehicleWinnerSerialFromRecords = (
     .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
     .map(([serial]) => serial)[0] || '';
 
-  if (configuredWinnerSerial && isAllowed(configuredWinnerSerial)) {
+  if (configuredWinnerSerial && isAllowedNow(configuredWinnerSerial)) {
     const configuredStats = serialStats.get(configuredWinnerSerial);
     if (configuredStats?.hasReadingToday) {
       return configuredWinnerSerial;
@@ -477,7 +482,7 @@ const resolveVehicleWinnerSerialFromRecords = (
   if (freshestAllowedSerial) return freshestAllowedSerial;
 
   const fallbackSerial = getMostRecentSerialFromRecords(records, {
-    isSerialAllowed: (serial) => !isBlocked(serial)
+    isSerialAllowed: (serial) => isAllowedNow(serial)
   });
   if (fallbackSerial) return fallbackSerial;
 
@@ -497,12 +502,11 @@ const createGpsHistoryManager = ({
   const helpers = getDefaultHelpers();
   const safeEscape = escapeHTML || helpers.escapeHTML;
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
-  const serialIsBlacklisted = (serial = '') => {
-    if (typeof isSerialBlacklisted !== 'function') return false;
+  const serialIsBlacklisted = (serial = '', timestampMs = Date.now(), record = null) => {
     try {
       const normalized = normalizeSerial(serial);
       if (!normalized) return false;
-      return Boolean(isSerialBlacklisted(normalized));
+      return resolveSerialBlacklistState(isSerialBlacklisted, normalized, timestampMs, record);
     } catch (_error) {
       return false;
     }

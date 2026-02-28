@@ -1639,14 +1639,6 @@
       const errorPre = document.getElementById('pt-error-pre');
       const rejectedRows = [];
       const cleanedRows = (rows || []).map(sanitizePtPingRow);
-      const ptPingDedupFormatter = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        hour12: false,
-      });
       const aggregated = {
         inserted: 0,
         batches: 0,
@@ -1660,15 +1652,13 @@
       const derivePtDayParts = (dateVal) => {
         const parsedDate = new Date(dateVal);
         if (Number.isNaN(parsedDate.getTime())) return { readDay: null, dayHalf: null };
-        const parts = ptPingDedupFormatter.formatToParts(parsedDate).reduce((acc, part) => {
-          if (part.type !== 'literal') acc[part.type] = part.value;
-          return acc;
-        }, {});
-        const { year, month, day } = parts;
-        const hour = Number(parts.hour);
+        const year = parsedDate.getUTCFullYear();
+        const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+        const hour = parsedDate.getUTCHours();
         if (!year || !month || !day || Number.isNaN(hour)) return { readDay: null, dayHalf: null };
         const readDay = `${year}-${month}-${day}`;
-        const dayHalf = hour < 12 ? 0 : 1;
+        const dayHalf = Math.min(2, Math.floor(hour / 8));
         return { readDay, dayHalf };
       };
 
@@ -1942,7 +1932,7 @@
           '\nSent to Supabase: ' + aggregated.inserted +
           '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
           '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
-          '\nSkipped duplicates (client half-day bucket): ' + aggregated.skippedDeduplication +
+          '\nSkipped duplicates (client 8-hour bucket): ' + aggregated.skippedDeduplication +
           '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
           '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
           '\nErrors: ' + parseErrors;

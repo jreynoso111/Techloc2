@@ -1175,11 +1175,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       runWithTimeout,
       timeoutMs: SUPABASE_TIMEOUT_MS,
       tableName: TABLES.gpsHistory,
-      isSerialBlacklisted: (serial = '') => {
-        const normalized = normalizeGpsSerial(serial);
-        if (!normalized) return false;
-        return gpsDeviceBlacklistSerialsCache.has(normalized);
-      },
+      isSerialBlacklisted: (serial = '', timestampMs = Date.now()) => (
+        isGpsDeviceSerialBlacklistedAt(serial, timestampMs)
+      ),
       escapeHTML,
       formatDateTime
     });
@@ -1222,7 +1220,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       };
     };
 
+    const MAP_DEFAULT_CENTER = { lat: 39.8, lng: -98.5 };
+    const MISSING_VEHICLE_GPS_NOTE = 'No GPS coordinates available (shown at map center).';
+
     const hasValidCoords = (entry) => Number.isFinite(entry?.lat) && Number.isFinite(entry?.lng) && entry.lat !== 0 && entry.lng !== 0;
+
+    const getVehicleMapCoords = (vehicle = {}) => {
+      if (hasValidCoords(vehicle)) {
+        return {
+          lat: Number(vehicle.lat),
+          lng: Number(vehicle.lng),
+          isFallback: false
+        };
+      }
+      return {
+        lat: MAP_DEFAULT_CENTER.lat,
+        lng: MAP_DEFAULT_CENTER.lng,
+        isFallback: true
+      };
+    };
 
     const getLocationNote = (accuracy = '') => {
       if (accuracy === 'zip') return 'Approximate location (based on ZIP code)';
@@ -1344,6 +1360,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS = 1;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
     const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+    const GPS_MOVING_UNKNOWN_STALE_READ_MS = 3 * GPS_HISTORY_DAY_MS;
     const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
     const GPS_DEVICE_BLACKLIST_CACHE_TTL_MS = 5 * 60 * 1000;
     const HOTSPOT_SHARED_MATCH_RADIUS_METERS = 320;
@@ -1366,7 +1383,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const relatedHotspotVehiclesCache = new Map();
     let hotspotFastCoordinatePairs = [];
     let hotspotFastCoordinatePairLookupPromise = null;
-    let gpsDeviceBlacklistSerialsCache = new Set();
+    let gpsDeviceBlacklistSerialsCache = new Map();
     let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
     let gpsDeviceBlacklistSerialsPending = null;
 
@@ -1571,34 +1588,59 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return Array.isArray(movementSourceRecords) && movementSourceRecords.length <= 1 ? 'unknown' : '';
     };
 
-    const inferStationaryDaysFromRecords = (records = []) => {
+    const inferStationaryDaysFromRecords = (records = [], { vehicle = null } = {}) => {
       if (!Array.isArray(records) || !records.length) return null;
 
-      const points = records
-        .map((record) => toGpsTrailPoint(record))
-        .filter(Boolean)
-        .sort((a, b) => a.timestamp - b.timestamp);
-      if (!points.length) return null;
+      const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle);
+      const entries = records
+        .map((record, index) => {
+          const point = toGpsTrailPoint(record);
+          const timeMs = parseGpsTrailTimeMs(record);
+          return {
+            index,
+            timestamp: parseGpsTrailTimestamp(record),
+            lat: Number.isFinite(point?.lat) ? point.lat : null,
+            lng: Number.isFinite(point?.lng) ? point.lng : null,
+            dayStartMs: toLocalDayStartMs(timeMs),
+            derivedDaysStationary: null
+          };
+        })
+        .sort((a, b) => {
+          if (a.timestamp === b.timestamp) return a.index - b.index;
+          return a.timestamp - b.timestamp;
+        });
+      if (!entries.length) return null;
 
-      const latestPoint = points[points.length - 1];
-      const nearbyDayStarts = new Set();
-      for (let index = points.length - 1; index >= 0; index -= 1) {
-        const point = points[index];
-        const distanceFromLatest = getGpsPointDistanceMeters(point, latestPoint);
-        if (!Number.isFinite(distanceFromLatest)) continue;
-        if (distanceFromLatest > GPS_MOVING_STOPPED_MAX_RADIUS_METERS) break;
-        const dayStart = toUtcDayStartMs(Number.isFinite(point.timeMs) ? point.timeMs : point.timestamp);
-        if (!Number.isFinite(dayStart)) continue;
-        nearbyDayStarts.add(dayStart);
-      }
-      if (!nearbyDayStarts.size) return null;
+      let previousEntry = null;
+      let sessionStartDayMs = null;
+      entries.forEach((entry) => {
+        const hasCoords = Number.isFinite(entry.lat) && Number.isFinite(entry.lng);
+        const previousHasCoords = Number.isFinite(previousEntry?.lat) && Number.isFinite(previousEntry?.lng);
+        const distanceMeters = (hasCoords && previousHasCoords)
+          ? getGpsPointDistanceMeters(
+            { lat: previousEntry.lat, lng: previousEntry.lng },
+            { lat: entry.lat, lng: entry.lng }
+          )
+          : Number.POSITIVE_INFINITY;
 
-      const sortedDayStarts = [...nearbyDayStarts].sort((a, b) => a - b);
-      const earliestDayStart = sortedDayStarts[0];
-      const latestDayStart = sortedDayStarts[sortedDayStarts.length - 1];
-      if (!Number.isFinite(earliestDayStart) || !Number.isFinite(latestDayStart)) return null;
-      const spanDays = Math.floor((latestDayStart - earliestDayStart) / GPS_HISTORY_DAY_MS);
-      return Math.max(0, spanDays);
+        if (!previousEntry || !Number.isFinite(distanceMeters) || distanceMeters > stoppedDistanceThreshold) {
+          sessionStartDayMs = entry.dayStartMs;
+        } else if (!Number.isFinite(sessionStartDayMs) && Number.isFinite(entry.dayStartMs)) {
+          sessionStartDayMs = entry.dayStartMs;
+        }
+
+        if (Number.isFinite(entry.dayStartMs) && Number.isFinite(sessionStartDayMs)) {
+          entry.derivedDaysStationary = Math.max(
+            0,
+            Math.floor((entry.dayStartMs - sessionStartDayMs) / GPS_HISTORY_DAY_MS)
+          );
+        }
+
+        previousEntry = entry;
+      });
+
+      const latestEntry = entries[entries.length - 1];
+      return Number.isFinite(latestEntry?.derivedDaysStationary) ? latestEntry.derivedDaysStationary : null;
     };
 
     const applyVehicleMovingOverrideFromGpsHistory = (vehicle, records = []) => {
@@ -1630,12 +1672,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const latestMovementRecord = [...movementSourceRecords]
         .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))[0] || null;
       const explicitLatestStationaryDays = parseGpsRecordDaysParked(latestMovementRecord || {});
-      const inferredStationaryDays = inferStationaryDaysFromRecords(movementSourceRecords);
+      const inferredStationaryDays = inferStationaryDaysFromRecords(movementSourceRecords, { vehicle });
       let stationaryDays = Number.isFinite(inferredStationaryDays)
         ? inferredStationaryDays
         : (Number.isFinite(explicitLatestStationaryDays) ? explicitLatestStationaryDays : null);
+
+      const latestMovementRecordTimeMs = parseGpsTrailTimeMs(latestMovementRecord || {});
+      const isLatestReadStale = Number.isFinite(latestMovementRecordTimeMs)
+        && (Date.now() - latestMovementRecordTimeMs) > GPS_MOVING_UNKNOWN_STALE_READ_MS;
+      const latestRecordMove = parseGpsRecordMovingStatus(latestMovementRecord || {});
+      const latestRecordLooksParked = (
+        latestRecordMove === 'stopped'
+        || (Number.isFinite(explicitLatestStationaryDays) && explicitLatestStationaryDays > 0)
+      );
+      if (!Number.isFinite(stationaryDays) && latestRecordLooksParked) {
+        stationaryDays = 0;
+      }
+
       const currentMovingOverride = `${vehicle?.historyMovingOverride || ''}`.trim().toLowerCase();
-      const normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
+      let normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
+      if (isLatestReadStale) {
+        normalizedOverride = 'unknown';
+      }
       if (normalizedOverride === 'moving') {
         stationaryDays = 0;
       }
@@ -1682,8 +1740,70 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(normalizeGpsSerial(serial));
 
+    const normalizeGpsBlacklistColumnName = (value = '') => `${value ?? ''}`
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    const GPS_BLACKLIST_EFFECTIVE_DATE_COLUMN_CANDIDATES = [
+      'effective_from',
+      'effective_date',
+      'effective_start_date',
+      'blacklist_from',
+      'blacklist_date',
+      'start_date',
+      'date_from',
+      'from_date',
+      'date'
+    ];
+
+    const parseGpsBlacklistEffectiveFromMs = (row = {}) => {
+      if (!row || typeof row !== 'object') return null;
+
+      const keyLookup = new Map();
+      Object.keys(row).forEach((key) => {
+        keyLookup.set(normalizeGpsBlacklistColumnName(key), key);
+      });
+
+      for (const candidate of GPS_BLACKLIST_EFFECTIVE_DATE_COLUMN_CANDIDATES) {
+        const actualKey = keyLookup.get(normalizeGpsBlacklistColumnName(candidate));
+        if (!actualKey) continue;
+        const rawValue = row?.[actualKey];
+        if (rawValue === null || rawValue === undefined || `${rawValue}`.trim() === '') {
+          return null;
+        }
+        const parsed = Date.parse(rawValue);
+        if (!Number.isNaN(parsed)) return parsed;
+        return null;
+      }
+
+      return null;
+    };
+
+    const isGpsDeviceSerialBlacklistedAt = (
+      serial = '',
+      timestampMs = Date.now(),
+      { blacklistBySerial = gpsDeviceBlacklistSerialsCache } = {}
+    ) => {
+      const normalized = normalizeGpsSerial(serial);
+      if (!normalized) return false;
+
+      if (blacklistBySerial instanceof Set) {
+        return blacklistBySerial.has(normalized);
+      }
+
+      if (!(blacklistBySerial instanceof Map)) return false;
+      if (!blacklistBySerial.has(normalized)) return false;
+
+      const effectiveFromMs = blacklistBySerial.get(normalized);
+      if (effectiveFromMs === null || effectiveFromMs === undefined) return true;
+
+      const evaluationTimestamp = Number.isFinite(timestampMs) ? timestampMs : Date.now();
+      return evaluationTimestamp >= effectiveFromMs;
+    };
+
     const getGpsDeviceBlacklistSerials = async ({ force = false } = {}) => {
-      if (!supabaseClient?.from) return new Set();
+      if (!supabaseClient?.from) return new Map();
 
       const now = Date.now();
       const cacheIsFresh = (now - gpsDeviceBlacklistSerialsCacheUpdatedAt) <= GPS_DEVICE_BLACKLIST_CACHE_TTL_MS;
@@ -1699,19 +1819,31 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const { data, error } = await runWithTimeout(
           supabaseClient
             .from(tableName)
-            .select('serial,is_active'),
+            .select('*'),
           8000,
           'GPS blacklist request timed out.'
         );
 
         if (error) throw error;
 
-        const serials = new Set();
+        const serials = new Map();
         (data || []).forEach((row) => {
           if (row?.is_active === false) return;
           const serial = normalizeGpsSerial(row?.serial);
           if (!serial) return;
-          serials.add(serial);
+          const effectiveFromMs = parseGpsBlacklistEffectiveFromMs(row);
+          const currentValue = serials.get(serial);
+          if (currentValue === undefined) {
+            serials.set(serial, effectiveFromMs);
+            return;
+          }
+          if (currentValue === null || effectiveFromMs === null) {
+            serials.set(serial, null);
+            return;
+          }
+          if (effectiveFromMs < currentValue) {
+            serials.set(serial, effectiveFromMs);
+          }
         });
 
         gpsDeviceBlacklistSerialsCache = serials;
@@ -1896,11 +2028,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
     };
 
+    const toLocalDayStartMs = (timeMs) => {
+      if (!Number.isFinite(timeMs) || timeMs <= 0) return null;
+      const date = new Date(timeMs);
+      if (Number.isNaN(date.getTime())) return null;
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    };
+
     const selectParkingSpotRecordsByDay = (
       records = [],
       {
         getRecordSerial = () => '',
-        blacklistedWirelessSerials = new Set()
+        blacklistedWirelessSerials = new Map()
       } = {}
     ) => {
       if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
@@ -1908,15 +2047,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const dayBuckets = new Map();
       const fallbackWiredRecords = [];
       const fallbackWirelessRecords = [];
-      const blacklistedSerials = blacklistedWirelessSerials instanceof Set
+      const blacklistedSerials = (
+        blacklistedWirelessSerials instanceof Set
+        || blacklistedWirelessSerials instanceof Map
+      )
         ? blacklistedWirelessSerials
-        : new Set();
+        : new Map();
 
       records.forEach((record) => {
         const serial = normalizeGpsSerial(getRecordSerial(record));
         if (!serial) return;
+        const timeMs = parseGpsTrailTimeMs(record);
         const isWired = isWiredGpsSerial(serial);
-        const isWirelessAllowed = !isWired && !blacklistedSerials.has(serial);
+        const isWirelessAllowed = (
+          !isWired
+          && !isGpsDeviceSerialBlacklistedAt(serial, timeMs, {
+            blacklistBySerial: blacklistedSerials
+          })
+        );
         if (!isWired && !isWirelessAllowed) return;
 
         if (isWired) {
@@ -1925,7 +2073,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           fallbackWirelessRecords.push(record);
         }
 
-        const timeMs = parseGpsTrailTimeMs(record);
         const dayStartMs = toUtcDayStartMs(timeMs);
         if (!Number.isFinite(dayStartMs)) return;
 
@@ -2289,6 +2436,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           return [];
         }
 
+        const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
         const winnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
           ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
           : gpsHistoryManager.getVehicleWinnerSerial(vehicle);
@@ -2299,7 +2447,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const winnerScopedRecords = winnerSerial
           ? records.filter((record) => getRecordSerial(record) === winnerSerial)
           : records;
-        const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
 
         let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
           getRecordSerial,
@@ -2971,8 +3118,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         record?.days_stationary_calc,
         record?.DaysParked,
         record?.['Days Parked'],
-        record?.['Days Stationary'],
-        record?.historyDaysStationaryOverride
+        record?.['Days Stationary']
       ];
       for (const candidate of candidates) {
         const parsed = parseGpsNumericValue(candidate);
@@ -2983,10 +3129,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const getTrailPointDayStartMs = (point = {}) => {
       const timeMs = Number.isFinite(point?.timeMs) ? point.timeMs : point?.timestamp;
-      return toUtcDayStartMs(timeMs);
+      return toLocalDayStartMs(timeMs);
     };
 
-    const getTrailPointMovementStatus = (point = {}, previousPoint = null) => {
+    const getTrailPointMovementStatus = (
+      point = {},
+      previousPoint = null,
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS
+      } = {}
+    ) => {
       const explicit = parseGpsRecordMovingStatus(point?.record || {});
       if (explicit === 'moving' || explicit === 'stopped') return explicit;
 
@@ -2998,21 +3150,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (previousPoint) {
         const segmentDistance = getGpsPointDistanceMeters(previousPoint, point);
         if (Number.isFinite(segmentDistance)) {
-          return segmentDistance <= GPS_MOVING_STOPPED_MAX_SEGMENT_METERS ? 'stopped' : 'moving';
+          return segmentDistance <= stoppedDistanceThreshold ? 'stopped' : 'moving';
         }
       }
 
       return 'unknown';
     };
 
-    const buildTrailDerivedParkedDays = (points = []) => {
+    const buildTrailDerivedParkedDays = (
+      points = [],
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS
+      } = {}
+    ) => {
       if (!Array.isArray(points) || !points.length) return [];
       const result = new Array(points.length).fill(null);
       let stationaryStartDayMs = null;
 
       points.forEach((point, index) => {
         const previousPoint = index > 0 ? points[index - 1] : null;
-        const movement = getTrailPointMovementStatus(point, previousPoint);
+        const movement = getTrailPointMovementStatus(point, previousPoint, {
+          stoppedDistanceThreshold
+        });
         const dayStartMs = getTrailPointDayStartMs(point);
 
         if (movement === 'moving') {
@@ -3039,14 +3198,21 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return result;
     };
 
-    const buildTrailParkedStartTimeByPoint = (points = []) => {
+    const buildTrailParkedStartTimeByPoint = (
+      points = [],
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS
+      } = {}
+    ) => {
       if (!Array.isArray(points) || !points.length) return [];
       const parkedStartByIndex = new Array(points.length).fill(null);
       let parkedStartMs = null;
 
       points.forEach((point, index) => {
         const previousPoint = index > 0 ? points[index - 1] : null;
-        const movement = getTrailPointMovementStatus(point, previousPoint);
+        const movement = getTrailPointMovementStatus(point, previousPoint, {
+          stoppedDistanceThreshold
+        });
         const pointTimeMs = Number(point?.timeMs);
 
         if (movement !== 'stopped') {
@@ -3064,8 +3230,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return parkedStartByIndex;
     };
 
-    const drawVehicleGpsTrail = (points = [], vehicleColor = '') => {
+    const drawVehicleGpsTrail = (points = [], vehicleColor = '', vehicle = null) => {
       if (!gpsTrailLayer || !Array.isArray(points) || !points.length) return;
+      const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle || {});
       const oldestLineRgb = parseTrailColorToRgb('#14532d');
       const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
       const newestVehicleRgb = parseTrailColorToRgb(vehicleColor, oldestLineRgb);
@@ -3075,8 +3242,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const newestLabelTextRgb = parseTrailColorToRgb('#dcfce7');
       const pointStepDenominator = Math.max(1, points.length - 1);
       const segmentStepDenominator = Math.max(1, points.length - 1);
-      const derivedParkedDaysByPoint = buildTrailDerivedParkedDays(points);
-      const parkedStartTimeByPoint = buildTrailParkedStartTimeByPoint(points);
+      const derivedParkedDaysByPoint = buildTrailDerivedParkedDays(points, {
+        stoppedDistanceThreshold
+      });
+      const parkedStartTimeByPoint = buildTrailParkedStartTimeByPoint(points, {
+        stoppedDistanceThreshold
+      });
       const segmentLabelEntries = [];
 
       for (let index = 0; index < points.length - 1; index += 1) {
@@ -3156,12 +3327,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const segmentDistanceKm = formatTrailSegmentDistanceKm(fromPoint, toPoint);
         if (!segmentDistanceKm) continue;
         const toPointIndex = index + 1;
-        const toPointMovement = getTrailPointMovementStatus(toPoint, fromPoint);
+        const toPointMovement = getTrailPointMovementStatus(toPoint, fromPoint, {
+          stoppedDistanceThreshold
+        });
         const explicitDaysParked = parseGpsRecordDaysParked(toPoint?.record || {});
         const derivedDaysParked = Number.isFinite(derivedParkedDaysByPoint[toPointIndex])
           ? derivedParkedDaysByPoint[toPointIndex]
           : null;
-        const resolvedDaysParked = explicitDaysParked ?? derivedDaysParked;
+        const resolvedDaysParked = derivedDaysParked ?? explicitDaysParked;
         const parkedStartMs = parkedStartTimeByPoint[toPointIndex];
         const toPointTimeMs = Number(toPoint?.timeMs);
         const parkedElapsedMs = (
@@ -3346,9 +3519,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const focusMapOnVehicleQuick = (vehicle, { targetZoom = 14, preserveZoom = false } = {}) => {
-      if (!map || !hasValidCoords(vehicle)) return;
+      if (!map || !vehicle) return;
+      const vehicleCoords = getVehicleMapCoords(vehicle);
 
-      const destination = L.latLng(vehicle.lat, vehicle.lng);
+      const destination = L.latLng(vehicleCoords.lat, vehicleCoords.lng);
       const currentCenter = typeof map.getCenter === 'function' ? map.getCenter() : null;
       const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : targetZoom;
       const distanceMeters = currentCenter ? map.distance(currentCenter, destination) : 0;
@@ -3392,7 +3566,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!vehicle) return false;
 
       clearParkingSpotCascade();
-      if (hasValidCoords(vehicle) && map) {
+      if (map) {
         const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : 14;
         focusMapOnVehicleQuick(vehicle, {
           targetZoom: currentZoom,
@@ -3575,6 +3749,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (error || !Array.isArray(records) || !records.length) return;
       setHotspotFastCoordinatePairsFromRecords(records);
 
+      const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
       const configuredWinnerSerial = gpsHistoryManager.getVehicleWinnerSerial(vehicle);
       const winnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
         ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
@@ -3601,7 +3776,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .filter((point) => point !== null)
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
       let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
         getRecordSerial,
         blacklistedWirelessSerials
@@ -3634,7 +3808,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!trailPoints.length && !historyHotspots.length) return;
       drawVehicleHistoryHotspots(historyHotspots);
       if (trailPoints.length) {
-        drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle));
+        drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle), vehicle);
       }
     };
 
@@ -3660,7 +3834,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
     };
 
-    const VEHICLE_RENDER_LIMIT = 35;
+    const VEHICLE_RENDER_LIMIT = 500;
     const PARTNER_CARD_LIMIT = 35;
 
     const SERVICE_TYPES = ['tech', 'reseller', 'repair', 'custom'];
@@ -3926,7 +4100,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         minZoom: 3,
         zoomSnap: 0.25,
         zoomDelta: 0.5
-      }).setView([39.8, -98.5], 5);
+      }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], 5);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, minZoom: 3 }).addTo(map);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 19, minZoom: 3, opacity: 0.95 }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -4047,7 +4221,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           clearParkingSpotCascade();
           map.closePopup();
           const selectedVehicle = getSelectedVehicleEntry();
-          if (selectedVehicle && hasValidCoords(selectedVehicle) && vehicleMarkersVisible) {
+          if (selectedVehicle && vehicleMarkersVisible) {
             focusVehicle(selectedVehicle);
           } else {
             applySelection(selectedVehicleId, null, selectedVehicleKey);
@@ -5089,10 +5263,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 || vehicles.find((item) => `${item.id}` === `${vehicle.id}`)
                 || vehicle;
               if (!currentVehicle) return;
-              if (!hasValidCoords(currentVehicle)) {
-                console.warn(`No coordinates available for vehicle ${currentVehicle.vin || currentVehicle.id || 'unknown'}`);
-                return;
-              }
               const originalEvent = payload?.event?.originalEvent;
               const vehicleSelectionMatchesKey = !selectedVehicleKey || `${selectedVehicleKey}` === currentVehicleKey;
               const vehicleSelectionChanged = (
@@ -5119,13 +5289,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             [currentVehicleKey]
           );
 
-          let coords = null;
-          if (hasValidCoords(vehicle)) {
+          const coordsInfo = getVehicleMapCoords(vehicle);
+          const coords = { lat: coordsInfo.lat, lng: coordsInfo.lng };
+          if (coordsInfo.isFallback) {
+            vehicle.locationAccuracy = 'missing';
+            vehicle.locationNote = MISSING_VEHICLE_GPS_NOTE;
+          } else {
             vehicle.locationAccuracy = vehicle.locationAccuracy || 'exact';
             vehicle.locationNote = getLocationNote(vehicle.locationAccuracy);
-            coords = { lat: vehicle.lat, lng: vehicle.lng };
-          } else {
-            console.warn(`No location data for vehicle ${vehicle.vin || vehicle.id || 'unknown'}`);
           }
 
           if (coords && vehicleMarkersVisible) {
@@ -5331,8 +5502,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function focusVehicle(vehicle) {
       const trailRequestId = ++gpsTrailRequestCounter;
       if (!vehicle) return;
-      if (!hasValidCoords(vehicle)) return;
       if (!vehicleMarkersVisible) return;
+      const vehicleCoords = getVehicleMapCoords(vehicle);
       clearParkingSpotCascade();
       highlightLayer.clearLayers();
       gpsTrailLayer?.clearLayers();
@@ -5340,7 +5511,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const vehicleKey = getVehicleKey(vehicle);
       const storedMarker = vehicleMarkers.get(vehicleKey)?.marker;
       const markerColor = getVehicleMarkerColor(vehicle);
-      const anchorMarker = storedMarker || L.circleMarker([vehicle.lat, vehicle.lng], {
+      const anchorMarker = storedMarker || L.circleMarker([vehicleCoords.lat, vehicleCoords.lng], {
         radius: 9,
         color: '#0b1220',
         weight: 2.8,
@@ -5353,7 +5524,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         cycleKey: `vehicle-${vehicleKey}`
       }).addTo(highlightLayer);
 
-      const halo = L.circleMarker([vehicle.lat, vehicle.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
+      const halo = L.circleMarker([vehicleCoords.lat, vehicleCoords.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
       halo.bringToBack();
 
       syncFocusedVehicleNotMovingBadge(vehicle);
@@ -5767,7 +5938,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           persistVehicleFilterPrefs();
 
           const selectedVehicle = getSelectedVehicleEntry();
-          if (selectedVehicle && hasValidCoords(selectedVehicle) && vehicleMarkersVisible) {
+          if (selectedVehicle && vehicleMarkersVisible) {
             focusVehicle(selectedVehicle);
           }
         };
@@ -6428,7 +6599,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const stopLoading = startLoading('Loading GPS history…');
       try {
         const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin });
-        await getGpsDeviceBlacklistSerials().catch(() => new Set());
+        await getGpsDeviceBlacklistSerials().catch(() => new Map());
         if (Array.isArray(records) && records.length) {
           const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records);
           if (movingOverrideChanged) {

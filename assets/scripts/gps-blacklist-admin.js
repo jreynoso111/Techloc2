@@ -48,6 +48,17 @@ const state = {
 };
 
 const ADDED_AT_COL = 'added_at';
+const EFFECTIVE_FROM_COL_CANDIDATES = [
+  'effective_from',
+  'effective_date',
+  'effective_start_date',
+  'blacklist_from',
+  'blacklist_date',
+  'start_date',
+  'date_from',
+  'from_date',
+  'date',
+];
 const AUTO_FIELDS = new Set(['is_active', 'added_by', 'uuid']);
 const HIDDEN_COLUMNS = new Set(['uuid', 'is_active']);
 const ADMIN_ROLE = 'administrator';
@@ -205,6 +216,14 @@ const getDisplayColumns = (rows) => {
 const findColumnByNormalizedName = (normalizedName) =>
   state.columns.find((col) => normalizeColumnName(col) === normalizeColumnName(normalizedName)) || null;
 
+const normalizeDateColumnToken = (value = '') => normalizeColumnName(value).replace(/[^a-z0-9]/g, '');
+
+const EFFECTIVE_FROM_COLUMN_TOKENS = new Set(
+  EFFECTIVE_FROM_COL_CANDIDATES.map((column) => normalizeDateColumnToken(column)),
+);
+
+const isEffectiveFromColumn = (columnName) => EFFECTIVE_FROM_COLUMN_TOKENS.has(normalizeDateColumnToken(columnName));
+
 const formatAddedAt = (value) => {
   if (!value) return '—';
   const date = new Date(value);
@@ -218,7 +237,33 @@ const formatAddedAt = (value) => {
   return `${mm}/${dd}/${yy} [${hh}:${min}]`;
 };
 
+const formatEffectiveFromDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
+};
+
 const isAddedAtColumn = (columnName) => normalizeColumnName(columnName) === ADDED_AT_COL;
+
+const toDateInputValue = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = String(parsed.getFullYear());
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const raw = String(value).trim();
+  const isoDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return isoDate ? isoDate[1] : '';
+};
 
 
 
@@ -276,6 +321,7 @@ const renderColumnSelectors = () => {
 const formatCell = (columnName, value) => {
   if (value === null || value === undefined || value === '') return '—';
   if (isAddedAtColumn(columnName)) return formatAddedAt(value);
+  if (isEffectiveFromColumn(columnName)) return formatEffectiveFromDate(value);
   if (typeof value === 'object') return JSON.stringify(value);
   const valueText = String(value);
   return valueText.length > 80 ? `${valueText.slice(0, 77)}...` : valueText;
@@ -344,13 +390,15 @@ const openModal = (title, row = null) => {
   editableColumns.forEach((col) => {
     const value = row?.[col] ?? '';
     const fieldId = `field-${col}`;
-    const inputType = typeof value === 'number' ? 'number' : 'text';
+    const dateField = isEffectiveFromColumn(col);
+    const inputType = dateField ? 'date' : (typeof value === 'number' ? 'number' : 'text');
+    const inputValue = dateField ? toDateInputValue(value) : String(value);
     els.rowForm.insertAdjacentHTML(
       'beforeend',
       `
       <label class="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-300" for="${fieldId}">
         <span>${col}</span>
-        <input id="${fieldId}" data-field="${col}" type="${inputType}" value="${String(value).replaceAll('"', '&quot;')}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-blue-500 focus:outline-none" />
+        <input id="${fieldId}" data-field="${col}" data-date-field="${dateField ? 'true' : 'false'}" type="${inputType}" value="${String(inputValue).replaceAll('"', '&quot;')}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-blue-500 focus:outline-none" />
       </label>
       `,
     );
@@ -371,7 +419,11 @@ const buildPayloadFromForm = () => {
   els.rowForm.querySelectorAll('[data-field]').forEach((input) => {
     const field = input.dataset.field;
     const raw = input.value;
-    payload[field] = raw === '' ? null : raw;
+    if (raw === '') {
+      payload[field] = null;
+      return;
+    }
+    payload[field] = raw;
   });
   return payload;
 };
