@@ -81,6 +81,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const DEFAULT_GPS_TRAIL_POINT_LIMIT = 10;
     const MIN_GPS_TRAIL_POINT_LIMIT = 1;
     const MAX_GPS_TRAIL_POINT_LIMIT = 120;
+    const DATA_SYNC_AUTO_REFRESH_INTERVAL_MS = 90 * 1000;
+    const DATA_SYNC_FOCUS_COOLDOWN_MS = 12 * 1000;
     let syncingVehicleSelection = false;
     let selectedTechId = null;
     const vehicleMarkers = new Map();
@@ -94,6 +96,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let lastClientLocation = null;
     let renderedTechIds = '';
     let lastOriginPoint = null;
+    let lastDataSyncRefreshAt = 0;
+    let dataSyncRefreshPromise = null;
     const serviceSearchFilters = { tech: '', reseller: '', repair: '', custom: '' };
     const serviceFilterIds = { ...getServiceFilterIds() };
     const vehicleFilters = {
@@ -578,22 +582,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const ensureSupabaseSession = () => ensureSupabaseSessionBase(supabaseClient);
     const vehicleService = createVehicleService({ client: supabaseClient, tableName: TABLES.vehicles });
 
-    const areDepsEqual = (next = [], prev = []) =>
-      next.length === prev.length && next.every((value, index) => Object.is(value, prev[index]));
-
-    const createCallbackMemo = () => {
-      const cache = new Map();
-      return (key, factory, deps = []) => {
-        const previous = cache.get(key);
-        if (previous && areDepsEqual(deps, previous.deps)) return previous.fn;
-        const fn = factory();
-        cache.set(key, { deps: [...deps], fn });
-        return fn;
-      };
-    };
-
-    const useCallback = createCallbackMemo();
-
     const parseNumber = (value) => {
       if (value === undefined || value === null) return null;
       const cleaned = typeof value === 'string' ? value.replace(/[$,]/g, '').trim() : value;
@@ -619,9 +607,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     );
 
     const getVehicleKey = (vehicle = {}) => {
+      const idPart = `${vehicle?.id ?? ''}`.trim();
+      if (idPart) return idPart;
       const explicitKey = `${vehicle?.uiKey || ''}`.trim();
       if (explicitKey) return explicitKey;
-      const idPart = `${vehicle?.id ?? ''}`.trim();
       const vinPart = normalizeVin(vehicle?.vin);
       const stockPart = normalizeStockNumber(vehicle?.stockNo);
       return [idPart, vinPart, stockPart].join('::');
@@ -1537,17 +1526,34 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
-    const matchesVehicleSelection = (vehicle, selection) => {
-      if (!vehicle || !selection) return false;
+    const resolveSelectionVehicle = (selection) => {
+      if (!selection) return null;
+
+      const selectionId = `${selection.id ?? ''}`.trim();
+      if (selectionId) {
+        const byId = vehicles.find((vehicle) => `${vehicle?.id ?? ''}` === selectionId) || null;
+        if (byId) return byId;
+      }
+
       const selectionKey = `${selection.key || ''}`.trim();
-      if (selectionKey && getVehicleKey(vehicle) === selectionKey) return true;
-      if (selection.id !== null && selection.id !== undefined && `${vehicle.id}` === `${selection.id}`) return true;
+      if (selectionKey) {
+        const byKey = findVehicleByKey(selectionKey);
+        if (byKey) return byKey;
+      }
+
       const selectionVin = normalizeSelectionValue(selection.vin);
-      const vehicleVin = normalizeSelectionValue(vehicle.vin);
-      if (selectionVin && vehicleVin && selectionVin === vehicleVin) return true;
+      if (selectionVin) {
+        const vinMatches = vehicles.filter((vehicle) => normalizeSelectionValue(vehicle?.vin) === selectionVin);
+        if (vinMatches.length === 1) return vinMatches[0];
+      }
+
       const selectionCustomer = normalizeSelectionValue(selection.customerId);
-      const vehicleCustomer = normalizeSelectionValue(vehicle.customerId);
-      return !!(selectionCustomer && vehicleCustomer && selectionCustomer === vehicleCustomer);
+      if (selectionCustomer) {
+        const customerMatches = vehicles.filter((vehicle) => normalizeSelectionValue(vehicle?.customerId) === selectionCustomer);
+        if (customerMatches.length === 1) return customerMatches[0];
+      }
+
+      return null;
     };
 
     const syncVehicleSelectionFromStore = (selection, { shouldFocus = true } = {}) => {
@@ -1559,7 +1565,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
-      const match = vehicles.find((vehicle) => matchesVehicleSelection(vehicle, selection));
+      const match = resolveSelectionVehicle(selection);
       if (!match) return;
       const matchKey = getVehicleKey(match);
       if (`${selectedVehicleId ?? ''}` === `${match.id ?? ''}` && `${selectedVehicleKey ?? ''}` === matchKey) return;
@@ -1586,12 +1592,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return cache;
     };
 
-    const ensureServiceCache = async () => {
+    const ensureServiceCache = async ({ force = false, silent = false } = {}) => {
       if (!supabaseClient) return null;
-      if (serviceCacheByCategory.size) return serviceCacheByCategory;
+      if (!force && serviceCacheByCategory.size) return serviceCacheByCategory;
       if (serviceFetchPromise) return serviceFetchPromise;
 
-      const stopLoading = startLoading('Loading Services…');
+      if (force) {
+        serviceCacheByCategory = new Map();
+      }
+
+      const stopLoading = silent ? () => {} : startLoading('Loading Services…');
       serviceFetchPromise = (async () => {
         const { data, error } = await supabaseClient.from(SERVICE_TABLE).select('*');
         if (error) throw error;
@@ -4180,7 +4190,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const labelTextColor = rgbToHex(labelTextRgb);
         const labelShadow = rgbToRgba(labelToneRgb, interpolateNumber(0.2, 0.48, segmentProgress));
         const labelFontWeight = Math.round(interpolateNumber(690, 820, segmentProgress));
-        const labelMarker = L.marker([midpoint.lat, midpoint.lng], {
+        const labelAnchor = {
+          lat: toPoint.lat,
+          lng: toPoint.lng
+        };
+        const labelMarker = L.marker([labelAnchor.lat, labelAnchor.lng], {
           icon: L.divIcon({
             className: 'gps-trail-distance',
             html: `<span class="gps-trail-distance-wrap"><span class="gps-trail-distance-badge" style="border-color:${labelBorder};background:${labelBackground};color:${labelTextColor};font-weight:${labelFontWeight};box-shadow:0 0 0 1px ${labelShadow};">${segmentLabelWithParked}</span></span>`,
@@ -4194,7 +4208,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const previousEntryIndex = segmentLabelEntries.findIndex((entry) => {
           const distance = getGpsPointDistanceMeters(
             { lat: entry.lat, lng: entry.lng },
-            midpoint
+            labelAnchor
           );
           return Number.isFinite(distance) && distance <= GPS_TRAIL_LABEL_MERGE_RADIUS_METERS;
         });
@@ -4205,14 +4219,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             gpsTrailLayer.removeLayer(previousEntry.marker);
           }
           segmentLabelEntries[previousEntryIndex] = {
-            lat: midpoint.lat,
-            lng: midpoint.lng,
+            lat: labelAnchor.lat,
+            lng: labelAnchor.lng,
             marker: labelMarker
           };
         } else {
           segmentLabelEntries.push({
-            lat: midpoint.lat,
-            lng: midpoint.lng,
+            lat: labelAnchor.lat,
+            lng: labelAnchor.lng,
             marker: labelMarker
           });
         }
@@ -4966,6 +4980,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       vehicleLayer = L.markerClusterGroup({
         maxClusterRadius: 35,
         disableClusteringAtZoom: 17,
+        animate: false,
+        animateAddingMarkers: false,
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
         iconCreateFunction(cluster) {
@@ -5065,12 +5081,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (e.originalEvent?.handledByMarker) {
           return;
         }
+        const eventTarget = e.originalEvent?.target;
+        if (eventTarget instanceof Element && eventTarget.closest('.leaflet-interactive')) {
+          return;
+        }
 
         const lat = parseFloat(e.latlng.lat.toFixed(6));
         const lng = parseFloat(e.latlng.lng.toFixed(6));
 
-        const shouldCascadeToVehicleOnly = selectedVehicleId !== null
-          && (parkingSpotCascadeArmed || hasVisibleParkingSpotPopup() || hasVisibleRoutePointPopup());
+        const shouldCascadeToVehicleOnly = selectedVehicleId !== null && parkingSpotCascadeArmed;
         if (shouldCascadeToVehicleOnly) {
           clearParkingSpotCascade();
           map.closePopup();
@@ -5112,7 +5131,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     // --- 2. Load data from Supabase ---
-    async function loadTechnicians() {
+    async function loadTechnicians({ force = false, silent = false } = {}) {
       if (!isServiceTypeEnabled('tech')) return;
       if (!supabaseClient) {
         console.warn('Supabase unavailable: showing local installer placeholders.');
@@ -5124,9 +5143,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         `;
         return;
       }
-      const stopLoading = startLoading('Loading Installers…');
+      const stopLoading = silent ? () => {} : startLoading('Loading Installers…');
       try {
-        await ensureServiceCache();
+        await ensureServiceCache({ force, silent });
         const data = getCachedServices(getServiceCategoryLabel('tech'));
         technicians = (data || []).map((row, idx) => normalizeInstaller(row, idx, { getField, toStateCode, resolveCoords })).filter(t => t.company || t.city || t.state);
         setServiceHeaders('technicians', data || []);
@@ -5148,9 +5167,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
-    async function loadVehicles({ force = false } = {}) {
+    async function loadVehicles({ force = false, silent = false } = {}) {
       if (vehicles.length && !force) return;
-      const stopLoading = startLoading('Loading Vehicles…');
+      const stopLoading = silent ? () => {} : startLoading('Loading Vehicles…');
       try {
         const data = await vehicleService.listVehicles();
         const normalizedVehicles = data.map((row, idx) =>
@@ -5299,13 +5318,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
-    async function loadHotspots() {
+    async function loadHotspots({ silent = false } = {}) {
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping hotspot load.');
         return;
       }
 
-      const stopLoading = startLoading('Loading hotspots…');
+      const stopLoading = silent ? () => {} : startLoading('Loading hotspots…');
       try {
         const { data, error } = await supabaseClient.from(TABLES.hotspots).select('*');
         if (error) throw error;
@@ -5318,13 +5337,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
-    async function loadBlacklistSites() {
+    async function loadBlacklistSites({ silent = false } = {}) {
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping blacklist load.');
         return;
       }
 
-      const stopLoading = startLoading('Loading Blacklist Locations…');
+      const stopLoading = silent ? () => {} : startLoading('Loading Blacklist Locations…');
       try {
         const { data, error } = await supabaseClient.from(TABLES.blacklist).select('*');
         if (error) throw error;
@@ -5350,7 +5369,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     };
 
-    async function loadPartnerService(type) {
+    async function loadPartnerService(type, { force = false, silent = false } = {}) {
       if (!isServiceTypeEnabled(type)) return;
       if (!supabaseClient) return;
 
@@ -5361,7 +5380,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       try {
-        await ensureServiceCache();
+        await ensureServiceCache({ force, silent });
         const data = getCachedServices(getServiceCategoryLabel(type));
         setServiceHeaders(type, data);
         const normalized = (data || []).map((row, idx) => normalizePartner(row, type, idx, { getField, toStateCode, resolveCoords }));
@@ -5373,10 +5392,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
-    async function loadAllServices() {
+    async function loadAllServices({ force = false, silent = false } = {}) {
       if (!supabaseClient) return;
 
-      await ensureServiceCache();
+      await ensureServiceCache({ force, silent });
 
       const categoryMap = new Map();
       serviceCacheByCategory.forEach((rows, key) => {
@@ -5396,15 +5415,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       rebuildCustomCategoryToggles();
 
       for (const type of Object.keys(SERVICE_LOAD_CONFIG)) {
-        await loadPartnerService(type);
+        await loadPartnerService(type, { force, silent });
       }
 
       if (isServiceTypeEnabled('custom') && customCategoryLabels.size) {
-        await loadCustomServices();
+        await loadCustomServices({ force, silent });
       }
     }
 
-    async function loadCustomServices() {
+    async function loadCustomServices({ force = false, silent = false } = {}) {
       if (!isServiceTypeEnabled('custom') || !customCategoryLabels.size) return;
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping custom categories.');
@@ -5413,7 +5432,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       try {
         const labels = Array.from(customCategoryLabels);
-        await ensureServiceCache();
+        await ensureServiceCache({ force, silent });
         const data = labels.flatMap((label) => getCachedServices(label));
 
         customCategories.forEach(({ layer }) => layer?.clearLayers?.());
@@ -5433,6 +5452,63 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         console.warn(`Custom service warning: ${err.message}`);
       }
     }
+
+    const refreshControlMapData = async ({
+      includeServices = true,
+      silent = true
+    } = {}) => {
+      if (dataSyncRefreshPromise) return dataSyncRefreshPromise;
+
+      dataSyncRefreshPromise = (async () => {
+        await Promise.allSettled([
+          loadVehicles({ force: true, silent }),
+          loadHotspots({ silent }),
+          loadBlacklistSites({ silent })
+        ]);
+
+        if (includeServices) {
+          await loadAllServices({ force: true, silent });
+          if (isServiceTypeEnabled('tech')) {
+            await loadTechnicians({ force: false, silent });
+          }
+        }
+
+        lastDataSyncRefreshAt = Date.now();
+      })().finally(() => {
+        dataSyncRefreshPromise = null;
+      });
+
+      return dataSyncRefreshPromise;
+    };
+
+    const startDataSyncWatchdog = () => {
+      if (typeof window === 'undefined') return () => {};
+
+      const triggerForegroundRefresh = () => {
+        const now = Date.now();
+        if ((now - lastDataSyncRefreshAt) < DATA_SYNC_FOCUS_COOLDOWN_MS) return;
+        void refreshControlMapData({ includeServices: true, silent: true });
+      };
+
+      const intervalId = window.setInterval(() => {
+        if (document.hidden) return;
+        void refreshControlMapData({ includeServices: true, silent: true });
+      }, DATA_SYNC_AUTO_REFRESH_INTERVAL_MS);
+
+      const onFocus = () => triggerForegroundRefresh();
+      const onVisibilityChange = () => {
+        if (!document.hidden) triggerForegroundRefresh();
+      };
+
+      window.addEventListener('focus', onFocus);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener('focus', onFocus);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
+    };
 
     // --- 4. Update map and list ---
     function updateTechUI(techList, target = null, clientLocation = null) {
@@ -6061,6 +6137,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       if (map) map.closePopup();
       container.replaceChildren();
+      if (selectedVehicleId === null && !selectedVehicleKey) {
+        highlightLayer?.clearLayers();
+        gpsTrailLayer?.clearLayers();
+      }
 
       if (!vehicleMarkersVisible && map?.hasLayer(vehicleLayer)) {
         map.removeLayer(vehicleLayer);
@@ -6098,37 +6178,35 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const currentVehicleKey = getVehicleKey(vehicle);
         const movingMeta = getMovingMeta(vehicle);
 
-          const focusHandler = useCallback(
-            `vehicle-focus-${currentVehicleKey}`,
-            () => (payload = {}) => {
-              const currentVehicle = findVehicleByKey(currentVehicleKey)
-                || vehicles.find((item) => `${item.id}` === `${vehicle.id}`)
-                || vehicle;
-              if (!currentVehicle) return;
-              const originalEvent = payload?.event?.originalEvent;
-              const vehicleSelectionMatchesKey = !selectedVehicleKey || `${selectedVehicleKey}` === currentVehicleKey;
-              const vehicleSelectionChanged = (
-                `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`
-                || !vehicleSelectionMatchesKey
-              );
-              if (originalEvent) {
-                originalEvent.handledByMarker = true;
-                originalEvent.cycleRole = 'vehicle';
-                originalEvent.cycleKey = `vehicle-${currentVehicleKey}`;
-                originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
+          const focusHandler = (payload = {}) => {
+            const markerVehicle = payload?.marker?.options?.vehicleData || null;
+            const markerVehicleKey = `${payload?.marker?.options?.vehicleKey || ''}`.trim();
+            const payloadVehicle = payload?.vehicle || markerVehicle || vehicle;
+            const resolvedVehicleKey = `${markerVehicleKey || getVehicleKey(payloadVehicle) || currentVehicleKey}`.trim();
+            const currentVehicle = (resolvedVehicleKey ? findVehicleByKey(resolvedVehicleKey) : null) || payloadVehicle || vehicle;
+            if (!currentVehicle) return;
+            const originalEvent = payload?.event?.originalEvent;
+            const vehicleSelectionMatchesKey = !selectedVehicleKey || `${selectedVehicleKey}` === resolvedVehicleKey;
+            const vehicleSelectionChanged = (
+              `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`
+              || !vehicleSelectionMatchesKey
+            );
+            if (originalEvent) {
+              originalEvent.handledByMarker = true;
+              originalEvent.cycleRole = 'vehicle';
+              originalEvent.cycleKey = `vehicle-${resolvedVehicleKey}`;
+              originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
+            }
+            if (!vehicleSelectionChanged) {
+              if (payload?.marker && typeof payload.marker.openPopup === 'function') {
+                payload.marker.openPopup();
+              } else {
+                focusVehicle(currentVehicle);
               }
-              if (!vehicleSelectionChanged) {
-                if (payload?.marker && typeof payload.marker.openPopup === 'function') {
-                  payload.marker.openPopup();
-                } else {
-                  focusVehicle(currentVehicle);
-                }
-                return;
-              }
-              focusVehicle(currentVehicle);
-            },
-            [currentVehicleKey]
-          );
+              return;
+            }
+            focusVehicle(currentVehicle);
+          };
 
           const coordsInfo = getVehicleMapCoords(vehicle);
           const coords = { lat: coordsInfo.lat, lng: coordsInfo.lng };
@@ -6920,14 +6998,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const previousVehicleKey = selectedVehicleKey;
       const previousTechId = selectedTechId;
       const normalizedVehicleKey = `${vehicleKey || ''}`.trim();
-      const resolvedVehicle = vehicleId !== null
-        ? (normalizedVehicleKey
-          ? findVehicleByKey(normalizedVehicleKey)
-          : vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`))
+      const resolvedVehicleById = vehicleId !== null
+        ? (vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`) || null)
         : null;
+      const resolvedVehicle = resolvedVehicleById
+        || (vehicleId !== null && normalizedVehicleKey ? findVehicleByKey(normalizedVehicleKey) : null);
       const nextVehicleKey = vehicleId === null
         ? null
-        : (normalizedVehicleKey || getVehicleKey(resolvedVehicle || { id: vehicleId }));
+        : getVehicleKey(resolvedVehicle || { id: vehicleId });
 
       if (
         `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
@@ -7247,7 +7325,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       let serviceMatch = findServiceByGlobalSearch(query);
       if (!serviceMatch) {
-        await Promise.allSettled([loadAllServices(), loadTechnicians()]);
+        await Promise.allSettled([
+          loadAllServices({ force: true, silent: true }),
+          loadTechnicians({ force: false, silent: true })
+        ]);
         serviceMatch = findServiceByGlobalSearch(query);
       }
       if (serviceMatch && focusGlobalServiceMatch(serviceMatch)) {
@@ -8442,16 +8523,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           });
 
           const refreshVehicles = debounceAsync(async () => {
-            await loadVehicles({ force: true });
+            await loadVehicles({ force: true, silent: true });
+            lastDataSyncRefreshAt = Date.now();
           }, 600);
           const refreshHotspots = debounceAsync(async () => {
-            await loadHotspots();
+            await loadHotspots({ silent: true });
+            lastDataSyncRefreshAt = Date.now();
           }, 600);
           const refreshBlacklist = debounceAsync(async () => {
-            await loadBlacklistSites();
+            await loadBlacklistSites({ silent: true });
+            lastDataSyncRefreshAt = Date.now();
           }, 600);
           const refreshServices = debounceAsync(async () => {
-            await loadAllServices();
+            await loadAllServices({ force: true, silent: true });
+            if (isServiceTypeEnabled('tech')) {
+              await loadTechnicians({ force: false, silent: true });
+            }
+            lastDataSyncRefreshAt = Date.now();
           }, 800);
 
           createControlMapApiService({
@@ -8466,6 +8554,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               services: refreshServices
             }
           });
+
+          startDataSyncWatchdog();
 
           startSupabaseKeepAlive({ supabaseClient, table: TABLES.vehicles });
 
