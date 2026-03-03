@@ -1,6 +1,6 @@
-export const createVehicleMarkerIcon = (markerColor, borderColor, isStopped) => L.divIcon({
+export const createVehicleMarkerIcon = (markerColor, borderColor, isStopped, opacity = 1) => L.divIcon({
   className: 'vehicle-marker-wrapper',
-  html: `<div class="vehicle-marker-icon"><span class="vehicle-marker-dot" style="background:${markerColor}; border-color:${borderColor}"></span>${isStopped ? '<span class="vehicle-cross-badge">✕</span>' : ''}</div>`,
+  html: `<div class="vehicle-marker-icon" style="opacity:${Math.max(0.2, Math.min(1, Number(opacity) || 1)).toFixed(2)}"><span class="vehicle-marker-dot" style="background:${markerColor}; border-color:${borderColor}"></span>${isStopped ? '<span class="vehicle-cross-badge">✕</span>' : ''}</div>`,
   iconSize: [18, 18],
   iconAnchor: [9, 9]
 });
@@ -13,7 +13,8 @@ export const syncVehicleMarkers = ({
   getVehicleMarkerKey,
   getVehicleMarkerColor,
   getVehicleMarkerBorderColor,
-  isVehicleNotMoving
+  isVehicleNotMoving,
+  getVehicleMarkerOpacity
 }) => {
   if (!vehicleLayer) return;
 
@@ -38,7 +39,10 @@ export const syncVehicleMarkers = ({
     const markerColor = getVehicleMarkerColor(vehicle);
     const borderColor = getVehicleMarkerBorderColor(markerColor);
     const isStopped = isVehicleNotMoving(vehicle);
-    const icon = createVehicleMarkerIcon(markerColor, borderColor, isStopped);
+    const markerOpacity = typeof getVehicleMarkerOpacity === 'function'
+      ? getVehicleMarkerOpacity(vehicle)
+      : 1;
+    const icon = createVehicleMarkerIcon(markerColor, borderColor, isStopped, markerOpacity);
     const marker = L.marker(
       [coords.lat, coords.lng],
       {

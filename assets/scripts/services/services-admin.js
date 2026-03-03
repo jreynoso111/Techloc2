@@ -1,7 +1,6 @@
 import '../authManager.js';
 import { requireSession, supabaseClient } from '../admin-auth.js';
 import '../sharedHeader.js';
-import '../adminNav.js';
 import { setupBackgroundManager } from '../backgroundManager.js';
 import {
   loadPreferredBackgroundMode,

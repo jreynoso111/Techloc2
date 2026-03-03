@@ -71,6 +71,7 @@ const notifySessionListeners = (session) => {
 };
 
 const roleAllowsDashboard = (role) => ['administrator', 'moderator'].includes(String(role || '').toLowerCase());
+const roleIsAdministrator = (role) => String(role || '').toLowerCase() === 'administrator';
 const normalizeRoleValue = (value, fallback = 'user') => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized || fallback;
@@ -78,6 +79,18 @@ const normalizeRoleValue = (value, fallback = 'user') => {
 const normalizeStatusValue = (value, fallback = 'active') => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized || fallback;
+};
+
+const isMissingProfilesStatusColumnError = (error) => {
+  const code = String(error?.code || '').trim().toUpperCase();
+  const details = String(error?.details || '').toLowerCase();
+  const hint = String(error?.hint || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (code === '42703') return true;
+  if (message.includes('column') && message.includes('status')) return true;
+  if (details.includes('status') && details.includes('column')) return true;
+  if (hint.includes('status') && hint.includes('column')) return true;
+  return false;
 };
 
 const withTimeout = (promise, timeoutMs = 2500, label = 'operation') =>
@@ -196,6 +209,33 @@ const getUserAccess = async (session, { timeoutMs = ACCESS_LOOKUP_TIMEOUT_MS, pr
   const { data, error } = response;
 
   if (error) {
+    if (isMissingProfilesStatusColumnError(error)) {
+      try {
+        const roleOnlyResponse = await withTimeout(
+          supabaseClient
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .maybeSingle(),
+          timeoutMs,
+          'Profile role-only lookup',
+        );
+        const roleOnlyData = roleOnlyResponse?.data || null;
+        const roleOnlyError = roleOnlyResponse?.error || null;
+        if (!roleOnlyError && roleOnlyData) {
+          const normalizedRole = normalizeRoleValue(roleOnlyData.role, fallbackRole);
+          const normalizedStatus = normalizeStatusValue(fallbackStatus, fallbackStatus);
+          cachedUserRole = normalizedRole;
+          cachedUserStatus = normalizedStatus;
+          window.currentUserRole = normalizedRole;
+          window.currentUserStatus = normalizedStatus;
+          broadcastRoleStatus(normalizedRole, normalizedStatus);
+          return { role: normalizedRole, status: normalizedStatus, source: 'db-role-only', confident: true };
+        }
+      } catch (roleOnlyLookupError) {
+        console.warn('Role-only lookup failed', roleOnlyLookupError);
+      }
+    }
     console.warn('Unable to fetch user role', error);
     window.currentUserRole = fallbackRole;
     window.currentUserStatus = fallbackStatus;
@@ -342,6 +382,7 @@ const routeInfo = (() => {
     isControlView: path.endsWith('/pages/control-map.html') || path.endsWith('pages/control-map.html'),
     isLoginPage: path.endsWith('/login.html') || path.endsWith('login.html'),
     isProfilesPage: path.includes('/admin/profiles.html'),
+    isSettingsPage: path.includes('/admin/settings.html'),
   };
 })();
 
@@ -624,6 +665,29 @@ const enforceAdminGuard = async () => {
     applyRoleVisibility(strictAccess.role);
 
     if (!roleAllowsDashboard(strictAccess.role)) {
+      redirectToHome();
+      return session;
+    }
+  }
+
+  if (routeInfo.isSettingsPage) {
+    const hintedRole = normalizeRoleValue(
+      window.currentUserRole
+      || session?.user?.app_metadata?.role
+      || session?.user?.user_metadata?.role
+      || role,
+      'user',
+    );
+    const hintedIsAdmin = roleIsAdministrator(hintedRole);
+
+    const strictSettingsAccess = await getUserAccess(session, {
+      timeoutMs: ACCESS_LOOKUP_TIMEOUT_MS * 2,
+      preferCache: false,
+    });
+    applyRoleVisibility(strictSettingsAccess.role);
+
+    const strictIsAdmin = roleIsAdministrator(strictSettingsAccess.role);
+    if (!strictIsAdmin && (strictSettingsAccess.confident || !hintedIsAdmin)) {
       redirectToHome();
       return session;
     }

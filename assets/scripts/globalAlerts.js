@@ -1,9 +1,10 @@
 const ROOT_ID = 'techloc-global-alert-root';
 const MAX_ALERTS = 8;
 const DEFAULT_IGNORED_REQUEST_PATTERNS = [
-  'https://ipapi.co/json/',
-  'https://ipwho.is/',
+  'ipapi.co',
+  'ipwho.is',
   '/rest/v1/admin_change_log',
+  '/rest/v1/app_settings',
 ];
 
 const toText = (value) => {
@@ -101,6 +102,48 @@ const parsePromiseReason = (reason) => {
   return { message: toText(reason), details: '' };
 };
 
+const normalizeComparableUrl = (value = '') => String(value || '').trim().toLowerCase().replace(/\/+$/, '');
+
+const matchesIgnoredPattern = (requestUrl = '', pattern = '') => {
+  const normalizedUrl = normalizeComparableUrl(requestUrl);
+  const normalizedPattern = normalizeComparableUrl(pattern);
+  if (!normalizedUrl || !normalizedPattern) return false;
+  return normalizedUrl.includes(normalizedPattern);
+};
+
+const hasSilentHeader = (headers) => {
+  if (!headers) return false;
+
+  try {
+    if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+      const value = String(headers.get('x-techloc-silent-request') || '').trim().toLowerCase();
+      return value === '1' || value === 'true' || value === 'yes';
+    }
+
+    if (Array.isArray(headers)) {
+      return headers.some(([key, value]) => {
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        const normalizedValue = String(value || '').trim().toLowerCase();
+        return normalizedKey === 'x-techloc-silent-request'
+          && (normalizedValue === '1' || normalizedValue === 'true' || normalizedValue === 'yes');
+      });
+    }
+
+    if (typeof headers === 'object') {
+      return Object.entries(headers).some(([key, value]) => {
+        const normalizedKey = String(key || '').trim().toLowerCase();
+        const normalizedValue = String(value || '').trim().toLowerCase();
+        return normalizedKey === 'x-techloc-silent-request'
+          && (normalizedValue === '1' || normalizedValue === 'true' || normalizedValue === 'yes');
+      });
+    }
+  } catch (_error) {
+    return false;
+  }
+
+  return false;
+};
+
 const wrapFetch = () => {
   if (typeof window.fetch !== 'function') return;
   if (window.__techlocFetchWrapped) return;
@@ -108,11 +151,20 @@ const wrapFetch = () => {
   const baseFetch = window.fetch.bind(window);
   window.fetch = async (...args) => {
     const target = args?.[0];
+    const init = (args?.[1] && typeof args[1] === 'object') ? args[1] : {};
     const requestUrl = typeof target === 'string' ? target : (target?.url || 'unknown');
-    const ignoredPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+    const isSilentRequest =
+      Boolean(init?.techlocSilent || init?.silent) ||
+      hasSilentHeader(init?.headers) ||
+      hasSilentHeader(target?.headers);
+    const customPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
       ? window.__techlocIgnoredAlertRequestPatterns
-      : DEFAULT_IGNORED_REQUEST_PATTERNS;
-    const isIgnored = ignoredPatterns.some((pattern) => requestUrl.includes(pattern));
+      : [];
+    const ignoredPatterns = Array.from(new Set([
+      ...DEFAULT_IGNORED_REQUEST_PATTERNS,
+      ...customPatterns
+    ]));
+    const isIgnored = isSilentRequest || ignoredPatterns.some((pattern) => matchesIgnoredPattern(requestUrl, pattern));
     try {
       const response = await baseFetch(...args);
       if (!response.ok && !isIgnored) {

@@ -1,5 +1,6 @@
 import '../../scripts/authManager.js';
 import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
+    import { APP_SETTINGS_STORAGE_KEY, getAppSettings, normalizeAppSettings, saveAppSettings } from '../../scripts/appSettings.js';
     import { getWebAdminSession } from '../../scripts/web-admin-session.js';
     import { supabase as supabaseClient } from '../supabaseClient.js';
     import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
@@ -22,6 +23,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       isVehicleNotMoving,
       normalizeFilterValue,
       normalizeKey,
+      parsePtLastReadDate,
       parseDealCompletion,
       toStateCode
     } from '../utils/formatters.js';
@@ -114,6 +116,126 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
     let gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
     let vehicleFiltersCollapsed = false;
+    let mapAppSettings = getAppSettings();
+    const STALE_PING_DAY_MS = 24 * 60 * 60 * 1000;
+    const APP_SETTINGS_TABLE = 'app_settings';
+    const APP_SETTINGS_KEY = 'control_map';
+    let mapRemoteSettingsAvailable = true;
+    const MAP_ALERT_IGNORE_PATTERNS = [
+      '/rest/v1/app_settings',
+      'ipapi.co',
+      'ipwho.is',
+    ];
+
+    if (typeof window !== 'undefined') {
+      const currentPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+        ? window.__techlocIgnoredAlertRequestPatterns
+        : [];
+      const mergedPatterns = Array.from(new Set([
+        ...currentPatterns,
+        ...MAP_ALERT_IGNORE_PATTERNS,
+      ]));
+      window.__techlocIgnoredAlertRequestPatterns = mergedPatterns;
+    }
+
+    const isMissingAppSettingsTableError = (error) => {
+      const code = String(error?.code || '').trim().toUpperCase();
+      const message = String(error?.message || '').toLowerCase();
+      return code === 'PGRST205' || message.includes("could not find the table 'public.app_settings'");
+    };
+
+    const refreshMapAppSettings = () => {
+      mapAppSettings = getAppSettings();
+      return mapAppSettings;
+    };
+
+    const hydrateMapSettingsFromSupabase = async () => {
+      if (!supabaseClient?.from || !mapRemoteSettingsAvailable) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from(APP_SETTINGS_TABLE)
+          .select('settings')
+          .eq('key', APP_SETTINGS_KEY)
+          .maybeSingle();
+        if (error) {
+          if (isMissingAppSettingsTableError(error)) {
+            mapRemoteSettingsAvailable = false;
+          }
+          return;
+        }
+        if (!data?.settings || typeof data.settings !== 'object') return;
+        const mergedSettings = normalizeAppSettings({
+          ...getAppSettings(),
+          ...data.settings
+        });
+        saveAppSettings(mergedSettings);
+        mapAppSettings = mergedSettings;
+      } catch (_error) {
+        // Non-blocking: keep local/default settings when remote fetch fails.
+      }
+    };
+
+    const parseEpochCandidateMs = (value) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return null;
+      if (numeric >= 1_000_000_000_000) return numeric;
+      if (numeric >= 1_000_000_000) return numeric * 1000;
+      return null;
+    };
+
+    const getVehicleLastPingTimestampMs = (vehicle = {}) => {
+      const details = vehicle?.details || {};
+      const candidates = [
+        vehicle?.lastRead,
+        details?.pt_last_read,
+        details?.pt_last_ping,
+        details?.pt_lastread,
+        details?.last_read,
+        details?.['PT Last Read'],
+        details?.['PT Last Read '],
+        details?.['PT-LastPing'],
+        details?.['Last Read'],
+        details?.gps_time,
+        details?.updated_at
+      ];
+
+      for (const candidate of candidates) {
+        if (candidate === null || candidate === undefined || candidate === '') continue;
+        const epochMs = parseEpochCandidateMs(candidate);
+        if (Number.isFinite(epochMs)) return epochMs;
+
+        const parsedDate = parsePtLastReadDate(candidate);
+        if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+          return parsedDate.getTime();
+        }
+      }
+
+      return null;
+    };
+
+    const getVehicleMarkerOpacityByLastPing = (vehicle = {}) => {
+      const settings = mapAppSettings || refreshMapAppSettings();
+      const thresholdDays = Number(settings?.vehicleMarkerStalePingDays);
+      const staleOpacity = Number(settings?.vehicleMarkerStaleOpacity);
+      if (!Number.isFinite(thresholdDays) || thresholdDays < 0) return 1;
+
+      const lastPingMs = getVehicleLastPingTimestampMs(vehicle);
+      if (!Number.isFinite(lastPingMs)) return 1;
+
+      const ageMs = Date.now() - lastPingMs;
+      if (!Number.isFinite(ageMs) || ageMs < 0) return 1;
+
+      if (ageMs < (thresholdDays * STALE_PING_DAY_MS)) return 1;
+      return Math.max(0.2, Math.min(1, Number.isFinite(staleOpacity) ? staleOpacity : 0.55));
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        if (event?.key && event.key !== APP_SETTINGS_STORAGE_KEY) return;
+        refreshMapAppSettings();
+        renderVehicles();
+      });
+    }
 
     const getVehicleFiltersStorageKey = (userId) => `${VEHICLE_FILTERS_STORAGE_KEY}:${userId || 'anonymous'}`;
 
@@ -256,8 +378,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
     const OVERLAP_CYCLE_HIT_RADIUS_PX = 18;
     const OVERLAP_CYCLE_MAX_AGE_MS = 7000;
+    const ROUTE_SEGMENT_CYCLE_HIT_RADIUS_PX = 14;
     let overlapCycleState = null;
     let parkingSpotCascadeArmed = false;
+    let routeSegmentEntries = [];
+    let activeRouteSegmentKey = '';
+    let routeSegmentCycleState = null;
 
     const resetOverlapCycleState = () => {
       overlapCycleState = null;
@@ -269,6 +395,178 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const armParkingSpotCascade = () => {
       parkingSpotCascadeArmed = true;
+    };
+
+    const resetRouteSegmentCycleState = () => {
+      routeSegmentCycleState = null;
+    };
+
+    const getRouteSegmentEntryByKey = (segmentKey = '') => {
+      const normalizedKey = `${segmentKey || ''}`.trim();
+      if (!normalizedKey) return null;
+      return routeSegmentEntries.find((entry) => `${entry?.key || ''}` === normalizedKey) || null;
+    };
+
+    const setRouteSegmentVisualState = (entry, active = false) => {
+      if (!entry) return;
+
+      const line = entry.line;
+      const baseStyle = entry.baseLineStyle || {};
+      if (line && typeof line.setStyle === 'function') {
+        if (active) {
+          line.setStyle({
+            color: baseStyle.color,
+            weight: Number(baseStyle.weight) + 1.55,
+            opacity: Math.min(1, Number(baseStyle.opacity) + 0.22),
+            dashArray: '0',
+            lineCap: 'round',
+            lineJoin: 'round'
+          });
+          if (typeof line.bringToFront === 'function') {
+            line.bringToFront();
+          }
+        } else {
+          line.setStyle({
+            color: baseStyle.color,
+            weight: baseStyle.weight,
+            opacity: baseStyle.opacity,
+            dashArray: baseStyle.dashArray || '4 6',
+            lineCap: 'round',
+            lineJoin: 'round'
+          });
+        }
+      }
+
+      const labelMarker = entry.labelMarker;
+      if (labelMarker) {
+        if (typeof labelMarker.setZIndexOffset === 'function') {
+          labelMarker.setZIndexOffset(active ? (entry.baseLabelZIndexOffset + 900) : entry.baseLabelZIndexOffset);
+        }
+        const markerElement = typeof labelMarker.getElement === 'function' ? labelMarker.getElement() : null;
+        if (markerElement) {
+          markerElement.classList.toggle('is-active', Boolean(active));
+        }
+      }
+    };
+
+    const clearRouteSegmentSelection = ({ resetCycle = true } = {}) => {
+      const activeEntry = getRouteSegmentEntryByKey(activeRouteSegmentKey);
+      if (activeEntry) {
+        setRouteSegmentVisualState(activeEntry, false);
+      }
+      activeRouteSegmentKey = '';
+      if (resetCycle) {
+        resetRouteSegmentCycleState();
+      }
+    };
+
+    const selectRouteSegment = (entry) => {
+      if (!entry?.key) return false;
+      if (activeRouteSegmentKey && activeRouteSegmentKey !== entry.key) {
+        const previous = getRouteSegmentEntryByKey(activeRouteSegmentKey);
+        if (previous) {
+          setRouteSegmentVisualState(previous, false);
+        }
+      }
+      activeRouteSegmentKey = `${entry.key}`;
+      setRouteSegmentVisualState(entry, true);
+      return true;
+    };
+
+    const resetRouteSegmentState = ({ clearEntries = false } = {}) => {
+      clearRouteSegmentSelection({ resetCycle: true });
+      if (clearEntries) {
+        routeSegmentEntries = [];
+      }
+    };
+
+    const getPointToSegmentDistancePx = (point, segmentStart, segmentEnd) => {
+      if (!point || !segmentStart || !segmentEnd) return Number.POSITIVE_INFINITY;
+      const vx = segmentEnd.x - segmentStart.x;
+      const vy = segmentEnd.y - segmentStart.y;
+      const wx = point.x - segmentStart.x;
+      const wy = point.y - segmentStart.y;
+      const c1 = (wx * vx) + (wy * vy);
+      if (c1 <= 0) {
+        const dx = point.x - segmentStart.x;
+        const dy = point.y - segmentStart.y;
+        return Math.hypot(dx, dy);
+      }
+      const c2 = (vx * vx) + (vy * vy);
+      if (c2 <= c1) {
+        const dx = point.x - segmentEnd.x;
+        const dy = point.y - segmentEnd.y;
+        return Math.hypot(dx, dy);
+      }
+      const ratio = c1 / c2;
+      const projectionX = segmentStart.x + (ratio * vx);
+      const projectionY = segmentStart.y + (ratio * vy);
+      return Math.hypot(point.x - projectionX, point.y - projectionY);
+    };
+
+    const collectRouteSegmentsAtLatLng = (latlng) => {
+      if (!map || !latlng || !routeSegmentEntries.length) return [];
+      const clickPoint = map.latLngToContainerPoint(latlng);
+      const hitRadiusPx = ROUTE_SEGMENT_CYCLE_HIT_RADIUS_PX;
+
+      return routeSegmentEntries
+        .map((entry) => {
+          const startPoint = map.latLngToContainerPoint(entry.fromLatLng);
+          const endPoint = map.latLngToContainerPoint(entry.toLatLng);
+          const distancePx = getPointToSegmentDistancePx(clickPoint, startPoint, endPoint);
+          if (!Number.isFinite(distancePx) || distancePx > hitRadiusPx) return null;
+          return { ...entry, distancePx };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (a.distancePx !== b.distancePx) return a.distancePx - b.distancePx;
+          return (a.index || 0) - (b.index || 0);
+        });
+    };
+
+    const cycleRouteSegmentSelectionAt = (latlng, clickedSegmentKey = '') => {
+      if (!map || !latlng) return false;
+      const candidates = collectRouteSegmentsAtLatLng(latlng);
+      if (!candidates.length) return false;
+
+      const signature = candidates.map((entry) => entry.key).join('|');
+      const now = Date.now();
+      const previous = routeSegmentCycleState;
+      const previousLatLng = previous ? L.latLng(previous.lat, previous.lng) : null;
+      const sameSequence = Boolean(
+        previous
+        && previous.signature === signature
+        && previousLatLng
+        && map.distance(latlng, previousLatLng) <= getOverlapHitRadiusMeters(latlng)
+        && (now - previous.timestamp) <= OVERLAP_CYCLE_MAX_AGE_MS
+      );
+
+      let nextIndex = 0;
+      if (sameSequence && candidates.length > 1) {
+        nextIndex = (previous.index + 1) % candidates.length;
+      } else {
+        const clickedIndex = clickedSegmentKey
+          ? candidates.findIndex((entry) => `${entry.key}` === `${clickedSegmentKey}`)
+          : -1;
+        if (clickedIndex >= 0) {
+          nextIndex = clickedIndex;
+        } else if (activeRouteSegmentKey) {
+          const activeIndex = candidates.findIndex((entry) => `${entry.key}` === `${activeRouteSegmentKey}`);
+          nextIndex = activeIndex >= 0 ? activeIndex : 0;
+        }
+      }
+
+      const target = candidates[nextIndex];
+      if (!selectRouteSegment(target)) return false;
+
+      routeSegmentCycleState = {
+        signature,
+        index: nextIndex,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        timestamp: now
+      };
+      return true;
     };
 
     const hasVisibleParkingSpotPopup = () => Boolean(document.querySelector('.vehicle-history-hotspot-popup'));
@@ -2051,7 +2349,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS = 120000;
     const GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS = 20000;
     const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
-    const GPS_TRAIL_LABEL_MERGE_RADIUS_METERS = 90;
     const GPS_MOVING_ANALYSIS_MAX_POINTS = 8;
     const GPS_MOVING_STOPPED_TOTAL_DISTANCE_METERS = 550;
     const GPS_MOVING_STOPPED_NET_DISTANCE_METERS = 180;
@@ -4063,6 +4360,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const drawVehicleGpsTrail = (points = [], vehicleColor = '', vehicle = null) => {
       if (!gpsTrailLayer || !Array.isArray(points) || !points.length) return;
+      resetRouteSegmentState({ clearEntries: true });
       const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle || {});
       const oldestLineRgb = parseTrailColorToRgb('#14532d');
       const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
@@ -4079,26 +4377,60 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const parkedStartTimeByPoint = buildTrailParkedStartTimeByPoint(points, {
         stoppedDistanceThreshold
       });
-      const segmentLabelEntries = [];
+      const trailSegmentsByIndex = new Map();
 
       for (let index = 0; index < points.length - 1; index += 1) {
         const fromPoint = points[index];
         const toPoint = points[index + 1];
         const segmentProgress = clampUnitInterval((index + 0.5) / segmentStepDenominator);
         const segmentRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
-        const segmentLine = L.polyline([
-          [fromPoint.lat, fromPoint.lng],
-          [toPoint.lat, toPoint.lng]
-        ], {
+        const segmentStyle = {
           color: rgbToHex(segmentRgb),
           weight: interpolateNumber(2.25, 2.85, segmentProgress),
           opacity: interpolateNumber(0.56, 0.8, segmentProgress),
           dashArray: '4 6',
           lineCap: 'round',
-          lineJoin: 'round',
-          interactive: false
+          lineJoin: 'round'
+        };
+        const segmentKey = `route-segment-${index}`;
+        const segmentLine = L.polyline([
+          [fromPoint.lat, fromPoint.lng],
+          [toPoint.lat, toPoint.lng]
+        ], {
+          ...segmentStyle,
+          interactive: true,
+          cycleRole: 'route-segment',
+          cycleKey: segmentKey
         }).addTo(gpsTrailLayer);
         segmentLine.bringToBack();
+
+        const midpoint = {
+          lat: (fromPoint.lat + toPoint.lat) / 2,
+          lng: (fromPoint.lng + toPoint.lng) / 2
+        };
+
+        segmentLine.on('click', (event) => {
+          const originalEvent = event?.originalEvent;
+          if (originalEvent) {
+            originalEvent.handledByMarker = true;
+            originalEvent.cycleRole = 'route-segment';
+            originalEvent.cycleKey = segmentKey;
+          }
+          const clickedLatLng = event?.latlng || L.latLng(midpoint.lat, midpoint.lng);
+          cycleRouteSegmentSelectionAt(clickedLatLng, segmentKey);
+        });
+
+        trailSegmentsByIndex.set(index, {
+          key: segmentKey,
+          index,
+          line: segmentLine,
+          labelMarker: null,
+          baseLineStyle: { ...segmentStyle },
+          baseLabelZIndexOffset: 0,
+          fromLatLng: L.latLng(fromPoint.lat, fromPoint.lng),
+          toLatLng: L.latLng(toPoint.lat, toPoint.lng),
+          midpointLatLng: L.latLng(midpoint.lat, midpoint.lng)
+        });
       }
 
       points.forEach((point, index) => {
@@ -4206,36 +4538,32 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             iconSize: [1, 1],
             iconAnchor: [0, 0]
           }),
-          interactive: false,
+          interactive: true,
+          cycleRole: 'route-segment',
+          cycleKey: `route-segment-${index}`,
           zIndexOffset: segmentVisualPriority + 1
         }).addTo(gpsTrailLayer);
 
-        const previousEntryIndex = segmentLabelEntries.findIndex((entry) => {
-          const distance = getGpsPointDistanceMeters(
-            { lat: entry.lat, lng: entry.lng },
-            labelAnchor
-          );
-          return Number.isFinite(distance) && distance <= GPS_TRAIL_LABEL_MERGE_RADIUS_METERS;
+        const segmentKey = `route-segment-${index}`;
+        labelMarker.on('click', (event) => {
+          const originalEvent = event?.originalEvent;
+          if (originalEvent) {
+            originalEvent.handledByMarker = true;
+            originalEvent.cycleRole = 'route-segment';
+            originalEvent.cycleKey = segmentKey;
+          }
+          const clickedLatLng = event?.latlng || L.latLng(labelAnchor.lat, labelAnchor.lng);
+          cycleRouteSegmentSelectionAt(clickedLatLng, segmentKey);
         });
 
-        if (previousEntryIndex >= 0) {
-          const previousEntry = segmentLabelEntries[previousEntryIndex];
-          if (previousEntry?.marker) {
-            gpsTrailLayer.removeLayer(previousEntry.marker);
-          }
-          segmentLabelEntries[previousEntryIndex] = {
-            lat: labelAnchor.lat,
-            lng: labelAnchor.lng,
-            marker: labelMarker
-          };
-        } else {
-          segmentLabelEntries.push({
-            lat: labelAnchor.lat,
-            lng: labelAnchor.lng,
-            marker: labelMarker
-          });
+        const segmentEntry = trailSegmentsByIndex.get(index);
+        if (segmentEntry) {
+          segmentEntry.labelMarker = labelMarker;
+          segmentEntry.baseLabelZIndexOffset = segmentVisualPriority + 1;
         }
       }
+
+      routeSegmentEntries = Array.from(trailSegmentsByIndex.values()).sort((a, b) => a.index - b.index);
     };
 
     const formatHotspotDuration = (durationMs) => {
@@ -6174,6 +6502,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             if (map?.hasLayer(vehicleLayer)) map.removeLayer(vehicleLayer);
           }
           vehicleMarkers.clear();
+          resetRouteSegmentState({ clearEntries: true });
           highlightLayer?.clearLayers();
           gpsTrailLayer?.clearLayers();
           gpsTrailRequestCounter += 1;
@@ -6188,6 +6517,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (map) map.closePopup();
       container.replaceChildren();
       if (selectedVehicleId === null && !selectedVehicleKey) {
+        resetRouteSegmentState({ clearEntries: true });
         highlightLayer?.clearLayers();
         gpsTrailLayer?.clearLayers();
       }
@@ -6215,7 +6545,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           getVehicleMarkerKey: getVehicleKey,
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
-          isVehicleNotMoving
+          isVehicleNotMoving,
+          getVehicleMarkerOpacity: getVehicleMarkerOpacityByLastPing
         });
         return;
       }
@@ -6475,7 +6806,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           getVehicleMarkerKey: getVehicleKey,
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
-          isVehicleNotMoving
+          isVehicleNotMoving,
+          getVehicleMarkerOpacity: getVehicleMarkerOpacityByLastPing
         });
       }
 
@@ -6485,6 +6817,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!vehicleMarkersVisible) return;
       const vehicleCoords = getVehicleMapCoords(vehicle);
       clearParkingSpotCascade();
+      resetRouteSegmentState({ clearEntries: true });
       highlightLayer.clearLayers();
       gpsTrailLayer?.clearLayers();
 
@@ -7086,6 +7419,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
       if (vehicleId === null) {
         gpsTrailRequestCounter += 1;
+        resetRouteSegmentState({ clearEntries: true });
         highlightLayer?.clearLayers();
         gpsTrailLayer?.clearLayers();
       }
@@ -7100,6 +7434,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function resetSelection() {
       gpsTrailRequestCounter += 1;
       resetOverlapCycleState();
+      resetRouteSegmentState({ clearEntries: true });
       clearParkingSpotCascade();
       selectedVehicleId = null;
       selectedVehicleKey = null;
@@ -8492,6 +8827,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           initMap();
           await syncAvailableServiceTypes();
           updateServiceVisibilityUI();
+          await hydrateMapSettingsFromSupabase();
           await loadVehicleFilterPrefs();
           await loadVehicles();
 

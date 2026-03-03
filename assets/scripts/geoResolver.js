@@ -2,6 +2,31 @@
  * Resolve approximate location from the public IP without prompting for browser permissions.
  * @returns {Promise<{lat:number, lon:number, source:"ip", city?:string, region?:string, country?:string} | null>}
  */
+const GEO_PROVIDER_TIMEOUT_MS = 4500;
+
+const fetchGeoProvider = async (url) => {
+  if (typeof fetch !== 'function') return null;
+
+  const hasAbortController = typeof AbortController === 'function';
+  const controller = hasAbortController ? new AbortController() : null;
+  const timeoutId = controller
+    ? setTimeout(() => controller.abort('geo-timeout'), GEO_PROVIDER_TIMEOUT_MS)
+    : null;
+
+  try {
+    return await fetch(url, {
+      cache: 'no-store',
+      techlocSilent: true,
+      headers: {
+        'x-techloc-silent-request': '1',
+      },
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
 export const resolveLocationFromIp = async () => {
   const providers = [
     {
@@ -29,7 +54,8 @@ export const resolveLocationFromIp = async () => {
   try {
     for (const provider of providers) {
       try {
-        const response = await fetch(provider.url, { cache: 'no-store' });
+        const response = await fetchGeoProvider(provider.url);
+        if (!response) continue;
         if (!response.ok) continue;
         const data = await response.json();
         const parsed = provider.parse(data);

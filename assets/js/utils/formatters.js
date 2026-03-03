@@ -82,7 +82,7 @@ export const getVehicleMarkerBorderColor = (fillColor) => {
   return '#991b1b';
 };
 
-const parsePtLastReadDate = (value) => {
+export const parsePtLastReadDate = (value) => {
   if (!value) return null;
   const raw = String(value).trim();
   if (!raw) return null;
