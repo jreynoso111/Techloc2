@@ -148,11 +148,20 @@ const parseMovingIndicator = (...candidates) => {
 };
 
 const parseStationaryDays = (...candidates) => {
+  const parseFirstNumericToken = (value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const normalized = raw.replace(/,/g, '');
+    const match = normalized.match(/[+-]?(?:\d+\.?\d*|\.\d+)/);
+    if (!match) return null;
+    const parsed = Number.parseFloat(match[0]);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   for (const candidate of candidates) {
     if (candidate === null || candidate === undefined) continue;
-    const raw = String(candidate).trim();
-    if (!raw) continue;
-    const numeric = Number.parseFloat(raw.replace(/[^\d.\-]/g, ''));
+    const numeric = parseFirstNumericToken(candidate);
     if (!Number.isFinite(numeric)) continue;
     return Math.max(0, numeric);
   }

@@ -2101,9 +2101,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const parseGpsNumericValue = (value) => {
       if (value === null || value === undefined) return null;
-      const normalized = `${value}`.replace(/[^\d.\-]/g, '').trim();
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+      }
+      const normalized = `${value}`.replace(/,/g, '').trim();
       if (!normalized) return null;
-      const parsed = Number.parseFloat(normalized);
+      const match = normalized.match(/[+-]?(?:\d+\.?\d*|\.\d+)/);
+      if (!match) return null;
+      const parsed = Number.parseFloat(match[0]);
       return Number.isFinite(parsed) ? parsed : null;
     };
 
@@ -5959,6 +5964,36 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return list.find((partner) => `${partner.id}` === `${id}`);
     };
 
+    function getVehicleFromListCard(card) {
+      if (!card) return null;
+      const cardVehicleId = `${card.dataset.vehicleId || ''}`.trim();
+      const cardVehicleKey = `${card.dataset.vehicleKey || card.dataset.id || ''}`.trim();
+      return vehicles.find((item) => `${item?.id ?? ''}` === cardVehicleId)
+        || (cardVehicleKey ? findVehicleByKey(cardVehicleKey) : null)
+        || findVehicleById(card.dataset.id);
+    }
+
+    function isVehicleCardControlTarget(target, composedPath = []) {
+      const CONTROL_ACTIONS = new Set([
+        'vehicle-view-more',
+        'repair-history',
+        'gps-history',
+        'vehicle-select-checkbox'
+      ]);
+      const INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL']);
+      if (target?.closest('button,a,input,select,textarea,label')) return true;
+
+      const actionHost = target?.closest('[data-action]');
+      if (actionHost && CONTROL_ACTIONS.has(actionHost.dataset.action)) return true;
+
+      return composedPath.some((node) => {
+        const action = node?.dataset?.action;
+        if (action && CONTROL_ACTIONS.has(action)) return true;
+        const tagName = typeof node?.tagName === 'string' ? node.tagName.toUpperCase() : '';
+        return tagName ? INTERACTIVE_TAGS.has(tagName) : false;
+      });
+    }
+
     function handleVehicleListClick(event) {
       const container = event.currentTarget;
       const target = event.target instanceof Element ? event.target : null;
@@ -5971,11 +6006,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const selectCheckbox = target?.closest('[data-action="vehicle-select-checkbox"]') || findInPath('vehicle-select-checkbox');
       if (!card || !container.contains(card)) return;
 
-      const cardVehicleId = `${card.dataset.vehicleId || ''}`.trim();
-      const cardVehicleKey = `${card.dataset.vehicleKey || card.dataset.id || ''}`.trim();
-      const vehicle = vehicles.find((item) => `${item?.id ?? ''}` === cardVehicleId)
-        || (cardVehicleKey ? findVehicleByKey(cardVehicleKey) : null)
-        || findVehicleById(card.dataset.id);
+      const vehicle = getVehicleFromListCard(card);
       if (!vehicle) return;
 
       if (viewMoreBtn) {
@@ -6008,6 +6039,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       focusVehicle(vehicle);
+    }
+
+    function handleVehicleListDoubleClick(event) {
+      const container = event.currentTarget;
+      const target = event.target instanceof Element ? event.target : null;
+      const composedPath = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const card = target?.closest('[data-type="vehicle"]') || composedPath.find((node) => node?.dataset?.type === 'vehicle');
+      if (!card || !container.contains(card)) return;
+      if (isVehicleCardControlTarget(target, composedPath)) return;
+
+      const vehicle = getVehicleFromListCard(card);
+      if (!vehicle) return;
+
+      event.preventDefault();
+      focusVehicle(vehicle);
+      focusMapOnVehicleQuick(vehicle, { targetZoom: 15 });
     }
 
     function handleTechListClick(event) {
@@ -6051,7 +6098,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function setupEventDelegation() {
       const vehicleList = document.getElementById('vehicle-list');
-      if (vehicleList) vehicleList.addEventListener('click', handleVehicleListClick);
+      if (vehicleList) {
+        vehicleList.addEventListener('click', handleVehicleListClick);
+        vehicleList.addEventListener('dblclick', handleVehicleListDoubleClick);
+      }
 
       const techList = document.getElementById('tech-list');
       if (techList) techList.addEventListener('click', handleTechListClick);
