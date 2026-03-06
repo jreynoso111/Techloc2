@@ -321,6 +321,7 @@
       loadPreferredBackgroundMode,
       persistBackgroundMode,
     } from '../../assets/scripts/backgroundPreference.js';
+    import { createGpsHistoryManager } from '../../assets/scripts/gpsHistory.js';
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     function cleanHeaderKey(key) {
@@ -568,6 +569,167 @@
         acc[key] = value;
         return acc;
       }, {});
+    };
+
+    const gpsHistoryTools = createGpsHistoryManager();
+    const chunkArray = (items = [], chunkSize = 100) => {
+      const safeChunkSize = Math.max(1, Number(chunkSize) || 100);
+      const chunks = [];
+      for (let index = 0; index < items.length; index += safeChunkSize) {
+        chunks.push(items.slice(index, index + safeChunkSize));
+      }
+      return chunks;
+    };
+
+    const normalizeUpperTrimmedValue = (value) => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized || '';
+    };
+
+    const parsePtComparableTimestamp = (value) => {
+      const normalized = normalizePtDate(value) || value;
+      const timestamp = Date.parse(normalized || '');
+      return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+    };
+
+    const buildVehiclePtSyncPayload = (vehicleRow = {}, records = []) => {
+      if (!vehicleRow?.id || !Array.isArray(records) || !records.length) return null;
+
+      const normalizedVehicle = {
+        id: vehicleRow.id,
+        vin: vehicleRow.VIN,
+        ptSerial: vehicleRow['pt serial'],
+        encoreSerial: vehicleRow['encore serial'],
+        winnerSerial: vehicleRow['winner serial'],
+        details: vehicleRow
+      };
+
+      const resolvedWinnerSerial = typeof gpsHistoryTools.resolveVehicleWinnerSerialFromRecords === 'function'
+        ? gpsHistoryTools.resolveVehicleWinnerSerialFromRecords(normalizedVehicle, records)
+        : '';
+      const scopedRecords = resolvedWinnerSerial
+        ? records.filter((record) => {
+          const recordSerial = typeof gpsHistoryTools.getRecordSerial === 'function'
+            ? gpsHistoryTools.getRecordSerial(record)
+            : String(record?.Serial || '').trim().toUpperCase();
+          return recordSerial === resolvedWinnerSerial;
+        })
+        : records;
+      const sourceRecords = scopedRecords.length ? scopedRecords : records;
+      const orderedRecords = [...sourceRecords].sort((left, right) => (
+        parsePtComparableTimestamp(left?.Date) - parsePtComparableTimestamp(right?.Date)
+      ));
+      const firstRecord = orderedRecords[0] || null;
+      const latestRecord = orderedRecords[orderedRecords.length - 1] || null;
+      if (!latestRecord) return null;
+
+      const payload = { id: vehicleRow.id };
+      const nextSerial = resolvedWinnerSerial
+        || (typeof gpsHistoryTools.getRecordSerial === 'function'
+          ? gpsHistoryTools.getRecordSerial(latestRecord)
+          : normalizeUpperTrimmedValue(latestRecord?.Serial));
+      const firstRead = normalizePtDate(firstRecord?.Date);
+      const lastRead = normalizePtDate(latestRecord?.Date);
+      const currentLastReadMs = parsePtComparableTimestamp(vehicleRow?.['pt last read']);
+      const nextLastReadMs = parsePtComparableTimestamp(latestRecord?.Date);
+      const lat = toNumber(latestRecord?.Lat);
+      const lng = toNumber(latestRecord?.Long);
+
+      if (
+        Number.isFinite(currentLastReadMs)
+        && Number.isFinite(nextLastReadMs)
+        && nextLastReadMs < currentLastReadMs
+      ) {
+        return null;
+      }
+
+      if (nextSerial) payload['pt serial'] = nextSerial;
+      if (firstRead) payload['pt first read'] = firstRead;
+      if (lastRead) payload['pt last read'] = lastRead;
+      if (latestRecord?.moved !== undefined && latestRecord?.moved !== null && `${latestRecord.moved}` !== '') {
+        payload.moving = latestRecord.moved;
+      }
+      if (
+        latestRecord?.days_stationary !== undefined
+        && latestRecord?.days_stationary !== null
+        && `${latestRecord.days_stationary}` !== ''
+      ) {
+        payload.days_stationary = latestRecord.days_stationary;
+      }
+      if (lat !== null) payload.lat = lat;
+      if (lng !== null) payload.long = lng;
+
+      return Object.keys(payload).length > 1 ? payload : null;
+    };
+
+    const syncVehiclesFromPtLastPing = async (vins = []) => {
+      if (!supabaseClient) return { updated: 0, skipped: 0 };
+
+      const normalizedVins = Array.from(new Set(
+        (vins || [])
+          .map((vin) => normalizeUpperTrimmedValue(vin))
+          .filter(Boolean)
+      ));
+      if (!normalizedVins.length) return { updated: 0, skipped: 0 };
+
+      const releaseVehiclesAlertIgnore = registerGlobalAlertIgnorePattern('/rest/v1/vehicles');
+      try {
+        const { data: vehicleRows, error: vehicleError } = await supabaseClient
+          .from('vehicles')
+          .select('*');
+        if (vehicleError) throw vehicleError;
+
+        const matchingVehicles = (vehicleRows || []).filter((row) => (
+          normalizedVins.includes(normalizeUpperTrimmedValue(row?.VIN))
+        ));
+        if (!matchingVehicles.length) {
+          return { updated: 0, skipped: normalizedVins.length };
+        }
+
+        const ptRows = [];
+        for (const vinChunk of chunkArray(normalizedVins, 50)) {
+          const { data, error } = await supabaseClient
+            .from('PT-LastPing')
+            .select('VIN,Date,Serial,moved,days_stationary,Lat,Long,address')
+            .in('VIN', vinChunk);
+          if (error) throw error;
+          ptRows.push(...(data || []));
+        }
+
+        const recordsByVin = new Map();
+        ptRows.forEach((row) => {
+          const vin = normalizeUpperTrimmedValue(row?.VIN);
+          if (!vin) return;
+          const bucket = recordsByVin.get(vin) || [];
+          bucket.push(row);
+          recordsByVin.set(vin, bucket);
+        });
+
+        const payloads = matchingVehicles
+          .map((vehicleRow) => {
+            const vin = normalizeUpperTrimmedValue(vehicleRow?.VIN);
+            return buildVehiclePtSyncPayload(vehicleRow, recordsByVin.get(vin) || []);
+          })
+          .filter(Boolean);
+
+        if (!payloads.length) {
+          return { updated: 0, skipped: normalizedVins.length };
+        }
+
+        for (const payloadChunk of chunkArray(payloads, 100)) {
+          const { error } = await supabaseClient
+            .from('vehicles')
+            .upsert(payloadChunk, { onConflict: 'id' });
+          if (error) throw error;
+        }
+
+        return {
+          updated: payloads.length,
+          skipped: Math.max(0, normalizedVins.length - payloads.length)
+        };
+      } finally {
+        releaseVehiclesAlertIgnore();
+      }
     };
 
     const normalizePtHeaders = (headers = []) => {
@@ -1924,19 +2086,41 @@
           }
         }
 
+        setProgress(94, 'Synchronizing vehicles snapshot...');
+        let vehicleSyncResult = null;
+        try {
+          setStatus('Synchronizing vehicles snapshot from PT history...');
+          vehicleSyncResult = await syncVehiclesFromPtLastPing(
+            dedupedRows.map((row) => row?.VIN).filter(Boolean)
+          );
+        } catch (error) {
+          console.error('PT vehicles sync warning:', error);
+          showPtError(error, 'PT upload vehicle snapshot sync failed');
+          showToast(
+            'PT uploaded, but vehicles snapshot sync failed: ' + (error?.message || 'Unknown error'),
+            'error'
+          );
+        }
+
         setProgress(100, 'Done');
 
         const summary =
           'Completed.' +
           '\nBatches: ' + aggregated.batches +
           '\nSent to Supabase: ' + aggregated.inserted +
+          '\nVehicles synced: ' + (vehicleSyncResult?.updated ?? 0) +
           '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
           '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
           '\nSkipped duplicates (client 8-hour bucket): ' + aggregated.skippedDeduplication +
           '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
           '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
           '\nErrors: ' + parseErrors;
-        setStatus(`Upload complete. Sent: ${aggregated.inserted} Skipped (client dedup): ${aggregated.skippedDeduplication} Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`);
+        setStatus(
+          `Upload complete. Sent: ${aggregated.inserted} ` +
+          `Vehicles synced: ${vehicleSyncResult?.updated ?? 0} ` +
+          `Skipped (client dedup): ${aggregated.skippedDeduplication} ` +
+          `Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`
+        );
         showToast(summary, 'success');
         if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
         lucide.createIcons();

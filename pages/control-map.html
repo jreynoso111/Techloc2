@@ -30,11 +30,11 @@
 
   <link rel="stylesheet" href="../assets/visuals/theme.css" />
 </head>
-<body class="min-h-screen bg-slate-950 font-sans text-slate-50 text-sm overflow-hidden flex flex-col" data-page-title="Control Map" data-active-nav="control-map">
+<body class="min-h-screen bg-black font-sans text-slate-50 text-sm overflow-hidden flex flex-col" data-page-title="Control Map" data-active-nav="control-map">
   <div class="pointer-events-none fixed inset-0 -z-10 opacity-80 mix-blend-screen" aria-hidden="true">
     <canvas id="constellation-canvas" class="h-full w-full"></canvas>
   </div>
-  <div data-auth-loading data-auth-loading-mode="defer" class="fixed inset-0 z-50 bg-slate-950">
+  <div data-auth-loading data-auth-loading-mode="defer" class="fixed inset-0 z-50 bg-black">
     <div id="home-intro" class="home-intro" aria-hidden="true">
       <div id="home-intro-scene" class="home-intro__scene">
         <canvas id="home-intro-canvas" class="home-intro__canvas" aria-hidden="true"></canvas>
@@ -48,8 +48,8 @@
     </div>
   </div>
 
-  <div id="loading-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm pointer-events-none">
-    <div class="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-900/90 px-4 py-2 text-sm font-semibold text-slate-100 shadow-lg shadow-slate-900/50">
+  <div id="loading-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm pointer-events-none">
+    <div class="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-black/90 px-4 py-2 text-sm font-semibold text-slate-100 shadow-lg shadow-black/60">
       <span class="spinner h-5 w-5 animate-spin rounded-full border-2 border-slate-500"></span>
       <span id="loading-text">Loading…</span>
     </div>
@@ -58,7 +58,7 @@
   <div data-auth-protected class="hidden min-h-0 flex-1 flex flex-col">
     <div data-shared-header></div>
 
-    <main id="map-layout" class="relative flex-1 overflow-hidden bg-slate-950">
+    <main id="map-layout" class="relative flex-1 overflow-hidden bg-black">
 
     <div class="absolute inset-0">
       <div id="tech-map"></div>
@@ -84,10 +84,10 @@
       <button id="toggle-vehicle-markers" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Vehicles Marks</button>
     </div>
     <div id="floating-search-shell" class="pointer-events-none absolute top-16 right-4 z-[510] flex flex-col items-end gap-2">
-      <button id="legend-search-toggle" type="button" class="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/80 bg-slate-950/85 text-slate-200 shadow-lg shadow-slate-950/50 hover:border-cyan-400/70 hover:text-cyan-200 transition-colors" aria-expanded="false" aria-label="Toggle map search">
+      <button id="legend-search-toggle" type="button" class="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/80 bg-black/85 text-slate-200 shadow-lg shadow-black/60 hover:border-cyan-400/70 hover:text-cyan-200 transition-colors" aria-expanded="false" aria-label="Toggle map search">
         <span id="legend-search-chevron">▸</span>
       </button>
-      <div id="legend-search-panel" class="pointer-events-auto hidden w-[min(86vw,340px)] rounded-xl border border-slate-800/90 bg-slate-950/92 px-2.5 py-2 shadow-xl shadow-slate-950/60 backdrop-blur">
+      <div id="legend-search-panel" class="pointer-events-auto hidden w-[min(86vw,340px)] rounded-xl border border-slate-800/90 bg-black/92 px-2.5 py-2 shadow-xl shadow-black/65 backdrop-blur">
         <form id="legend-search-form" class="relative">
           <input
             id="legend-search-input"
@@ -111,7 +111,7 @@
     </div>
 
     <!-- Floating Legend -->
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl backdrop-blur">
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-black/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl shadow-black/55 backdrop-blur">
         <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-8">
           <div class="flex-1 space-y-2">
             <p class="legend-heading">Services</p>
@@ -177,7 +177,7 @@
       <div class="resize-handle right-0"></div>
 
       <!-- Search -->
-      <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10 space-y-4">
+      <div class="p-5 border-b border-slate-800 bg-black shadow-md shadow-black/40 z-10 space-y-4">
         <div class="flex items-start justify-between gap-3">
           <div>
             <p class="text-[10px] font-bold uppercase text-slate-400 mb-1">Client starting point</p>
@@ -195,7 +195,7 @@
           <input
             id="address-input"
             type="text"
-            class="block w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+            class="block w-full rounded-xl border border-slate-700 bg-black/70 pl-4 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
             placeholder="Ex: 33101, Phoenix, AZ..."
             autocomplete="off"
           >
@@ -211,7 +211,7 @@
       </div>
 
       <!-- Technicians List -->
-      <div id="tech-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+      <div id="tech-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-black/92 scroll-smooth relative">
         <div class="text-center mt-10 text-slate-600 text-xs">Waiting for installer data...</div>
       </div>
     </aside>
@@ -221,7 +221,7 @@
     <!-- Vehicles Sidebar -->
     <aside id="right-sidebar" class="resizable-sidebar right-0 border-l border-slate-800 flex flex-col z-30 shadow-2xl collapsed-right" style="width: var(--right-sidebar-width)">
       <div class="resize-handle left-0"></div>
-      <div class="vehicle-sidebar-head p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10">
+      <div class="vehicle-sidebar-head p-5 border-b border-slate-800 bg-black shadow-md shadow-black/40 z-10">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-[9px] font-bold uppercase text-amber-300 mb-0.5">Control Map</p>
@@ -236,17 +236,17 @@
           </div>
         </div>
         <div class="vehicle-sidebar-search mt-4 relative">
-          <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
+          <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-black/70 pl-4 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
           <svg class="h-4 w-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
         </div>
-        <div class="vehicle-filter-panel mt-1.5 space-y-1.5 rounded-lg border border-slate-800 bg-slate-900/70 p-2">
+        <div class="vehicle-filter-panel mt-1.5 space-y-1.5 rounded-lg border border-slate-800 bg-black/70 p-2">
           <div class="flex items-center justify-between text-[10px] font-semibold text-slate-300">
             <span class="text-[9px] uppercase tracking-wide text-slate-400">Vehicle filters</span>
             <div class="flex items-center gap-1.5">
-              <button id="filter-kpi-positive-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false">
+              <button id="filter-kpi-positive-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false">
                 <span class="vehicle-filter-value">KPI &gt; 0</span>
                 <span class="text-slate-500" data-kpi-filter-state>Off</span>
               </button>
@@ -259,11 +259,11 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Inv. Prep. Stat</span>
               <div class="relative">
-                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-invprep" class="grid gap-1"></div>
                 </div>
               </div>
@@ -271,11 +271,11 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Physical Location</span>
               <div class="relative">
-                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-physloc" class="grid gap-1"></div>
                 </div>
               </div>
@@ -283,11 +283,11 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">GPS Fix</span>
               <div class="relative">
-                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-gps" class="grid gap-1"></div>
                 </div>
               </div>
@@ -295,11 +295,11 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Moving</span>
               <div class="relative">
-                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-moving" class="grid gap-1"></div>
                 </div>
               </div>
@@ -307,11 +307,11 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal status</span>
               <div class="relative">
-                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-deal-status" class="grid gap-1"></div>
                 </div>
               </div>
@@ -319,35 +319,36 @@
             <div class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">PT Status</span>
               <div class="relative">
-                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
                   <span class="vehicle-filter-value">Select</span>
                   <span class="text-slate-500">▾</span>
                 </button>
-                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-slate-950/95 p-1.5 shadow-lg">
+                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
                   <div id="filter-pt" class="grid gap-1"></div>
                 </div>
               </div>
             </div>
-            <label class="vehicle-filter-field vehicle-filter-range space-y-0">
+            <label class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal completion %</span>
-              <div class="vehicle-filter-range-row flex items-center gap-1 text-[9px] text-slate-300">
-                <input id="filter-deal-min" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
-                <span class="text-slate-500">to</span>
-                <input id="filter-deal-max" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input w-full rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="100">
+              <div class="vehicle-filter-inline-controls">
+                <select id="filter-deal-operator" class="vehicle-filter-range-input vehicle-filter-operator rounded-md border border-slate-800 bg-black text-[9px] font-semibold text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400">
+                  <option value="gt">&gt;</option>
+                  <option value="lt">&lt;</option>
+                </select>
+                <input id="filter-deal-value" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input vehicle-filter-number rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
               </div>
             </label>
-            <label class="vehicle-filter-field vehicle-filter-range col-span-2 space-y-0">
+            <label class="vehicle-filter-field space-y-0">
               <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">History points</span>
-              <div class="vehicle-filter-range-row flex items-center gap-1.5 text-[9px] text-slate-300">
-                <input id="filter-trail-points" type="number" min="1" max="120" step="1" class="vehicle-filter-range-input w-20 rounded-md border border-slate-800 bg-slate-950 px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" value="10">
-                <span class="text-slate-500">Points shown when selecting a vehicle route</span>
+              <div class="vehicle-filter-inline-controls">
+                <input id="filter-trail-points" type="number" min="1" max="120" step="1" class="vehicle-filter-range-input vehicle-filter-number is-short rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" value="10">
               </div>
             </label>
             </div>
           </div>
         </div>
       </div>
-      <div id="vehicle-list" class="vehicle-list-scroll flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+      <div id="vehicle-list" class="vehicle-list-scroll flex-1 overflow-y-auto p-4 space-y-2 bg-black/92 scroll-smooth relative">
         <div class="text-center mt-10 text-slate-600 text-xs">Waiting for vehicle data...</div>
       </div>
     </aside>
@@ -355,19 +356,19 @@
 
   <!-- Vehicle detail modal -->
   <div id="vehicle-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-    <div class="flex w-[96vw] max-w-[1880px] flex-col border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden max-h-[90vh]">
-      <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-4 py-3 backdrop-blur">
+    <div class="flex w-[96vw] max-w-[1880px] flex-col border border-slate-800 bg-black shadow-2xl shadow-black/60 overflow-hidden max-h-[90vh]">
+      <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-black/80 px-4 py-3 backdrop-blur">
         <div>
           <p class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Vehicle details</p>
           <h3 id="vehicle-modal-title" class="text-lg font-bold text-white"></h3>
           <p id="vehicle-modal-vin" class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400"></p>
         </div>
         <div class="flex items-center gap-2">
-          <button id="vehicle-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
-          <button id="vehicle-modal-close" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
+          <button id="vehicle-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
+          <button id="vehicle-modal-close" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
         </div>
       </div>
-      <div id="vehicle-modal-columns-panel" class="hidden border-b border-slate-800 bg-slate-950/70 px-4 py-3">
+      <div id="vehicle-modal-columns-panel" class="hidden border-b border-slate-800 bg-black/70 px-4 py-3">
         <div class="flex items-center justify-between gap-4">
           <div>
             <p class="text-xs font-semibold text-slate-200">Choose columns</p>

@@ -40,9 +40,9 @@ const buildCard = ({ title, message, details = '', level = 'error' }) => {
   const accent = level === 'warn' ? '#f59e0b' : '#ef4444';
   card.style.border = `1px solid ${accent}`;
   card.style.borderRadius = '12px';
-  card.style.background = 'rgba(2, 6, 23, 0.96)';
+  card.style.background = 'rgba(0, 0, 0, 0.94)';
   card.style.padding = '10px 12px';
-  card.style.boxShadow = `0 8px 30px rgba(15, 23, 42, 0.65)`;
+  card.style.boxShadow = '0 8px 30px rgba(0, 0, 0, 0.65)';
   card.style.color = '#e2e8f0';
   card.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif';
   card.style.fontSize = '12px';
@@ -62,7 +62,7 @@ const buildCard = ({ title, message, details = '', level = 'error' }) => {
         ${safeDetails ? `<details style="margin-top:6px;"><summary style="cursor:pointer;color:#93c5fd;">Details</summary><pre style="white-space:pre-wrap;margin:6px 0 0;color:#cbd5e1;max-height:180px;overflow:auto;">${safeDetails}</pre></details>` : ''}
         <div style="margin-top:6px;color:#94a3b8;font-size:11px;">${stamp}</div>
       </div>
-      <button type="button" aria-label="Dismiss alert" style="border:1px solid #334155;background:#0f172a;color:#e2e8f0;border-radius:999px;padding:2px 8px;cursor:pointer;">x</button>
+      <button type="button" aria-label="Dismiss alert" style="border:1px solid #334155;background:#050505;color:#e2e8f0;border-radius:999px;padding:2px 8px;cursor:pointer;">x</button>
     </div>
   `;
 

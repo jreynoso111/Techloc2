@@ -82,7 +82,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.45rem 0.6rem;
-  background: rgba(2, 6, 23, 0.65);
+  background: rgba(0, 0, 0, 0.7);
   color: #cbd5e1;
   font-size: 10px;
   font-weight: 600;
@@ -90,7 +90,7 @@ body {
 }
 
 .gps-history-serial-toggle:hover {
-  background: rgba(15, 23, 42, 0.9);
+  background: rgba(0, 0, 0, 0.88);
 }
 
 .gps-history-serial-toggle.is-winner {
@@ -215,7 +215,7 @@ body.gps-column-resizing {
 	    }
 
     /* Map */
-    #tech-map { height: 100%; width: 100%; background-color: #0b1220; z-index: 1; position: absolute; inset: 0; }
+    #tech-map { height: 100%; width: 100%; background-color: #020202; z-index: 1; position: absolute; inset: 0; }
     .leaflet-control-container .leaflet-top, .leaflet-control-container .leaflet-bottom { z-index: 500; }
 
 	    .resizable-sidebar {
@@ -223,7 +223,7 @@ body.gps-column-resizing {
 	      top: 0;
 	      bottom: 0;
 	      backdrop-filter: blur(12px);
-	      background: rgba(15, 23, 42, 0.9);
+	      background: linear-gradient(180deg, rgba(0, 0, 0, 0.95), rgba(5, 5, 5, 0.92));
 	      transition: transform 0.3s ease;
 	    }
 
@@ -319,6 +319,29 @@ body.gps-column-resizing {
 	      font-size: 10px;
 	    }
 
+	    .vehicle-filter-inline-controls {
+	      display: flex;
+	      align-items: center;
+	      gap: 0.25rem;
+	      min-width: 0;
+	    }
+
+	    .vehicle-filter-operator {
+	      width: 2.55rem;
+	      text-align: center;
+	      padding-left: 0.15rem;
+	      padding-right: 0.15rem;
+	    }
+
+	    .vehicle-filter-number {
+	      width: 100%;
+	      min-width: 0;
+	    }
+
+	    .vehicle-filter-number.is-short {
+	      width: 4rem;
+	    }
+
 	    .vehicle-list-scroll {
 	      padding: 0.7rem;
 	    }
@@ -382,7 +405,7 @@ body.gps-column-resizing {
       gap: 0.5rem;
       padding: 6px 10px;
       border-radius: 9999px;
-      background: rgba(15, 23, 42, 0.75);
+      background: rgba(0, 0, 0, 0.76);
       border: 1px solid rgba(148, 163, 184, 0.25);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
       color: #e2e8f0;
@@ -450,7 +473,7 @@ body.gps-column-resizing {
 
     /* Vehicle popup styling */
     .vehicle-popup .leaflet-popup-content-wrapper {
-      background: #0b1120ee;
+      background: #050505f0;
       color: #e2e8f0;
       border: 1px solid #1f2937;
       border-radius: 14px;
@@ -460,10 +483,10 @@ body.gps-column-resizing {
       max-width: min(260px, calc(100vw - 80px));
     }
     .vehicle-popup .leaflet-popup-content { margin: 0; width: 100%; }
-    .vehicle-popup .leaflet-popup-tip { background: #0b1120; border: 1px solid #1f2937; }
+    .vehicle-popup .leaflet-popup-tip { background: #050505; border: 1px solid #1f2937; }
 
     .service-mini-popup .leaflet-popup-content-wrapper {
-      background: #0b1120f0;
+      background: #050505f2;
       color: #e2e8f0;
       border: 1px solid #1f2937;
       border-radius: 10px;
@@ -474,7 +497,7 @@ body.gps-column-resizing {
     }
 
     .service-mini-popup .leaflet-popup-content { margin: 2px 4px; width: 100%; }
-    .service-mini-popup .leaflet-popup-tip { background: #0b1120; border: 1px solid #1f2937; }
+    .service-mini-popup .leaflet-popup-tip { background: #050505; border: 1px solid #1f2937; }
 
     .service-mini-card { font-family: 'Inter', sans-serif; min-width: 0; }
     .service-mini-title { margin: 0; font-size: 13px; font-weight: 800; color: #fff; line-height: 1.2; }
@@ -516,7 +539,7 @@ body.gps-column-resizing {
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-track { background: #050505; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
     .vehicle-cross-badge {
@@ -560,15 +583,15 @@ body.gps-column-resizing {
       padding: 2px 7px;
       border-radius: 999px;
       border: 1px solid rgba(71, 85, 105, 0.8);
-      background: rgba(15, 23, 42, 0.62);
+      background: rgba(0, 0, 0, 0.72);
       color: #e2e8f0;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.02em;
       line-height: 1.1;
       white-space: nowrap;
-      text-shadow: 0 1px 2px rgba(2, 6, 23, 0.9);
-      box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.35);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.92);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.42);
       transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
     }
 
@@ -622,7 +645,7 @@ body.gps-column-resizing {
     }
 
     .vehicle-history-hotspot-popup .leaflet-popup-content-wrapper {
-      background: #1e3a8af0;
+      background: #050505f2;
       color: #dbeafe;
       border: 1px solid rgba(96, 165, 250, 0.68);
       border-radius: 10px;
@@ -641,7 +664,7 @@ body.gps-column-resizing {
     }
 
     .vehicle-history-hotspot-popup .leaflet-popup-tip {
-      background: #1e3a8a;
+      background: #050505;
       border: 1px solid rgba(96, 165, 250, 0.68);
     }
 
@@ -793,7 +816,7 @@ body.gps-column-resizing {
     }
 
     .vehicle-history-hotspot-related-body::-webkit-scrollbar-track {
-      background: rgba(15, 23, 42, 0.32);
+      background: rgba(0, 0, 0, 0.34);
       border-radius: 999px;
     }
 
@@ -841,7 +864,7 @@ body.gps-column-resizing {
       text-align: left;
       border-radius: 6px;
       border: 1px solid rgba(147, 197, 253, 0.35);
-      background: rgba(15, 23, 42, 0.35);
+      background: rgba(0, 0, 0, 0.42);
       color: #dbeafe;
       padding: 4px 6px;
       transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -850,7 +873,7 @@ body.gps-column-resizing {
 
     .vehicle-history-hotspot-related-btn:hover {
       border-color: rgba(186, 230, 253, 0.75);
-      background: rgba(15, 23, 42, 0.62);
+      background: rgba(0, 0, 0, 0.66);
     }
 
     .vehicle-history-hotspot-related-btn-title {
@@ -937,7 +960,7 @@ body.gps-column-resizing {
       overflow: auto;
       border: 1px solid rgba(51, 65, 85, 0.85);
       border-radius: 8px;
-      background: rgba(15, 23, 42, 0.75);
+      background: rgba(0, 0, 0, 0.78);
     }
 
     .gps-record-table {
@@ -1087,7 +1110,7 @@ body.gps-column-resizing {
       font-size: 12px;
       font-weight: 700;
       border-radius: 9999px;
-      background: rgba(15, 23, 42, 0.9);
+      background: rgba(0, 0, 0, 0.9);
       border: 1px solid rgba(148, 163, 184, 0.4);
       color: #e2e8f0;
       backdrop-filter: blur(8px);

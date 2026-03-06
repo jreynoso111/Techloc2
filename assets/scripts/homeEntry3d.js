@@ -54,9 +54,9 @@ const createBackgroundStars = (count) => {
 
 const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, progress, stars) => {
   const base = ctx.createLinearGradient(0, 0, 0, height);
-  base.addColorStop(0, '#02020a');
-  base.addColorStop(0.5, '#05091a');
-  base.addColorStop(1, '#02040d');
+  base.addColorStop(0, '#010101');
+  base.addColorStop(0.5, '#050505');
+  base.addColorStop(1, '#080808');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, width, height);
 
@@ -69,10 +69,10 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.48 + pointerY * 0.03),
     width * (0.92 + progress * 0.08)
   );
-  nebulaCore.addColorStop(0, 'rgba(67, 56, 202, 0.12)');
-  nebulaCore.addColorStop(0.35, 'rgba(30, 64, 175, 0.08)');
-  nebulaCore.addColorStop(0.62, 'rgba(15, 23, 42, 0.06)');
-  nebulaCore.addColorStop(1, 'rgba(2, 6, 23, 0)');
+  nebulaCore.addColorStop(0, 'rgba(56, 189, 248, 0.06)');
+  nebulaCore.addColorStop(0.35, 'rgba(148, 163, 184, 0.05)');
+  nebulaCore.addColorStop(0.62, 'rgba(0, 0, 0, 0.04)');
+  nebulaCore.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = nebulaCore;
   ctx.fillRect(0, 0, width, height);
 
@@ -84,9 +84,9 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.28 + pointerY * 0.02),
     width * 0.58
   );
-  nebulaArmA.addColorStop(0, 'rgba(190, 24, 93, 0.05)');
-  nebulaArmA.addColorStop(0.45, 'rgba(79, 70, 229, 0.07)');
-  nebulaArmA.addColorStop(1, 'rgba(2, 6, 23, 0)');
+  nebulaArmA.addColorStop(0, 'rgba(248, 250, 252, 0.02)');
+  nebulaArmA.addColorStop(0.45, 'rgba(56, 189, 248, 0.04)');
+  nebulaArmA.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = nebulaArmA;
   ctx.fillRect(0, 0, width, height);
 
@@ -98,19 +98,19 @@ const drawGalaxyBackdrop = (ctx, width, height, elapsed, pointerX, pointerY, pro
     height * (0.74 - pointerY * 0.02),
     width * 0.6
   );
-  nebulaArmB.addColorStop(0, 'rgba(8, 145, 178, 0.06)');
-  nebulaArmB.addColorStop(0.42, 'rgba(30, 64, 175, 0.07)');
-  nebulaArmB.addColorStop(1, 'rgba(2, 6, 23, 0)');
+  nebulaArmB.addColorStop(0, 'rgba(56, 189, 248, 0.05)');
+  nebulaArmB.addColorStop(0.42, 'rgba(148, 163, 184, 0.04)');
+  nebulaArmB.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = nebulaArmB;
   ctx.fillRect(0, 0, width, height);
 
   // Dust lanes for depth.
   const dustLane = ctx.createLinearGradient(0, height * 0.26, 0, height * 0.78);
-  dustLane.addColorStop(0, 'rgba(2, 6, 23, 0)');
-  dustLane.addColorStop(0.45, 'rgba(2, 6, 23, 0.22)');
-  dustLane.addColorStop(0.52, 'rgba(2, 6, 23, 0.34)');
-  dustLane.addColorStop(0.62, 'rgba(2, 6, 23, 0.2)');
-  dustLane.addColorStop(1, 'rgba(2, 6, 23, 0)');
+  dustLane.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  dustLane.addColorStop(0.45, 'rgba(0, 0, 0, 0.24)');
+  dustLane.addColorStop(0.52, 'rgba(0, 0, 0, 0.36)');
+  dustLane.addColorStop(0.62, 'rgba(0, 0, 0, 0.2)');
+  dustLane.addColorStop(1, 'rgba(0, 0, 0, 0)');
   ctx.fillStyle = dustLane;
   ctx.fillRect(0, 0, width, height);
 

@@ -73,6 +73,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
     let selectedVehicleKey = null;
+    const expandedVehicleCardKeys = new Set();
     const checkedVehicleIds = new Set();
     const checkedVehicleClickTimes = new Map();
     const checkedVehicleClickTimesByVin = new Map();
@@ -109,8 +110,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       moving: [],
       dealStatus: [],
       ptStatus: [],
-      dealMin: 0,
-      dealMax: 100,
+      dealOperator: 'gt',
+      dealValue: null,
       trailPoints: DEFAULT_GPS_TRAIL_POINT_LIMIT,
       payKpiPositiveOnly: false,
     };
@@ -244,14 +245,27 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         ? value.map((item) => String(item).trim()).filter(Boolean)
         : []);
 
-      const toBoundedNumber = (value, fallback) => {
+      const toBoundedNumber = (value, fallback = null) => {
         const parsed = Number(value);
         if (!Number.isFinite(parsed)) return fallback;
         return Math.max(0, Math.min(parsed, 100));
       };
 
-      const min = toBoundedNumber(payload.dealMin, 0);
-      const max = toBoundedNumber(payload.dealMax, 100);
+      const legacyMin = toBoundedNumber(payload.dealMin, 0);
+      const legacyMax = toBoundedNumber(payload.dealMax, 100);
+      let dealOperator = payload.dealOperator === 'lt' ? 'lt' : 'gt';
+      let dealValue = toBoundedNumber(payload.dealValue, null);
+      if (!Number.isFinite(dealValue)) {
+        if (legacyMin > 0 && legacyMax >= 100) {
+          dealOperator = 'gt';
+          dealValue = legacyMin;
+        } else if (legacyMax < 100 && legacyMin <= 0) {
+          dealOperator = 'lt';
+          dealValue = legacyMax;
+        } else {
+          dealValue = null;
+        }
+      }
       const parsedTrailPoints = Number.parseInt(payload.trailPoints, 10);
       const trailPoints = Number.isFinite(parsedTrailPoints)
         ? Math.max(MIN_GPS_TRAIL_POINT_LIMIT, Math.min(parsedTrailPoints, MAX_GPS_TRAIL_POINT_LIMIT))
@@ -265,8 +279,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         moving: toArray(payload.moving),
         dealStatus: toArray(payload.dealStatus),
         ptStatus: toArray(payload.ptStatus),
-        dealMin: Math.min(min, max),
-        dealMax: max,
+        dealOperator,
+        dealValue: Number.isFinite(dealValue) ? dealValue : null,
         trailPoints,
         payKpiPositiveOnly,
       };
@@ -2802,10 +2816,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       if (nextDays !== null) {
         vehicle.historyDaysStationaryOverride = nextDays;
-        vehicle.daysStationary = nextDays;
         if (vehicle?.details && typeof vehicle.details === 'object') {
+          // Keep the GPS-history derivation separate from raw vehicle snapshot fields.
           vehicle.details.historyDaysStationaryOverride = nextDays;
-          vehicle.details.days_stationary = nextDays;
         }
       } else {
         delete vehicle.historyDaysStationaryOverride;
@@ -4959,7 +4972,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         : records;
 
       const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
-      const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records);
       const latestRecords = [...records]
         .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
         .slice(0, getCurrentTrailPointLimit());
@@ -4991,17 +5003,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       prefetchRelatedVehiclesForHotspots(historyHotspots, vehicle.id);
 
       if (requestId !== gpsTrailRequestCounter) return;
-      const selectedVehicleMatchesCurrent = (
-        `${selectedVehicleId ?? ''}` === `${vehicle?.id ?? ''}`
-        && (!selectedVehicleKey || `${selectedVehicleKey}` === getVehicleKey(vehicle))
-      );
-      if (movingOverrideChanged) {
-        updateVehicleFilterOptions();
-        renderVehicles();
-        if (selectedVehicleMatchesCurrent) {
-          syncFocusedVehicleNotMovingBadge(vehicle);
-        }
-      }
       if (!trailPoints.length && !historyHotspots.length) {
         applyRouteLayerVisibilityMode();
         return;
@@ -6301,8 +6302,29 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         || findVehicleById(card.dataset.id);
     }
 
+    function isVehicleCardExpanded(vehicleOrKey) {
+      const key = typeof vehicleOrKey === 'string'
+        ? vehicleOrKey.trim()
+        : getVehicleKey(vehicleOrKey);
+      return Boolean(key) && expandedVehicleCardKeys.has(key);
+    }
+
+    function toggleVehicleCardExpanded(vehicleOrKey) {
+      const key = typeof vehicleOrKey === 'string'
+        ? vehicleOrKey.trim()
+        : getVehicleKey(vehicleOrKey);
+      if (!key) return;
+      if (expandedVehicleCardKeys.has(key)) {
+        expandedVehicleCardKeys.delete(key);
+      } else {
+        expandedVehicleCardKeys.add(key);
+      }
+      renderVehicles();
+    }
+
     function isVehicleCardControlTarget(target, composedPath = []) {
       const CONTROL_ACTIONS = new Set([
+        'vehicle-expand-toggle',
         'vehicle-view-more',
         'repair-history',
         'gps-history',
@@ -6328,6 +6350,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const composedPath = typeof event.composedPath === 'function' ? event.composedPath() : [];
       const findInPath = (action) => composedPath.find((node) => node?.dataset?.action === action);
       const card = target?.closest('[data-type="vehicle"]') || composedPath.find((node) => node?.dataset?.type === 'vehicle');
+      const expandToggleBtn = target?.closest('[data-action="vehicle-expand-toggle"]') || findInPath('vehicle-expand-toggle');
       const viewMoreBtn = target?.closest('[data-action="vehicle-view-more"]') || findInPath('vehicle-view-more');
       const repairHistoryBtn = target?.closest('[data-action="repair-history"]') || findInPath('repair-history');
       const gpsHistoryBtn = target?.closest('[data-action="gps-history"]') || findInPath('gps-history');
@@ -6336,6 +6359,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const vehicle = getVehicleFromListCard(card);
       if (!vehicle) return;
+
+      if (expandToggleBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        toggleVehicleCardExpanded(vehicle);
+        return;
+      }
 
       if (viewMoreBtn) {
         event.preventDefault();
@@ -6637,6 +6668,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
           );
+          const isExpanded = isVehicleCardExpanded(currentVehicleKey);
+          const expandChevron = isExpanded ? '▾' : '▸';
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = currentVehicleKey;
           card.dataset.vehicleKey = currentVehicleKey;
@@ -6644,27 +6677,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           card.dataset.type = 'vehicle';
           card.innerHTML = `
             <div class="flex items-start justify-between gap-3">
-              <div class="space-y-1">
-                <p class="text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">${vehicle.model}</p>
-                <h3 class="font-extrabold text-white text-sm leading-tight flex items-center gap-2">${vehicle.year || '—'} <span class="text-slate-600">•</span> ${vehicle.vin || 'VIN N/A'}</h3>
-                <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
-                <p class="text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
-                ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
-                <p class="text-[11px] text-blue-200 font-semibold">Customer ID: <span class="text-slate-100">${vehicle.customerId || '—'}</span></p>
+              <div class="min-w-0 flex-1 space-y-1">
+                <p class="truncate text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">${vehicle.model} <span class="text-amber-100">${vehicle.year || '—'}</span></p>
+                <h3 class="truncate font-extrabold text-white text-sm leading-tight">${vehicle.vin || 'VIN N/A'}</h3>
+                <div class="flex flex-wrap items-center gap-2 pt-0.5 text-[10px]">
+                  <span class="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-1 font-bold text-amber-100">${vehicle.dealStatus || vehicle.status || 'ACTIVE'}</span>
+                  <span class="inline-flex items-center gap-2 rounded-full border border-slate-800 px-2 py-1 font-semibold ${movingMeta.text} ${movingMeta.bg}">
+                    <span class="w-2 h-2 rounded-full ${movingMeta.dot}"></span>
+                    <span>${movingMeta.label}</span>
+                  </span>
+                  <span class="rounded-full border border-slate-800 bg-slate-950/70 px-2 py-1 font-semibold text-slate-300">
+                    Days Parked <span class="text-slate-100">${getDaysParkedDisplay(vehicle)}</span>
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="truncate text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
               </div>
-              <div class="flex flex-col items-end gap-1 text-right">
-                <div class="inline-flex items-center gap-2 text-[10px] font-bold text-slate-300">
-                  <span class="px-2 py-1 rounded-full border border-amber-400/40 bg-amber-500/10 text-amber-100">${vehicle.dealStatus || vehicle.status || 'ACTIVE'}</span>
-                </div>
-                <div class="inline-flex items-center gap-2 text-[10px] font-semibold ${movingMeta.text} px-2 py-1 rounded-full border border-slate-800 ${movingMeta.bg}">
-                  <span class="w-2 h-2 rounded-full ${movingMeta.dot}"></span>
-                  <span>${movingMeta.label}</span>
-                </div>
-                <div class="text-[10px] font-semibold text-slate-300">
-                  Days Parked <span class="text-slate-100">${getDaysParkedDisplay(vehicle)}</span>
-                </div>
-              </div>
+              <button
+                type="button"
+                data-action="vehicle-expand-toggle"
+                aria-expanded="${isExpanded ? 'true' : 'false'}"
+                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-sm font-bold text-slate-300 transition hover:border-amber-400 hover:text-amber-200"
+                title="${isExpanded ? 'Collapse vehicle card' : 'Expand vehicle card'}"
+              >${expandChevron}</button>
             </div>
+            ${isExpanded ? `
             <div class="grid grid-cols-2 gap-2 text-[11px]">
               <div class="${gpsCardClasses}">
                 ${svgIcon('wifiOff', gpsIconClasses)}
@@ -6674,14 +6710,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 </div>
               </div>
               <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 flex items-center gap-2 text-slate-200">
-                ${svgIcon('hash', 'h-3 w-3 text-blue-400')}
+                ${svgIcon('clock', 'h-3 w-3 text-blue-400')}
                 <div class="text-left leading-tight">
-                  <p class="font-semibold">VIN</p>
-                  <p class="text-[10px] text-slate-400">${vehicle.vin || 'Not available'}</p>
+                  <p class="text-[10px] text-slate-400">Last ${ptLastReadLabel}</p>
+                  <p class="text-[10px] text-slate-500">First ${ptFirstReadLabel}</p>
                 </div>
               </div>
             </div>
             <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] text-slate-200 space-y-2">
+              <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
+              ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
+              <p class="text-[11px] text-blue-200 font-semibold">Customer ID: <span class="text-slate-100">${vehicle.customerId || '—'}</span></p>
               <div class="grid grid-cols-4 gap-2">
                 <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
                   <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
@@ -6701,16 +6740,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   <p class="text-[11px] font-semibold ${ptStatusStyles.value}">${vehicle.ptStatus || '—'}</p>
                 </div>
               </div>
-              <div class="flex items-center justify-between text-[11px] text-slate-400">
-                <span class="flex items-center gap-2 font-semibold text-slate-200">${svgIcon('clock', 'h-3 w-3')} PT Last Read ${ptLastReadLabel}</span>
+              <div class="flex items-center justify-end text-[11px] text-slate-400">
                 <span class="text-slate-400">${vehicle.payment || ''}</span>
-              </div>
-              <div class="flex items-center text-[10px] text-slate-400">
-                <span class="flex items-center gap-2">${svgIcon('clock', 'h-3 w-3')} PT First Read ${ptFirstReadLabel}</span>
-              </div>
-              <div class="flex items-center justify-between text-[10px] text-slate-400">
-                <span>Lat <span class="text-slate-200">${latLabel}</span></span>
-                <span>Long <span class="text-slate-200">${longLabel}</span></span>
               </div>
             </div>
             <div class="pt-1 flex items-end justify-between gap-2">
@@ -6732,6 +6763,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <button type="button" data-action="gps-history" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[10px] font-bold text-emerald-100 hover:bg-emerald-500/25 transition-colors">GPS Historic</button>
               </div>
             </div>
+            ` : ''}
           `;
 
           const selectCheckbox = card.querySelector('[data-action="vehicle-select-checkbox"]');
@@ -6878,11 +6910,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
-    function matchesRange(value, min, max) {
+    function matchesDealCompletionFilter(value, operator, threshold) {
       const pct = parseDealCompletion(value);
-      // Vehicles with unknown completion should remain visible in the map list.
-      if (!Number.isFinite(pct)) return true;
-      return pct >= min && pct <= max;
+      if (!Number.isFinite(threshold)) return true;
+      if (!Number.isFinite(pct)) return false;
+      if (operator === 'lt') return pct < threshold;
+      return pct > threshold;
     }
 
     const EMPTY_FILTER_VALUE = '__empty__';
@@ -6906,7 +6939,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const ptStatus = normalizeFilterValue(vehicle.ptStatus);
       if (vehicleFilters.ptStatus.length && !vehicleFilters.ptStatus.includes(ptStatus)) return false;
 
-      if (!matchesRange(vehicle.dealCompletion, vehicleFilters.dealMin, vehicleFilters.dealMax)) return false;
+      if (!matchesDealCompletionFilter(vehicle.dealCompletion, vehicleFilters.dealOperator, vehicleFilters.dealValue)) return false;
 
       const movingStatus = getMovingStatus(vehicle);
       if (vehicleFilters.moving.length && !vehicleFilters.moving.includes(movingStatus)) return false;
@@ -6938,9 +6971,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function getDaysParkedValue(vehicle) {
-      const raw = vehicle?.historyDaysStationaryOverride
-        ?? vehicle?.details?.historyDaysStationaryOverride
-        ?? vehicle?.daysStationary
+      const raw = vehicle?.daysStationary
         ?? vehicle?.details?.days_stationary
         ?? vehicle?.details?.['Days Parked'];
       if (typeof raw === 'number') return Number.isFinite(raw) ? raw : Number.NEGATIVE_INFINITY;
@@ -6979,6 +7010,36 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function sortVehiclesByPayKpiDesc(list) {
       return [...list].sort((a, b) => getPayKpiValue(b) - getPayKpiValue(a));
+    }
+
+    function sortVehiclesMissingCoordsLast(list) {
+      return list
+        .map((vehicle, index) => ({ vehicle, index }))
+        .sort((left, right) => {
+          const leftHasCoords = hasValidCoords(left.vehicle);
+          const rightHasCoords = hasValidCoords(right.vehicle);
+          if (leftHasCoords !== rightHasCoords) {
+            return leftHasCoords ? -1 : 1;
+          }
+          return left.index - right.index;
+        })
+        .map((entry) => entry.vehicle);
+    }
+
+    function hasActiveVehicleSidebarRefinements(query = '') {
+      const normalizedQuery = `${query ?? ''}`.trim();
+      return Boolean(
+        normalizedQuery
+        || selectedTechId !== null
+        || vehicleFilters.invPrep.length
+        || vehicleFilters.physLoc.length
+        || vehicleFilters.gpsFix.length
+        || vehicleFilters.moving.length
+        || vehicleFilters.dealStatus.length
+        || vehicleFilters.ptStatus.length
+        || Number.isFinite(vehicleFilters.dealValue)
+        || vehicleFilters.payKpiPositiveOnly
+      );
     }
 
     function getUniqueVehicleValues(field, { includeEmpty = false } = {}) {
@@ -7105,8 +7166,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movingContainer = document.getElementById('filter-moving');
       const dealStatusContainer = document.getElementById('filter-deal-status');
       const ptContainer = document.getElementById('filter-pt');
-      const minInput = document.getElementById('filter-deal-min');
-      const maxInput = document.getElementById('filter-deal-max');
+      const dealOperatorInput = document.getElementById('filter-deal-operator');
+      const dealValueInput = document.getElementById('filter-deal-value');
       const trailPointsInput = document.getElementById('filter-trail-points');
       const kpiPositiveToggle = document.getElementById('filter-kpi-positive-toggle');
 
@@ -7123,8 +7184,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       syncCheckboxes(movingContainer, vehicleFilters.moving);
       syncCheckboxes(dealStatusContainer, vehicleFilters.dealStatus);
       syncCheckboxes(ptContainer, vehicleFilters.ptStatus);
-      if (minInput) minInput.value = vehicleFilters.dealMin;
-      if (maxInput) maxInput.value = vehicleFilters.dealMax;
+      if (dealOperatorInput) dealOperatorInput.value = vehicleFilters.dealOperator === 'lt' ? 'lt' : 'gt';
+      if (dealValueInput) dealValueInput.value = Number.isFinite(vehicleFilters.dealValue) ? String(vehicleFilters.dealValue) : '';
       if (trailPointsInput) trailPointsInput.value = String(vehicleFilters.trailPoints);
       if (kpiPositiveToggle) {
         const isActive = Boolean(vehicleFilters.payKpiPositiveOnly);
@@ -7152,8 +7213,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       vehicleFilters.moving = [];
       vehicleFilters.dealStatus = [];
       vehicleFilters.ptStatus = [];
-      vehicleFilters.dealMin = 0;
-      vehicleFilters.dealMax = 100;
+      vehicleFilters.dealOperator = 'gt';
+      vehicleFilters.dealValue = null;
       vehicleFilters.trailPoints = DEFAULT_GPS_TRAIL_POINT_LIMIT;
       vehicleFilters.payKpiPositiveOnly = false;
       gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
@@ -7222,27 +7283,26 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       });
 
-      const minInput = document.getElementById('filter-deal-min');
-      const maxInput = document.getElementById('filter-deal-max');
-      [minInput, maxInput].forEach((input, idx) => {
-        if (!input) return;
-        input.addEventListener('input', () => {
-          const val = parseFloat(input.value);
-          if (Number.isFinite(val)) {
-            if (idx === 0) vehicleFilters.dealMin = Math.max(0, Math.min(val, 100));
-            else vehicleFilters.dealMax = Math.max(0, Math.min(val, 100));
-          } else {
-            if (idx === 0) vehicleFilters.dealMin = 0;
-            else vehicleFilters.dealMax = 100;
-          }
-          if (vehicleFilters.dealMin > vehicleFilters.dealMax) {
-            vehicleFilters.dealMin = vehicleFilters.dealMax;
-            syncVehicleFilterInputs();
-          }
+      const dealOperatorInput = document.getElementById('filter-deal-operator');
+      const dealValueInput = document.getElementById('filter-deal-value');
+      if (dealOperatorInput) {
+        dealOperatorInput.addEventListener('change', () => {
+          vehicleFilters.dealOperator = dealOperatorInput.value === 'lt' ? 'lt' : 'gt';
           renderVehicles();
           persistVehicleFilterPrefs();
         });
-      });
+      }
+
+      if (dealValueInput) {
+        dealValueInput.addEventListener('input', () => {
+          const val = parseFloat(dealValueInput.value);
+          vehicleFilters.dealValue = Number.isFinite(val)
+            ? Math.max(0, Math.min(val, 100))
+            : null;
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
 
       const trailPointsInput = document.getElementById('filter-trail-points');
       if (trailPointsInput) {
@@ -7318,6 +7378,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         : (shouldSortByDaysParked ? sortVehiclesByDaysParked(filtered) : filtered);
       if (shouldPrioritizeOnRev) {
         list = sortVehiclesByOnRevChecked(list);
+      }
+      if (!hasActiveVehicleSidebarRefinements(query)) {
+        list = sortVehiclesMissingCoordsLast(list);
       }
       return list;
     }
@@ -8177,21 +8240,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     async function handleGpsHistoryRequest(vehicle) {
       const vin = gpsHistoryManager.getVehicleVin(vehicle);
+      const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
       const stopLoading = startLoading('Loading GPS history…');
       try {
-        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin });
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
         await getGpsDeviceBlacklistSerials().catch(() => new Map());
-        if (Array.isArray(records) && records.length) {
-          const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records);
-          if (movingOverrideChanged) {
-            updateVehicleFilterOptions();
-            renderVehicles();
-            const selectedVehicle = getSelectedVehicleEntry();
-            if (selectedVehicle && `${selectedVehicle.id ?? ''}` === `${vehicle?.id ?? ''}`) {
-              syncFocusedVehicleNotMovingBadge(vehicle);
-            }
-          }
-        }
         openGpsHistoryModal(vehicle, { records, error });
       } finally {
         stopLoading();
