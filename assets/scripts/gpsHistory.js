@@ -984,8 +984,7 @@ const createGpsHistoryManager = ({
       renderTableHead();
       const visibleColumns = getVisibleColumns();
       const modeRecords = getModeFilteredRecords(records);
-      const displayRecords = applyDisplayOverrides(modeRecords, { vehicle });
-      const filteredRecords = getSortedRecords(getFilteredRecords(displayRecords));
+      const filteredRecords = getSortedRecords(getFilteredRecords(modeRecords));
       const serialGroups = buildSerialGroups(filteredRecords);
       const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {
         isSerialBlacklisted: serialIsBlacklisted
