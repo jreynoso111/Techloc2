@@ -7,7 +7,7 @@ export const fetchAllRowsFromTable = async ({ supabaseClient, tableName, pageSiz
   if (!supabaseClient?.from) {
     return {
       data: null,
-      error: { message: 'Supabase client not available.' },
+      error: { message: 'Database client not available.' },
     };
   }
 
@@ -67,8 +67,8 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
       if (!assertSupabaseTarget(supabaseUrl, supabaseAnonKey)) {
         if (showDebug) {
           showDebug(
-            'Blocked Supabase target',
-            'The provided Supabase URL/key do not match the allowed project.',
+            'Blocked database target',
+            'The provided database URL/key do not match the allowed project.',
             { supabaseUrl }
           );
         }
@@ -78,8 +78,8 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
     }
     if (showDebug) {
       showDebug(
-        'Supabase client not available',
-        'Import failed and the fallback has no URL/KEY. Check the supabaseClient.js export or provide credentials here.',
+        'Database client not available',
+        'Import failed and the fallback has no URL/KEY. Check the data client export or provide credentials here.',
         { error: String(error) }
       );
     }
@@ -123,7 +123,7 @@ export const hydrateVehiclesFromSupabase = async ({
   getField,
 }) => {
   if (supabaseClient === null) {
-    console.warn('Supabase client not available, skipping vehicle hydration.');
+    console.warn('Database client not available, skipping vehicle hydration.');
     DashboardState.ui.isLoading = false;
     setConnectionStatus('Offline');
     renderDashboard();
@@ -150,7 +150,7 @@ export const hydrateVehiclesFromSupabase = async ({
 
     if (showDebug) {
       showDebug(
-        'Supabase SELECT failed',
+        'Database SELECT failed',
         'Esto suele ser RLS (no tienes SELECT permitido), credenciales, o tabla/columnas distintas en DealsJP1.',
         { code: error.code, message: error.message, details: error.details, hint: error.hint }
       );

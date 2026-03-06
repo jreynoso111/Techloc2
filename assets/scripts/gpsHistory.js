@@ -523,7 +523,7 @@ const createGpsHistoryManager = ({
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
     const normalizedVehicleId = typeof vehicleId === 'string' ? vehicleId.trim() : '';
     if (!supabaseClient || (!normalizedVin && !normalizedVehicleId)) {
-      return { records: [], error: supabaseClient ? new Error('VIN missing') : new Error('Supabase unavailable') };
+      return { records: [], error: supabaseClient ? new Error('VIN missing') : new Error('Database unavailable') };
     }
     try {
       await ensureSupabaseSession?.();
@@ -1344,7 +1344,7 @@ const createGpsHistoryManager = ({
       setConnectionStatus('Vehicle missing', 'warning');
     } else if (!supabaseClient) {
       renderHistory([]);
-      if (statusText) statusText.textContent = 'Supabase connection not available.';
+      if (statusText) statusText.textContent = 'Database connection not available.';
       setConnectionStatus('Disconnected', 'error');
     } else if (Array.isArray(preloadedRecords)) {
       finalizeRender(preloadedRecords, preloadedError);

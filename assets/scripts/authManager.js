@@ -373,6 +373,25 @@ import {
       });
   };
 
+  const syncHeaderAuthState = async () => {
+    const session = await getEffectiveSession();
+    const hasSession = Boolean(session);
+    let userRole = 'user';
+    let userStatus = 'active';
+
+    if (hasSession && session.user) {
+      const fallbackProfile = resolveFallbackProfileForSession(session);
+      userRole = normalizeAccessValue(window.currentUserRole || fallbackProfile.role, 'user');
+      userStatus = normalizeAccessValue(window.currentUserStatus || fallbackProfile.status, 'active');
+      updateHeaderAccount(session, fallbackProfile.email);
+    } else {
+      updateHeaderAccount(null);
+    }
+
+    updateNav(hasSession, userRole, userStatus);
+    bindLogout();
+  };
+
   const startAuthFlow = async () => {
     try {
       const session = await getEffectiveSession();
@@ -478,4 +497,9 @@ import {
   };
 
   startAuthFlow();
+  window.addEventListener('shared-header:ready', () => {
+    syncHeaderAuthState().catch((error) => {
+      console.warn('Header auth sync failed.', error);
+    });
+  });
 })();

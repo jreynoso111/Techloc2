@@ -1,7 +1,7 @@
 import { SUPABASE_KEY, SUPABASE_URL, assertSupabaseTarget } from '../scripts/env.js';
 import { notifyGlobalAlert } from '../scripts/globalAlerts.js';
 
-// Single source of truth for the Supabase client; load this file from pages/scripts.
+// Single source of truth for the data client; load this file from pages/scripts.
 
 const existingClient = typeof window !== 'undefined' ? window.supabaseClient : null;
 const supabaseLibReady =
@@ -11,11 +11,11 @@ const supabaseLibReady =
 
 if (!supabaseLibReady) {
   console.error(
-    'Supabase library not found. Please include the Supabase CDN script before supabaseClient.js.'
+    'Data library not found. Please include the client script before supabaseClient.js.'
   );
   notifyGlobalAlert({
-    title: 'Supabase Library Missing',
-    message: 'Supabase CDN script is not loaded before supabaseClient.js.',
+    title: 'Data Library Missing',
+    message: 'The client library is not loaded before supabaseClient.js.',
     details: 'Expected window.supabase.createClient to be available.',
   });
 }
@@ -62,9 +62,9 @@ const supabase = existingClient || supabaseInstance || null;
 
 if (!supabase && supabaseLibReady) {
   notifyGlobalAlert({
-    title: 'Supabase Connection Blocked',
-    message: 'Supabase client was not created due to URL/key validation or missing credentials.',
-    details: `SUPABASE_URL=${SUPABASE_URL || '(empty)'}`,
+    title: 'Database Connection Blocked',
+    message: 'The data client was not created due to validation or missing credentials.',
+    details: 'The configured data endpoint did not pass validation.',
   });
 }
 

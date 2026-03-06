@@ -142,6 +142,7 @@ const renderHeaderTemplate = (template, { basePath, pageTitle, activeNav }) => {
   setActiveNav(headerSlot, activeNav);
   setupMobileMenu(headerSlot);
   setupContactDropdown(headerSlot);
+  window.dispatchEvent(new CustomEvent('shared-header:ready'));
 };
 
 const hydrateHeader = async () => {

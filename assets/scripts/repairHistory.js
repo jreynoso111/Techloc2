@@ -67,7 +67,7 @@ const createRepairHistoryManager = ({
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
     const normalizedShortVin = normalizedVin ? normalizedVin.slice(-6) : '';
     if (!supabaseClient || !normalizedVin) {
-      return { data: [], error: new Error('Missing Supabase client or VIN.') };
+      return { data: [], error: new Error('Missing database client or VIN.') };
     }
     try {
       const vinFilter = normalizedVin.replace(/[%_,]/g, '').slice(-17);
@@ -93,7 +93,7 @@ const createRepairHistoryManager = ({
   const saveRepair = async (vehicle, formData, editId) => {
     try {
       if (!supabaseClient) {
-        throw new Error('Supabase unavailable');
+        throw new Error('Database unavailable');
       }
       const cleanPrice = Number.parseFloat(`${formData.get('repair_price') || '0'}`.replace(/[$,]/g, '')) || 0;
       const payload = {
@@ -377,7 +377,7 @@ const createRepairHistoryManager = ({
 
     const deleteRepair = async (repairId) => {
       if (!supabaseClient) {
-        throw new Error('Supabase unavailable');
+        throw new Error('Database unavailable');
       }
       if (!repairId) return;
       const confirmed = window.confirm('Are you sure you want to delete this repair entry?');

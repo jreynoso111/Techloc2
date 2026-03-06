@@ -98,10 +98,6 @@
                   <i data-lucide="wrench" class="h-4 w-4"></i>
                   Open services
                 </a>
-                <a href="vehicles.html" class="inline-flex items-center gap-2 rounded-full border border-blue-600 bg-blue-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100 transition hover:-translate-y-0.5 hover:border-blue-400">
-                  <i data-lucide="car" class="h-4 w-4"></i>
-                  View vehicles
-                </a>
                 <a href="analytics.html" class="inline-flex items-center gap-2 rounded-full border border-amber-600 bg-amber-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-400">
                   <i data-lucide="activity" class="h-4 w-4"></i>
                   Analytics panel
@@ -136,7 +132,7 @@
               <div class="grid gap-3 md:grid-cols-3">
                 <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                   <p class="text-sm font-semibold text-slate-200">Active providers</p>
-                  <p class="text-xs text-slate-400">Synced directly from Supabase Services.</p>
+                  <p class="text-xs text-slate-400">Synced directly from the live services dataset.</p>
                 </div>
                 <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                   <p class="text-sm font-semibold text-slate-200">Monitored fleet</p>
@@ -167,7 +163,7 @@
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Data room</p>
-              <h3 class="text-xl font-bold text-white">Supabase live tables</h3>
+              <h3 class="text-xl font-bold text-white">Live data tables</h3>
               <p class="text-sm text-slate-400">Updated statistics for every connected dataset.</p>
             </div>
             <div class="text-sm font-semibold text-slate-300">Real-time database statistics</div>
@@ -250,7 +246,7 @@
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
                   <h3 class="text-lg font-bold text-white">Import PT Last Ping</h3>
-                  <p class="text-sm text-slate-400">Upload PT-LastPing data to Supabase (Serial required).</p>
+                  <p class="text-sm text-slate-400">Upload PT-LastPing data to the live database (Serial required).</p>
                 </div>
                 <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Serial required</span>
               </div>
@@ -275,7 +271,7 @@
                     <div id="pt-ping-progress-bar" class="h-2 w-0 bg-indigo-500 transition-all duration-200"></div>
                   </div>
                 </div>
-                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to Supabase after VIN validation. Conflict handling uses Serial + day bucket with automatic fallback.</p>
+                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to the live database after VIN validation. Conflict handling uses Serial + day bucket with automatic fallback.</p>
                 <details id="pt-error-box" class="hidden overflow-hidden rounded-xl border border-rose-900/60 bg-rose-950/60 text-xs text-rose-100 shadow-inner shadow-rose-950/50">
                   <summary class="cursor-pointer px-3 py-2 font-semibold text-rose-200">Error details</summary>
                   <pre id="pt-error-pre" class="max-h-64 overflow-auto whitespace-pre-wrap px-3 pb-3 pt-1 font-mono text-[11px] leading-relaxed text-rose-100"></pre>
@@ -1096,7 +1092,7 @@
           .select();
 
         if (error) {
-          console.error('Supabase upsert error:', error);
+          console.error('Database upsert error:', error);
           if (isSchemaMismatchError(error)) {
             showToast('Deals upload schema mismatch: ' + shortSupabaseError(error), 'error');
             return;
@@ -1131,7 +1127,7 @@
 
       const { data: recalcData, error: recalcError } = await supabaseClient.rpc('recalc_dealsjp1_last_deal');
       if (recalcError) {
-        console.error('Supabase DealsJP1 last-deal recalculation error:', recalcError);
+        console.error('Database DealsJP1 last-deal recalculation error:', recalcError);
         if (isRlsBlocked(recalcError)) {
           showToast('Deals uploaded, but last-deal recalculation was blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
         } else if (isSchemaMismatchError(recalcError)) {
@@ -1147,7 +1143,7 @@
 
       const { data: syncData, error: syncError } = await supabaseClient.rpc('sync_vehicles_from_dealsjp1_lastdeal');
       if (syncError) {
-        console.error('Supabase DealsJP1 sync error:', syncError);
+        console.error('Database DealsJP1 sync error:', syncError);
         if (isRlsBlocked(syncError)) {
           showToast('Deals uploaded, but vehicle sync was blocked by database permissions: ' + shortSupabaseError(syncError), 'error');
         } else if (isSchemaMismatchError(syncError)) {
@@ -1199,7 +1195,7 @@
     };
 
     const uploadInvoicesRows = async (rows, parseErrors = 0, rawHeaders = []) => {
-      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!supabaseClient) throw new Error('Database client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload invoice data.');
 
       const submitBtn = document.getElementById('ns-invoices-upload-button');
@@ -1254,7 +1250,7 @@
       try {
         dealsStockNumberSet = await fetchDealsStockNumberSet();
       } catch (err) {
-        console.error('Supabase fetch error (Deals stock numbers):', err);
+        console.error('Database fetch error (Deals stock numbers):', err);
         showToast('Unable to load Deals stock numbers for validation.', 'error');
         setProgress(0, 'Failed to load Deals stock numbers.');
         return;
@@ -1270,7 +1266,7 @@
 
       const { error: truncateError } = await supabaseClient.rpc('truncate_ns_invoices');
       if (truncateError) {
-        console.error('Supabase truncate error:', truncateError);
+        console.error('Database truncate error:', truncateError);
         if (isRlsBlocked(truncateError)) {
           showToast('Cannot clear previous NS invoices due to database permissions: ' + shortSupabaseError(truncateError), 'error');
         } else if (isSchemaMismatchError(truncateError)) {
@@ -1353,7 +1349,7 @@
           .upsert(batch, { onConflict: conflictColumns, ignoreDuplicates: true });
 
         if (error) {
-          console.error('Supabase upsert error:', error);
+          console.error('Database upsert error:', error);
           if (isSchemaMismatchError(error)) {
             showToast('Invoices upload schema mismatch: ' + shortSupabaseError(error), 'error');
             return;
@@ -1386,7 +1382,7 @@
       setProgress(95, 'Recalculating open balances...');
       const { error: recalcError } = await supabaseClient.rpc('recalc_open_balance_all_ns_invoices');
       if (recalcError) {
-        console.error('Supabase open balance recalculation error:', recalcError);
+        console.error('Database open balance recalculation error:', recalcError);
         if (isRlsBlocked(recalcError)) {
           showToast('Open balance recalculation blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
         } else if (isSchemaMismatchError(recalcError)) {
@@ -1760,7 +1756,7 @@
     };
 
     const uploadPtPingRows = async (rows, parseErrors = 0) => {
-      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!supabaseClient) throw new Error('Database client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload PT ping data.');
 
       const normalizeVinLast6 = (vin) => {
@@ -2028,7 +2024,7 @@
               continue;
             }
 
-            console.error('Supabase PT upload error:', {
+            console.error('Database PT upload error:', {
               error,
               nextIndex,
               batchSize,
@@ -2107,12 +2103,12 @@
         const summary =
           'Completed.' +
           '\nBatches: ' + aggregated.batches +
-          '\nSent to Supabase: ' + aggregated.inserted +
+          '\nSent to database: ' + aggregated.inserted +
           '\nVehicles synced: ' + (vehicleSyncResult?.updated ?? 0) +
           '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
           '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
           '\nSkipped duplicates (client 8-hour bucket): ' + aggregated.skippedDeduplication +
-          '\nSupabase duplicate handling: ON CONFLICT DO NOTHING' +
+          '\nDuplicate handling: ON CONFLICT DO NOTHING' +
           '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
           '\nErrors: ' + parseErrors;
         setStatus(

@@ -196,7 +196,7 @@
 
               <i data-lucide="file-up" class="h-4 w-4"></i>
 
-                  <span id="dataset-status">Supabase table</span>
+                  <span id="dataset-status">Live table</span>
 
             </div>
 
@@ -248,7 +248,7 @@
 
               <div class="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <div class="flex flex-wrap items-center gap-2">
-                  <span id="dataset-status" class="rounded-full border border-slate-700/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Supabase table</span>
+                  <span id="dataset-status" class="rounded-full border border-slate-700/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Live table</span>
                   <div class="relative">
                     <button id="column-selector-toggle" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white">
                       <i data-lucide="columns" class="h-4 w-4"></i>
@@ -678,12 +678,12 @@
     };
 
     const fetchVehiclesFromSupabase = async () => {
-      if (!supabaseClient) throw new Error('Supabase client is not available.');
+      if (!supabaseClient) throw new Error('Database client is not available.');
       const { data, error } = await supabaseClient.from('vehicles').select('*');
       if (error) throw error;
       const rows = Array.isArray(data) ? data : [];
       const headers = rows.length ? Object.keys(rows[0]) : [];
-      setDatasetStatus('Supabase table');
+      setDatasetStatus('Live table');
       return { headers, rows };
     };
 
@@ -696,11 +696,11 @@
         fetchedHeaders = headers;
         fetchedRows = rows;
         usedSupabase = true;
-        setDatasetStatus('Supabase table');
+        setDatasetStatus('Live table');
       } catch (error) {
-        console.error('Error loading vehicles from Supabase', error);
-        setDatasetStatus('Supabase unavailable');
-        showToast('Supabase data unavailable. Please verify the connection.', 'error');
+        console.error('Error loading vehicles from database', error);
+        setDatasetStatus('Connection unavailable');
+        showToast('Live data unavailable. Please verify the connection.', 'error');
       }
       if (!fetchedHeaders.length || !fetchedRows.length) {
         setDatasetStatus('No data available');
@@ -1156,7 +1156,7 @@
 
     const handleCsvUpload = async (file) => {
 
-      if (!supabaseClient) throw new Error('Supabase client is not available.');
+      if (!supabaseClient) throw new Error('Database client is not available.');
 
       if (!isAdminUser()) throw new Error('Only administrators can upload vehicle data.');
 
@@ -1192,7 +1192,7 @@
 
       if (deleteError) throw deleteError;
 
-      updateUploadProgress(75, 'Uploading to Supabase');
+      updateUploadProgress(75, 'Uploading to database');
 
       const { error } = await supabaseClient
 
@@ -1550,7 +1550,7 @@
 
         els.uploadStatus.textContent = allowed
 
-          ? 'Supabase import with dedupe'
+          ? 'Database import with dedupe'
 
           : 'Admin role required to upload';
 

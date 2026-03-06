@@ -2226,7 +2226,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const normalizeBlacklistEntry = (row, idx = 0) => {
-      // Use explicit lat/long columns from Supabase (no geocoding fallbacks)
+      // Use explicit lat/long columns from the live dataset (no geocoding fallbacks)
       const lat = parseFloat(getField(row, 'lat', 'Lat', 'latitude', 'Latitude'));
       const lng = parseFloat(getField(row, 'long', 'Long', 'lng', 'Lng', 'longitude', 'Longitude'));
 
@@ -5072,7 +5072,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       eyebrow: 'Dynamic services',
       title: 'New categories',
       accentClass: 'text-indigo-200',
-      description: 'Showing every new category detected in Supabase.'
+      description: 'Showing every new category detected in the live dataset.'
     };
 
     const partnerSidebarTemplate = ({ type, eyebrow, title, accentClass, filterPlaceholder, emptyText }) => `
@@ -5464,15 +5464,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
-    // --- 2. Load data from Supabase ---
+    // --- 2. Load data from the live dataset ---
     async function loadTechnicians({ force = false, silent = false } = {}) {
       if (!isServiceTypeEnabled('tech')) return;
       if (!supabaseClient) {
-        console.warn('Supabase unavailable: showing local installer placeholders.');
+        console.warn('Database unavailable: showing local installer placeholders.');
         document.getElementById('tech-list').innerHTML = `
           <div class="text-center mt-10 px-6">
             ${svgIcon('alertCircle', 'mx-auto h-8 w-8 text-slate-600 mb-2')}
-            <p class="text-slate-500 text-xs">Supabase is offline. Unable to load installers.</p>
+            <p class="text-slate-500 text-xs">Database connection unavailable. Unable to load installers.</p>
           </div>
         `;
         return;
@@ -5654,7 +5654,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     async function loadHotspots({ silent = false } = {}) {
       if (!supabaseClient) {
-        console.warn('Supabase unavailable: skipping hotspot load.');
+        console.warn('Database unavailable: skipping hotspot load.');
         return;
       }
 
@@ -5673,7 +5673,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     async function loadBlacklistSites({ silent = false } = {}) {
       if (!supabaseClient) {
-        console.warn('Supabase unavailable: skipping blacklist load.');
+        console.warn('Database unavailable: skipping blacklist load.');
         return;
       }
 
@@ -5760,7 +5760,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     async function loadCustomServices({ force = false, silent = false } = {}) {
       if (!isServiceTypeEnabled('custom') || !customCategoryLabels.size) return;
       if (!supabaseClient) {
-        console.warn('Supabase unavailable: skipping custom categories.');
+        console.warn('Database unavailable: skipping custom categories.');
         return;
       }
 
@@ -6191,7 +6191,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const label = meta?.label || 'Dynamic services';
       if (titleEl) titleEl.textContent = `${label} Network`;
       if (eyebrowEl) eyebrowEl.textContent = label;
-      if (descEl) descEl.textContent = `Showing ${label} partners detected in Supabase.`;
+      if (descEl) descEl.textContent = `Showing ${label} partners detected in the live dataset.`;
 
       const normalizedList = list.filter((item) => !categoryKey || item?.categoryKey === categoryKey);
       const allowedIds = Array.isArray(serviceFilterIds.custom) ? new Set(serviceFilterIds.custom.map((id) => `${id}`)) : null;
@@ -6668,6 +6668,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
           );
+          const isOnRev = Boolean(
+            checkedVehicleStateByVin.get(getVehicleVin(vehicle)) ?? checkedVehicleIds.has(vehicle.id)
+          );
           const isExpanded = isVehicleCardExpanded(currentVehicleKey);
           const expandChevron = isExpanded ? '▾' : '▸';
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
@@ -6690,7 +6693,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                     Days Parked <span class="text-slate-100">${getDaysParkedDisplay(vehicle)}</span>
                   </span>
                 </div>
-                <p class="text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="truncate text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
+                <div class="flex items-center justify-between gap-2">
+                  <p class="min-w-0 text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="truncate text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
+                  <label class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-300 leading-none">
+                    <span>on rev?</span>
+                    <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${isOnRev ? 'checked' : ''}>
+                  </label>
+                </div>
               </div>
               <button
                 type="button"
@@ -6746,10 +6755,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             </div>
             <div class="pt-1 flex items-end justify-between gap-2">
               <div class="flex flex-col items-start gap-1">
-                <label class="inline-flex flex-col items-start gap-1 text-[10px] font-semibold text-slate-300 leading-tight">
-                  <span>on rev?</span>
-                  <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${(checkedVehicleStateByVin.get(getVehicleVin(vehicle)) ?? checkedVehicleIds.has(vehicle.id)) ? 'checked' : ''}>
-                </label>
                 <p data-action="vehicle-select-last-click" class="text-[9px] text-slate-500">${(checkedVehicleClickTimes.get(vehicle.id) || checkedVehicleClickTimesByVin.get(getVehicleVin(vehicle))) ? formatDateTime(checkedVehicleClickTimes.get(vehicle.id) || checkedVehicleClickTimesByVin.get(getVehicleVin(vehicle))) : '--'}</p>
               </div>
               <div class="flex items-center justify-end gap-2">
@@ -8326,14 +8331,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
           try {
             if (!supabaseClient || !headerKey || vehicle?.id === undefined) {
-              throw new Error('Supabase unavailable');
+              throw new Error('Database unavailable');
             }
 
             const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
             if (sessionError || !sessionData?.session) {
               const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
               if (refreshError || !refreshed?.session) {
-                throw refreshError || new Error('Supabase session unavailable');
+                throw refreshError || new Error('Authentication session unavailable');
               }
             }
 

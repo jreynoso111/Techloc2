@@ -486,10 +486,10 @@ const fetchRows = async () => {
     if (isPermissionError) {
       reportError('fetchRows.select', error, {
         table: TABLE_NAME,
-        authHint: 'The request is not authenticated as an admin Supabase user.',
+        authHint: 'The request is not authenticated as an admin user.',
       });
       setFeedback(
-        'Permission denied. Re-login with Supabase credentials from /pages/login.html (not local limited mode).',
+        'Permission denied. Re-login with your administrator account from /pages/login.html.',
         'error',
       );
       return;
@@ -607,10 +607,10 @@ const initialize = async () => {
     if (isWebAdminSession(session)) {
       clearWebAdminSession();
       reportError('initialize.auth_mode', {
-        message: 'GPS Blacklist requires a real Supabase authenticated session. Local admin mode is not enough.',
+        message: 'GPS Blacklist requires a full authenticated session. Local admin mode is not enough.',
       });
-      setStatus('Supabase auth required', 'error');
-      setFeedback('Go to /pages/login.html and sign in with Supabase credentials.', 'error');
+      setStatus('Authenticated session required', 'error');
+      setFeedback('Go to /pages/login.html and sign in with your administrator account.', 'error');
       setTimeout(() => redirectToLogin(), 500);
       return;
     }

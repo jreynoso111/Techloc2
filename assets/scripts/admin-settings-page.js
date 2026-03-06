@@ -110,7 +110,7 @@ const saveRemoteSettings = async (settings = {}) => {
   if (error) {
     if (isMissingSettingsTableError(error)) {
       remoteSettingsAvailable = false;
-      throw new Error('`app_settings` table is missing in Supabase. Apply migration to enable shared settings.');
+      throw new Error('`app_settings` table is missing in the live database. Apply the migration to enable shared settings.');
     }
     throw error;
   }
@@ -130,15 +130,15 @@ if (settingsForm) {
       const saved = saveAppSettings(nextSettings);
       await saveRemoteSettings(saved);
       renderForm(saved);
-      setStatus('Saved in Supabase and applied locally.', 'success');
+      setStatus('Saved to the cloud and applied locally.', 'success');
     } catch (error) {
       const localSaved = saveAppSettings(readForm());
       renderForm(localSaved);
       const rawMessage = String(error?.message || '').trim();
       if (isMissingSettingsTableDisplayError(rawMessage)) {
-        setStatus('Saved locally. Supabase table `app_settings` is missing, so this value is not shared yet.', 'warning');
+        setStatus('Saved locally. Shared settings are not available yet, so this value is not synced.', 'warning');
       } else {
-        setStatus(rawMessage || 'Saved locally, but could not persist in Supabase.', 'warning');
+        setStatus(rawMessage || 'Saved locally, but could not persist to the cloud.', 'warning');
       }
     }
   });
@@ -150,15 +150,15 @@ if (resetButton) {
       const saved = saveAppSettings(DEFAULT_APP_SETTINGS);
       await saveRemoteSettings(saved);
       renderForm(saved);
-      setStatus('Defaults restored and synced to Supabase.', 'warning');
+      setStatus('Defaults restored and synced to the cloud.', 'warning');
     } catch (error) {
       const saved = saveAppSettings(DEFAULT_APP_SETTINGS);
       renderForm(saved);
       const rawMessage = String(error?.message || '').trim();
       if (isMissingSettingsTableDisplayError(rawMessage)) {
-        setStatus('Defaults restored locally. Supabase table `app_settings` is missing, so defaults are not shared yet.', 'warning');
+        setStatus('Defaults restored locally. Shared settings are not available yet, so defaults are not synced.', 'warning');
       } else {
-        setStatus(rawMessage || 'Defaults restored locally; Supabase sync failed.', 'warning');
+        setStatus(rawMessage || 'Defaults restored locally; cloud sync failed.', 'warning');
       }
     }
   });
@@ -181,21 +181,21 @@ const initializeSettingsPage = async () => {
     }
 
     renderForm(getAppSettings());
-    setStatus('Loading settings from Supabase…', 'neutral');
+    setStatus('Loading settings from the cloud…', 'neutral');
 
     try {
       const remoteSettings = await fetchRemoteSettings();
       if (remoteSettings) {
         const saved = saveAppSettings(remoteSettings);
         renderForm(saved);
-        setStatus('Loaded from Supabase.', 'neutral');
+        setStatus('Loaded from the cloud.', 'neutral');
       } else if (!remoteSettingsAvailable) {
-        setStatus('Supabase table `app_settings` is not deployed yet. Using local settings only.', 'warning');
+        setStatus('Shared settings are not deployed yet. Using local settings only.', 'warning');
       } else {
         setStatus('No remote settings yet. Using defaults/local values.', 'warning');
       }
     } catch (error) {
-      setStatus(error?.message || 'Could not read settings from Supabase. Using local values.', 'warning');
+      setStatus(error?.message || 'Could not read shared settings. Using local values.', 'warning');
     }
   } catch (error) {
     setStatus(error?.message || 'Unable to initialize settings page.', 'error');

@@ -476,7 +476,7 @@ const waitForAuthorizedSession = () =>
       }
 
       if (session === null && initialSessionResolved && !cleanedUp) {
-        handleUnauthorized('No active Supabase session');
+        handleUnauthorized('No active authenticated session');
       }
     };
 
@@ -596,6 +596,8 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
 
   const navItems = document.querySelectorAll('[data-auth-visible]');
   const guestItems = document.querySelectorAll('[data-auth-guest]');
+  const loginButton = document.getElementById('nav-login');
+  const logoutButton = ensureLogoutButton();
   if (!navItems.length && !guestItems.length) return;
 
   const session = sessionFromEvent ?? currentSession;
@@ -618,6 +620,8 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
   if (authorized) {
     navItems.forEach((item) => item.classList.remove('hidden'));
     guestItems.forEach((item) => item.classList.add('hidden'));
+    loginButton?.classList.add('hidden');
+    logoutButton?.classList.remove('hidden');
     setupLogoutButton();
     updateHeaderAccount(session);
     recordLastConnection(session).catch((error) =>
@@ -626,7 +630,7 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
   } else {
     navItems.forEach((item) => item.classList.add('hidden'));
     guestItems.forEach((item) => item.classList.remove('hidden'));
-    const logoutButton = ensureLogoutButton();
+    loginButton?.classList.remove('hidden');
     if (logoutButton) {
       logoutButton.classList.add('hidden');
     }
@@ -708,6 +712,7 @@ const startNavigationSync = () => {
     syncNavigationVisibility(session).catch((error) => console.error('Navigation auth sync failed', error));
 
   sessionListeners.add(handleNavigationSync);
+  window.addEventListener('shared-header:ready', () => handleNavigationSync(currentSession));
   initializeAuthState()
     .then(() => handleNavigationSync(currentSession))
     .catch((error) => console.error('Navigation initialization failed', error));
