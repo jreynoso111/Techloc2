@@ -23,6 +23,14 @@ const normalizeSerial = (value) => {
   return String(value).trim().toUpperCase();
 };
 
+const splitConfiguredSerials = (value) => {
+  if (value === null || value === undefined) return [];
+  return String(value)
+    .split(/[\n,;]+|\s+\/\s+/)
+    .map((entry) => normalizeSerial(entry))
+    .filter(Boolean);
+};
+
 const getVehicleWinnerSerial = (vehicle = {}) => {
   const details = vehicle?.details || {};
   const candidates = [
@@ -51,6 +59,36 @@ const getVehicleWinnerSerial = (vehicle = {}) => {
     if (normalized) return normalized;
   }
   return '';
+};
+
+const getVehicleConfiguredSerials = (vehicle = {}) => {
+  const details = vehicle?.details || {};
+  const candidates = [
+    vehicle?.winnerSerial,
+    vehicle?.winningSerial,
+    vehicle?.serialWinner,
+    details?.winner_serial,
+    details?.winning_serial,
+    details?.serial_winner,
+    details?.['Winner Serial'],
+    details?.['Winning Serial'],
+    vehicle?.ptSerial,
+    details?.['PT Serial'],
+    details?.['PT Serial '],
+    details?.pt_serial,
+    details?.['PassTime Serial No'],
+    details?.['PassTime Serial Number'],
+    details?.['GPS Serial No'],
+    vehicle?.encoreSerial,
+    details?.['Encore Serial'],
+    details?.encore_serial,
+    details?.['Encore Serial Number'],
+    details?.['Encore Serial #2'],
+  ];
+
+  return Array.from(new Set(
+    candidates.flatMap((candidate) => splitConfiguredSerials(candidate))
+  ));
 };
 
 const getRecordSerial = (record = {}) => {
@@ -955,7 +993,7 @@ const createGpsHistoryManager = ({
       return safeFormatDateTime(new Date(timestamp).toISOString());
     };
 
-    const buildSerialGroups = (records = []) => {
+    const buildSerialGroups = (records = [], knownSerials = []) => {
       const grouped = new Map();
       records.forEach((record) => {
         const groupKey = getSerialGroupKey(record);
@@ -964,11 +1002,19 @@ const createGpsHistoryManager = ({
         grouped.set(groupKey, groupRecords);
       });
 
+      knownSerials.forEach((serial) => {
+        const normalized = normalizeSerial(serial);
+        if (!normalized || grouped.has(normalized)) return;
+        grouped.set(normalized, []);
+      });
+
       return [...grouped.entries()]
         .map(([serial, groupRecords]) => ({
           serial,
           records: groupRecords,
-          latestTimestamp: getRecordTimestampMs(groupRecords[0])
+          latestTimestamp: groupRecords.length
+            ? getRecordTimestampMs(groupRecords[0])
+            : Number.NEGATIVE_INFINITY
         }))
         .sort((a, b) => {
           if (a.latestTimestamp !== b.latestTimestamp) return b.latestTimestamp - a.latestTimestamp;
@@ -985,10 +1031,17 @@ const createGpsHistoryManager = ({
       const visibleColumns = getVisibleColumns();
       const modeRecords = getModeFilteredRecords(records);
       const filteredRecords = getSortedRecords(getFilteredRecords(modeRecords));
-      const serialGroups = buildSerialGroups(filteredRecords);
+      const configuredSerials = getVehicleConfiguredSerials(vehicle);
+      const visibleConfiguredSerials = viewMode === 'winner' && winnerSerial
+        ? [winnerSerial]
+        : configuredSerials;
+      const serialGroups = buildSerialGroups(filteredRecords, visibleConfiguredSerials);
       const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {
         isSerialBlacklisted: serialIsBlacklisted
       });
+      const configuredWithoutHistoryCount = visibleConfiguredSerials.filter((serial) => (
+        !modeRecords.some((record) => getRecordSerial(record) === serial)
+      )).length;
 
       if (statusText) {
         const modeSuffix = viewMode === 'winner' && winnerSerial
@@ -997,10 +1050,13 @@ const createGpsHistoryManager = ({
         const alertSuffix = wirelessAlarmSerials.size
           ? ` · ${wirelessAlarmSerials.size} wireless alarm${wirelessAlarmSerials.size === 1 ? '' : 's'}`
           : '';
-        statusText.textContent = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in ${serialGroups.length} serial section${serialGroups.length === 1 ? '' : 's'}${modeSuffix}${alertSuffix}.`;
+        const configuredSuffix = configuredWithoutHistoryCount
+          ? ` · ${configuredWithoutHistoryCount} configured serial${configuredWithoutHistoryCount === 1 ? '' : 's'} with no history`
+          : '';
+        statusText.textContent = `${filteredRecords.length} record${filteredRecords.length === 1 ? '' : 's'} shown in ${serialGroups.length} serial section${serialGroups.length === 1 ? '' : 's'}${modeSuffix}${alertSuffix}${configuredSuffix}.`;
       }
 
-      if (!filteredRecords.length) {
+      if (!filteredRecords.length && !serialGroups.length) {
         const colSpan = Math.max(visibleColumns.length, 1);
         const emptyMessage = viewMode === 'winner' && winnerSerial
           ? `No GPS history found for winner serial ${safeEscape(winnerSerial)}.`
@@ -1018,8 +1074,9 @@ const createGpsHistoryManager = ({
         const isWinnerSerial = Boolean(winnerSerial) && group.serial === winnerSerial;
         const hasWirelessAlarm = wirelessAlarmSerials.has(group.serial);
         const expanded = serialSectionState.get(group.serial) === true;
-        const latestLabel = getDateDisplayFromRecord(group.records[0]);
-        const oldestLabel = getDateDisplayFromRecord(group.records[group.records.length - 1]);
+        const hasHistory = group.records.length > 0;
+        const latestLabel = hasHistory ? getDateDisplayFromRecord(group.records[0]) : 'No history';
+        const oldestLabel = hasHistory ? getDateDisplayFromRecord(group.records[group.records.length - 1]) : 'No history';
         const rowsMarkup = expanded
           ? group.records.map((record) => `
             <tr class="gps-history-record-row" data-gps-serial-row="${safeEscape(group.serial)}">
@@ -1050,6 +1107,7 @@ const createGpsHistoryManager = ({
                   <span class="gps-history-serial-label">Serial: ${safeEscape(serialLabel)}</span>
                   ${isWinnerSerial ? '<span class="gps-history-serial-winner-badge" title="Winner serial" aria-label="Winner serial"></span>' : ''}
                   ${hasWirelessAlarm ? '<span class="gps-history-serial-alarm-badge">ALARM</span>' : ''}
+                  ${!hasHistory ? '<span class="gps-history-serial-alarm-badge">NO HISTORY</span>' : ''}
                 </span>
                 <span class="gps-history-serial-stats">${group.records.length} row${group.records.length === 1 ? '' : 's'} · Latest: ${safeEscape(`${latestLabel}`)} · Oldest: ${safeEscape(`${oldestLabel}`)}</span>
               </button>

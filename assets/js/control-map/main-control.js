@@ -6319,7 +6319,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       } else {
         expandedVehicleCardKeys.add(key);
       }
-      renderVehicles();
+      renderVehicles({ preserveScrollTop: true });
     }
 
     function isVehicleCardControlTarget(target, composedPath = []) {
@@ -6541,9 +6541,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
-    function renderVehicles() {
+    function renderVehicles({ preserveScrollTop = false } = {}) {
       const container = document.getElementById('vehicle-list');
       if (!container) return;
+      const previousScrollTop = preserveScrollTop ? container.scrollTop : null;
 
       if (map) map.closePopup();
       container.replaceChildren();
@@ -6694,7 +6695,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   </span>
                 </div>
                 <div class="flex items-center justify-between gap-2">
-                  <p class="min-w-0 text-[11px] text-slate-300 flex items-center gap-1">${svgIcon('layers', 'h-3.5 w-3.5 text-cyan-300')} Physical Location: <span class="truncate text-slate-100">${vehicle.physicalLocation || '—'}</span></p>
+                  <p class="min-w-0 text-[11px] text-blue-200 font-semibold">Customer ID: <span class="truncate text-slate-100">${vehicle.customerId || '—'}</span></p>
                   <label class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-300 leading-none">
                     <span>on rev?</span>
                     <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${isOnRev ? 'checked' : ''}>
@@ -6729,7 +6730,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] text-slate-200 space-y-2">
               <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
               ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
-              <p class="text-[11px] text-blue-200 font-semibold">Customer ID: <span class="text-slate-100">${vehicle.customerId || '—'}</span></p>
               <div class="grid grid-cols-4 gap-2">
                 <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
                   <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
@@ -6834,6 +6834,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         }
 
         container.replaceChildren(fragment);
+
+        if (previousScrollTop !== null) {
+          requestAnimationFrame(() => {
+            const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+            container.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+          });
+        }
 
         syncVehicleMarkers({
           vehiclesWithCoords: vehiclesForMarkers,
