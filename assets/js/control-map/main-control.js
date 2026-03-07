@@ -862,7 +862,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           return true;
         }
         applySelection(targetVehicle.id, null, targetVehicleKey);
-        focusVehicle(targetVehicle);
+        focusVehicle(targetVehicle, { autoExpandSidebarCard: true });
         return true;
       }
 
@@ -2732,10 +2732,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movementSegmentThresholdMeters = isTruckOrTrailerUnit(vehicle)
         ? GPS_MOVING_MILES_TRUCK_SEGMENT_THRESHOLD_METERS
         : GPS_MOVING_MILES_SEGMENT_THRESHOLD_METERS;
-      const movementDayThresholdMeters = isTruckOrTrailerUnit(vehicle)
-        ? GPS_MOVING_MILES_TRUCK_DAY_THRESHOLD_METERS
-        : GPS_MOVING_MILES_DAY_THRESHOLD_METERS;
-
       const rawPoints = records
         .map((record) => {
           const point = toGpsTrailPoint(record);
@@ -2793,6 +2789,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const existingBucket = dayBuckets.get(dayStartMs);
         if (existingBucket) return existingBucket;
         const nextBucket = {
+          dayStartMs,
+          points: 0,
           distanceMeters: 0,
           movingEvidence: false
         };
@@ -2815,6 +2813,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           previousPoint = point;
           return;
         }
+        bucket.points += 1;
 
         if (`${point.movingStatus || ''}`.trim().toLowerCase() === 'moving') {
           bucket.movingEvidence = true;
@@ -2852,15 +2851,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         previousPoint = point;
       });
 
-      const movingDays = [...dayBuckets.values()].filter((bucket) => (
+      const observedDays = [...dayBuckets.values()]
+        .filter((bucket) => bucket.points > 0)
+        .sort((left, right) => left.dayStartMs - right.dayStartMs);
+      if (!observedDays.length) return null;
+
+      const totalDistanceMeters = observedDays.reduce((sum, bucket) => (
+        sum + (Number.isFinite(bucket.distanceMeters) ? bucket.distanceMeters : 0)
+      ), 0);
+      const hasMovementEvidence = observedDays.some((bucket) => (
         bucket.movingEvidence
-        && Number.isFinite(bucket.distanceMeters)
-        && bucket.distanceMeters >= movementDayThresholdMeters
+        || (Number.isFinite(bucket.distanceMeters) && bucket.distanceMeters >= movementSegmentThresholdMeters)
       ));
 
-      if (!movingDays.length) return null;
-      const totalMiles = movingDays.reduce((sum, bucket) => sum + (bucket.distanceMeters / 1609.344), 0);
-      return totalMiles > 0 ? (totalMiles / movingDays.length) : null;
+      if (!hasMovementEvidence || totalDistanceMeters < movementSegmentThresholdMeters) return null;
+
+      const totalMiles = totalDistanceMeters / 1609.344;
+      return totalMiles > 0 ? (totalMiles / observedDays.length) : null;
     };
 
     const applyVehicleAverageMovingMilesPerDayFromGpsHistory = (vehicle, records = []) => {
@@ -2896,10 +2903,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const card = document.querySelector(
         `#vehicle-list [data-type="vehicle"][data-vehicle-key="${CSS.escape(vehicleKey)}"]`
       );
-      const avgMilesNode = card?.querySelector('[data-field="avg-moving-miles-day"]');
-      if (avgMilesNode) {
-        avgMilesNode.textContent = getAvgMovingMilesPerDayDisplay(vehicle);
-      }
+      const avgMilesNodes = card?.querySelectorAll('[data-field="avg-moving-miles-day"]') || [];
+      avgMilesNodes.forEach((node) => {
+        node.textContent = getAvgMovingMilesPerDayDisplay(vehicle);
+      });
+      syncVehicleFleetAverageSummary();
     };
 
     const hydrateVehicleAverageMovingMilesPerDay = async (vehicle, { force = false } = {}) => {
@@ -2936,6 +2944,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
           : configuredWinnerSerial;
         const metricSourceRecords = selectMovementMetricRecords(records, {
+          vehicle,
           getRecordSerial,
           winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
           blacklistedWirelessSerials
@@ -3506,6 +3515,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const selectMovementMetricRecords = (
       records = [],
       {
+        vehicle = null,
         getRecordSerial = () => '',
         winnerSerial = '',
         blacklistedWirelessSerials = new Map()
@@ -3514,76 +3524,120 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
 
       const normalizedWinnerSerial = normalizeGpsSerial(winnerSerial);
+      const configuredSerials = typeof getVehicleConfiguredSerials === 'function'
+        ? getVehicleConfiguredSerials(vehicle)
+        : [];
       const blacklistedSerials = (
         blacklistedWirelessSerials instanceof Set
         || blacklistedWirelessSerials instanceof Map
       )
         ? blacklistedWirelessSerials
         : new Map();
-      const recordsBySerial = new Map();
+      const wiredRecordsBySerial = new Map();
+      const wirelessRecordsBySerial = new Map();
+      const unknownRecords = [];
 
       records.forEach((record) => {
         const serial = normalizeGpsSerial(getRecordSerial(record));
-        if (!serial) return;
         const timeMs = parseGpsTrailTimeMs(record);
-        const isWired = isWiredGpsSerial(serial);
-        if (!isWired && isGpsDeviceSerialBlacklistedAt(serial, timeMs, { blacklistBySerial: blacklistedSerials })) {
+        if (serial && isGpsDeviceSerialBlacklistedAt(serial, timeMs, { blacklistBySerial: blacklistedSerials })) {
           return;
         }
-        const bucket = recordsBySerial.get(serial) || [];
-        bucket.push(record);
-        recordsBySerial.set(serial, bucket);
+        if (!serial) {
+          unknownRecords.push(record);
+          return;
+        }
+
+        if (isWiredGpsSerial(serial)) {
+          const bucket = wiredRecordsBySerial.get(serial) || [];
+          bucket.push(record);
+          wiredRecordsBySerial.set(serial, bucket);
+          return;
+        }
+
+        if (/^8/.test(serial)) {
+          const bucket = wirelessRecordsBySerial.get(serial) || [];
+          bucket.push(record);
+          wirelessRecordsBySerial.set(serial, bucket);
+          return;
+        }
+
+        unknownRecords.push(record);
       });
 
-      const getLatestTimestamp = (serial = '') => {
-        const bucket = recordsBySerial.get(serial) || [];
-        return bucket.reduce((latest, record) => {
-          const timeMs = parseGpsTrailTimeMs(record);
-          return Number.isFinite(timeMs) ? Math.max(latest, timeMs) : latest;
-        }, Number.NEGATIVE_INFINITY);
+      const flattenRecordMap = (recordMap) => (
+        [...recordMap.values()]
+          .flat()
+          .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b))
+      );
+
+      const sortRecords = (items = []) => (
+        [...items].sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b))
+      );
+
+      const collectRecordsForSerials = (serials = [], recordMap = new Map()) => {
+        if (!Array.isArray(serials) || !serials.length || !(recordMap instanceof Map)) return [];
+        const collected = [];
+        const seen = new Set();
+        serials.forEach((serial) => {
+          const normalizedSerial = normalizeGpsSerial(serial);
+          if (!normalizedSerial || seen.has(normalizedSerial) || !recordMap.has(normalizedSerial)) return;
+          seen.add(normalizedSerial);
+          collected.push(...(recordMap.get(normalizedSerial) || []));
+        });
+        return sortRecords(collected);
       };
+
+      const configuredWiredRecords = collectRecordsForSerials(
+        configuredSerials.filter((serial) => isWiredGpsSerial(serial)),
+        wiredRecordsBySerial
+      );
+      if (configuredWiredRecords.length >= 2) {
+        return configuredWiredRecords;
+      }
 
       const winnerWiredRecords = (
         normalizedWinnerSerial
         && isWiredGpsSerial(normalizedWinnerSerial)
-        && recordsBySerial.has(normalizedWinnerSerial)
+        && wiredRecordsBySerial.has(normalizedWinnerSerial)
       )
-        ? (recordsBySerial.get(normalizedWinnerSerial) || [])
+        ? (wiredRecordsBySerial.get(normalizedWinnerSerial) || [])
         : [];
       if (winnerWiredRecords.length >= 2) {
-        return winnerWiredRecords;
+        return sortRecords(winnerWiredRecords);
       }
 
-      const freshestWiredSerial = [...recordsBySerial.keys()]
-        .filter((serial) => isWiredGpsSerial(serial))
-        .sort((left, right) => {
-          const latestGap = getLatestTimestamp(right) - getLatestTimestamp(left);
-          if (latestGap !== 0) return latestGap;
-          return (recordsBySerial.get(right)?.length || 0) - (recordsBySerial.get(left)?.length || 0);
-        })[0] || '';
-      const freshestWiredRecords = freshestWiredSerial
-        ? (recordsBySerial.get(freshestWiredSerial) || [])
+      const allWiredRecords = flattenRecordMap(wiredRecordsBySerial);
+      if (allWiredRecords.length >= 2) {
+        return allWiredRecords;
+      }
+
+      const configuredWirelessRecords = collectRecordsForSerials(
+        configuredSerials.filter((serial) => /^8/.test(normalizeGpsSerial(serial))),
+        wirelessRecordsBySerial
+      );
+      if (configuredWirelessRecords.length >= 2) {
+        return configuredWirelessRecords;
+      }
+
+      const winnerWirelessRecords = (
+        normalizedWinnerSerial
+        && /^8/.test(normalizedWinnerSerial)
+        && wirelessRecordsBySerial.has(normalizedWinnerSerial)
+      )
+        ? (wirelessRecordsBySerial.get(normalizedWinnerSerial) || [])
         : [];
-      if (freshestWiredRecords.length >= 2) {
-        return freshestWiredRecords;
+      if (winnerWirelessRecords.length >= 2) {
+        return sortRecords(winnerWirelessRecords);
       }
 
-      const preferredDailyRecords = selectParkingSpotRecordsByDay(records, {
-        getRecordSerial,
-        blacklistedWirelessSerials: blacklistedSerials
-      });
-      if (preferredDailyRecords.length >= 2) {
-        return preferredDailyRecords;
+      const allWirelessRecords = flattenRecordMap(wirelessRecordsBySerial);
+      if (allWirelessRecords.length >= 2) {
+        return allWirelessRecords;
       }
 
-      const winnerRecords = normalizedWinnerSerial
-        ? (recordsBySerial.get(normalizedWinnerSerial) || [])
-        : [];
-      if (winnerRecords.length >= 2) {
-        return winnerRecords;
-      }
-
-      const fallbackRecords = [...recordsBySerial.values()].flat();
+      const fallbackRecords = [...allWiredRecords, ...allWirelessRecords, ...unknownRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
       return fallbackRecords.length ? fallbackRecords : records;
     };
 
@@ -5302,7 +5356,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       }
       if (vehicleMarkersVisible) {
-        focusVehicle(vehicle);
+        focusVehicle(vehicle, { autoExpandSidebarCard: true });
       } else {
         applySelection(vehicle.id, null, getVehicleKey(vehicle));
       }
@@ -5581,6 +5635,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === normalizedWinnerSerial)
         : [];
       const metricSourceRecords = selectMovementMetricRecords(records, {
+        vehicle,
         getRecordSerial,
         winnerSerial: normalizedWinnerSerial,
         blacklistedWirelessSerials
@@ -7196,6 +7251,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const filtered = getVehicleList(searchBox?.value || '');
       const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
       document.getElementById('vehicles-count').textContent = filtered.length;
+      syncVehicleFleetAverageSummary(filtered);
 
       if (filtered.length === 0) {
         const empty = document.createElement('div');
@@ -7247,11 +7303,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               if (payload?.marker && typeof payload.marker.openPopup === 'function') {
                 payload.marker.openPopup();
               } else {
-                focusVehicle(currentVehicle);
+                focusVehicle(currentVehicle, { autoExpandSidebarCard: true });
               }
               return;
             }
-            focusVehicle(currentVehicle);
+            focusVehicle(currentVehicle, { autoExpandSidebarCard: true });
           };
 
           const coordsInfo = getVehicleMapCoords(vehicle);
@@ -7314,10 +7370,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           card.dataset.vehicleId = `${vehicle.id ?? ''}`;
           card.dataset.type = 'vehicle';
           card.innerHTML = `
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1 space-y-1">
+            <div class="relative">
+              <div class="min-w-0 space-y-1">
+                <div class="space-y-1 pr-10">
                 <p class="truncate text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">${vehicle.model} <span class="text-amber-100">${vehicle.year || '—'}</span></p>
                 <h3 class="truncate font-extrabold text-white text-sm leading-tight">${vehicle.vin || 'VIN N/A'}</h3>
+                </div>
                 <div class="flex flex-wrap items-center gap-2 pt-0.5 text-[10px]">
                   <span class="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-1 font-bold text-amber-100">${vehicle.dealStatus || vehicle.status || 'ACTIVE'}</span>
                   <span class="inline-flex items-center gap-2 rounded-full border border-slate-800 px-2 py-1 font-semibold ${movingMeta.text} ${movingMeta.bg}">
@@ -7327,20 +7385,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   <span class="rounded-full border px-2 py-1 font-semibold" style="${daysParkedBadge.badgeStyle}">
                     <span style="${daysParkedBadge.labelStyle}">Days Parked </span><span style="${daysParkedBadge.valueStyle}">${getDaysParkedDisplay(vehicle)}</span>
                   </span>
-                </div>
-                <div class="flex items-center justify-between gap-2">
-                  <p class="min-w-0 text-[11px] text-blue-200 font-semibold">Customer ID: <span class="truncate text-slate-100">${vehicle.customerId || '—'}</span></p>
-                  <label class="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-slate-300 leading-none">
+                  <label class="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-slate-300 leading-none">
                     <span>on rev?</span>
                     <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${isOnRev ? 'checked' : ''}>
                   </label>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <p class="min-w-0 text-[11px] text-blue-200 font-semibold">Customer ID: <span class="truncate text-slate-100">${vehicle.customerId || '—'}</span></p>
+                  <span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-100">
+                    <span class="text-emerald-200/80">Avg mi/day</span>
+                    <span class="text-slate-50" data-field="avg-moving-miles-day">${getAvgMovingMilesPerDayDisplay(vehicle)}</span>
+                  </span>
                 </div>
               </div>
               <button
                 type="button"
                 data-action="vehicle-expand-toggle"
                 aria-expanded="${isExpanded ? 'true' : 'false'}"
-                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-sm font-bold text-slate-300 transition hover:border-amber-400 hover:text-amber-200"
+                class="absolute right-0 top-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-sm font-bold text-slate-300 transition hover:border-amber-400 hover:text-amber-200"
                 title="${isExpanded ? 'Collapse vehicle card' : 'Expand vehicle card'}"
               >${expandChevron}</button>
             </div>
@@ -7490,7 +7552,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       }
 
-    function focusVehicle(vehicle) {
+    function focusVehicle(vehicle, { autoExpandSidebarCard = false } = {}) {
       const trailRequestId = ++gpsTrailRequestCounter;
       if (!vehicle) return;
       if (!vehicleMarkersVisible) return;
@@ -7501,6 +7563,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       gpsTrailLayer?.clearLayers();
 
       const vehicleKey = getVehicleKey(vehicle);
+      const shouldAutoExpandCard = Boolean(autoExpandSidebarCard && vehicleKey);
+      if (shouldAutoExpandCard) {
+        expandedVehicleCardKeys.add(vehicleKey);
+        void hydrateVehicleAverageMovingMilesPerDay(vehicle);
+      }
       const storedMarker = vehicleMarkers.get(vehicleKey)?.marker;
       const markerColor = getVehicleMarkerColor(vehicle);
       const anchorMarker = storedMarker || L.circleMarker([vehicleCoords.lat, vehicleCoords.lng], {
@@ -7627,6 +7694,38 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (miles >= 100) return `${Math.round(miles)} mi`;
       if (miles >= 10) return `${miles.toFixed(1)} mi`;
       return `${miles.toFixed(2)} mi`;
+    }
+
+    function getAverageMovingMilesPerDayAcrossVehicles(list = []) {
+      if (!Array.isArray(list) || !list.length) return Number.NEGATIVE_INFINITY;
+      let totalMiles = 0;
+      let countedVehicles = 0;
+      list.forEach((vehicle) => {
+        const miles = getAvgMovingMilesPerDayValue(vehicle);
+        if (!Number.isFinite(miles)) return;
+        totalMiles += miles;
+        countedVehicles += 1;
+      });
+      if (!countedVehicles) return Number.NEGATIVE_INFINITY;
+      return totalMiles / countedVehicles;
+    }
+
+    function formatFleetAverageMovingMilesPerDay(value) {
+      if (!Number.isFinite(value)) return '—';
+      if (value >= 100) return `${Math.round(value)} mi`;
+      if (value >= 10) return `${value.toFixed(1)} mi`;
+      return `${value.toFixed(2)} mi`;
+    }
+
+    function syncVehicleFleetAverageSummary(list = null) {
+      const summaryNode = document.getElementById('vehicles-avg-moving-miles');
+      if (!summaryNode) return;
+      const sourceList = Array.isArray(list)
+        ? list
+        : getVehicleList(document.getElementById('vehicle-search')?.value || '');
+      summaryNode.textContent = formatFleetAverageMovingMilesPerDay(
+        getAverageMovingMilesPerDayAcrossVehicles(sourceList)
+      );
     }
 
     function getMaxDaysParkedAcrossVehicles(list = []) {
