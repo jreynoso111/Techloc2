@@ -431,6 +431,19 @@ body.gps-column-resizing {
       transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
     }
 
+    .legend-reset-button-hidden {
+      width: 0;
+      height: 0;
+      padding: 0;
+      margin: 0;
+      border-width: 0;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+      box-shadow: none;
+      transform: scale(0.84);
+    }
+
     .legend-reset-button:hover {
       transform: translateY(-1px);
       border-color: rgba(103, 232, 249, 0.7);
