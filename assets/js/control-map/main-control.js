@@ -2464,6 +2464,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let gpsDeviceBlacklistSerialsCache = new Map();
     let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
     let gpsDeviceBlacklistSerialsPending = null;
+    let vehicleFleetAverageHydrationRunId = 0;
 
     const parseGpsNumericValue = (value) => {
       if (value === null || value === undefined) return null;
@@ -7252,6 +7253,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
       document.getElementById('vehicles-count').textContent = filtered.length;
       syncVehicleFleetAverageSummary(filtered);
+      hydrateFleetAverageMovingMilesForVisibleVehicles(filtered);
 
       if (filtered.length === 0) {
         const empty = document.createElement('div');
@@ -7726,6 +7728,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       summaryNode.textContent = formatFleetAverageMovingMilesPerDay(
         getAverageMovingMilesPerDayAcrossVehicles(sourceList)
       );
+    }
+
+    function hydrateFleetAverageMovingMilesForVisibleVehicles(list = []) {
+      if (!Array.isArray(list) || !list.length) return;
+      const candidates = list.filter((vehicle) => !Number.isFinite(getAvgMovingMilesPerDayValue(vehicle)));
+      if (!candidates.length) return;
+
+      const runId = ++vehicleFleetAverageHydrationRunId;
+      const maxConcurrent = 4;
+      let nextIndex = 0;
+
+      const runWorker = async () => {
+        while (nextIndex < candidates.length && runId === vehicleFleetAverageHydrationRunId) {
+          const vehicle = candidates[nextIndex];
+          nextIndex += 1;
+          try {
+            await hydrateVehicleAverageMovingMilesPerDay(vehicle);
+          } catch (_error) {
+            // Ignore per-vehicle failures so the rest of the fleet can keep hydrating.
+          }
+        }
+      };
+
+      Array.from({ length: Math.min(maxConcurrent, candidates.length) }, () => runWorker());
     }
 
     function getMaxDaysParkedAcrossVehicles(list = []) {
