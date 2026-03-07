@@ -310,6 +310,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       gpsTrailPointLimit = normalized.trailPoints;
     };
 
+    const applyDerivedVehicleMetricsFromPreviousSnapshot = (vehicle, previousVehicle = null) => {
+      if (!vehicle || !previousVehicle) return;
+
+      const previousAvgMovingMiles = Number(previousVehicle?.avgMovingMilesPerDay);
+      if (Number.isFinite(previousAvgMovingMiles) && previousAvgMovingMiles >= 0) {
+        vehicle.avgMovingMilesPerDay = previousAvgMovingMiles;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          vehicle.details.avgMovingMilesPerDay = previousAvgMovingMiles;
+        }
+      }
+    };
+
     const loadVehicleFilterPrefs = async () => {
       if (typeof window === 'undefined' || !window.localStorage) return;
       try {
@@ -6220,6 +6232,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (vehicles.length && !force) return;
       const stopLoading = silent ? () => {} : startLoading('Loading Vehicles…');
       try {
+        const previousVehiclesByKey = new Map(
+          (Array.isArray(vehicles) ? vehicles : [])
+            .map((vehicle) => [getVehicleKey(vehicle), vehicle])
+            .filter(([key]) => Boolean(key))
+        );
         const data = await vehicleService.listVehicles();
         const normalizedVehicles = data.map((row, idx) =>
           normalizeVehicle(row, idx, { getField, toStateCode, resolveCoords })
@@ -6255,6 +6272,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         const allowedDealStatuses = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
         const filteredVehicles = normalizedVehicles.filter((vehicle) => {
+          const previousVehicle = previousVehiclesByKey.get(getVehicleKey(vehicle)) || null;
+          if (previousVehicle) {
+            applyDerivedVehicleMetricsFromPreviousSnapshot(vehicle, previousVehicle);
+          }
           const stockNo = normalizeStockNumber(vehicle.stockNo);
           const dealValues = dealsByStockNo.get(stockNo) ?? null;
           const normalizedStatus = String(dealValues?.vehicleStatus ?? '').trim().toUpperCase();
@@ -7460,7 +7481,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] text-slate-200 space-y-2">
                 <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
                 ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
-                <p class="text-[11px] text-emerald-200 font-semibold">Avg Moving Miles/Day: <span class="text-slate-100" data-field="avg-moving-miles-day">${getAvgMovingMilesPerDayDisplay(vehicle)}</span></p>
                 <div class="grid grid-cols-4 gap-2">
                 <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
                   <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
