@@ -115,21 +115,21 @@
         <div class="legend-shell">
           <div class="legend-group flex-1 space-y-2">
             <p class="legend-heading">Services</p>
-            <div class="flex flex-wrap items-center gap-1.5">
+            <div class="legend-row">
               <div class="legend-pill" data-legend="tech">
-                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#3b82f6" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#3b82f6" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
                 Tech
               </div>
               <div class="legend-pill" data-legend="reseller">
-                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#34d399" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#34d399" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
                 Reseller
               </div>
               <div class="legend-pill" data-legend="repair">
-                <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#fb923c" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#fb923c" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
                 Repair
               </div>
-              <div id="custom-legend-slot" class="flex flex-wrap gap-1.5"></div>
             </div>
+            <div id="custom-legend-slot" class="legend-row"></div>
           </div>
           <div id="legend-reset-separator" class="legend-reset-separator" aria-hidden="false">
             <span class="legend-reset-line"></span>
@@ -140,7 +140,7 @@
           </div>
           <div class="legend-group flex-1 space-y-2 md:text-right">
             <p class="legend-heading md:justify-end">Vehicles</p>
-            <div class="flex flex-wrap items-center gap-2 md:justify-end">
+            <div class="legend-row md:justify-end">
               <div class="legend-pill">
                 <span class="legend-dot bg-red-500"></span>
                 GPS Fix: All
@@ -158,7 +158,7 @@
                 Not moving
               </div>
             </div>
-            <div class="flex flex-wrap items-center gap-2 md:justify-end">
+            <div class="legend-row md:justify-end">
               <div class="legend-pill">
                 <span class="legend-dot bg-red-500 border-white/90"></span>
                 Client location

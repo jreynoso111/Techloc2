@@ -389,6 +389,14 @@ body.gps-column-resizing {
       min-width: 0;
     }
 
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.45rem;
+      min-height: 34px;
+    }
+
     .legend-reset-separator {
       display: flex;
       align-items: center;
@@ -508,6 +516,15 @@ body.gps-column-resizing {
       color: #e2e8f0;
       font-weight: 600;
       font-size: 11px;
+    }
+
+    .legend-service-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
     }
 
     .legend-dot {
