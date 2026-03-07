@@ -2464,6 +2464,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let gpsDeviceBlacklistSerialsCache = new Map();
     let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
     let gpsDeviceBlacklistSerialsPending = null;
+    let vehicleFleetAverageHydrationRunId = 0;
+    let vehicleFleetAverageLastFiniteValue = Number.NEGATIVE_INFINITY;
+    let vehicleFleetAverageLastSignature = '';
 
     const parseGpsNumericValue = (value) => {
       if (value === null || value === undefined) return null;
@@ -2897,7 +2900,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return true;
     };
 
-    const syncVehicleAverageMovingMilesDayField = (vehicle) => {
+    const syncVehicleAverageMovingMilesDayField = (vehicle, { syncFleetSummary = true } = {}) => {
       const vehicleKey = getVehicleKey(vehicle);
       if (!vehicleKey) return;
       const card = document.querySelector(
@@ -2907,13 +2910,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       avgMilesNodes.forEach((node) => {
         node.textContent = getAvgMovingMilesPerDayDisplay(vehicle);
       });
-      syncVehicleFleetAverageSummary();
+      if (syncFleetSummary) {
+        syncVehicleFleetAverageSummary();
+      }
     };
 
-    const hydrateVehicleAverageMovingMilesPerDay = async (vehicle, { force = false } = {}) => {
+    const hydrateVehicleAverageMovingMilesPerDay = async (
+      vehicle,
+      { force = false, syncFleetSummary = true } = {}
+    ) => {
       if (!vehicle || !gpsHistoryManager || typeof gpsHistoryManager.fetchGpsHistory !== 'function') return false;
       if (!force && Number.isFinite(getAvgMovingMilesPerDayValue(vehicle))) {
-        syncVehicleAverageMovingMilesDayField(vehicle);
+        syncVehicleAverageMovingMilesDayField(vehicle, { syncFleetSummary });
         return false;
       }
 
@@ -2929,7 +2937,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
         if (error || !Array.isArray(records) || !records.length) {
-          syncVehicleAverageMovingMilesDayField(vehicle);
+          syncVehicleAverageMovingMilesDayField(vehicle, { syncFleetSummary });
           return false;
         }
 
@@ -2954,7 +2962,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (movingOverrideChanged) {
           renderVehicles({ preserveScrollTop: true });
         }
-        syncVehicleAverageMovingMilesDayField(vehicle);
+        syncVehicleAverageMovingMilesDayField(vehicle, { syncFleetSummary });
         return changed;
       })().finally(() => {
         vehicleAvgMovingMilesPendingRequests.delete(vehicleKey);
@@ -7251,7 +7259,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const filtered = getVehicleList(searchBox?.value || '');
       const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
       document.getElementById('vehicles-count').textContent = filtered.length;
-      syncVehicleFleetAverageSummary(filtered);
+      syncVehicleFleetAverageSummary(filtered, { keepPreviousOnMissing: true });
+      hydrateFleetAverageMovingMilesForVisibleVehicles(filtered);
 
       if (filtered.length === 0) {
         const empty = document.createElement('div');
@@ -7717,15 +7726,69 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return `${value.toFixed(2)} mi`;
     }
 
-    function syncVehicleFleetAverageSummary(list = null) {
+    function getVehicleFleetAverageSignature(list = []) {
+      if (!Array.isArray(list) || !list.length) return '';
+      return list.map((vehicle) => getVehicleKey(vehicle)).join('|');
+    }
+
+    function syncVehicleFleetAverageSummary(list = null, { keepPreviousOnMissing = false } = {}) {
       const summaryNode = document.getElementById('vehicles-avg-moving-miles');
       if (!summaryNode) return;
       const sourceList = Array.isArray(list)
         ? list
         : getVehicleList(document.getElementById('vehicle-search')?.value || '');
-      summaryNode.textContent = formatFleetAverageMovingMilesPerDay(
-        getAverageMovingMilesPerDayAcrossVehicles(sourceList)
-      );
+      const signature = getVehicleFleetAverageSignature(sourceList);
+      const nextValue = getAverageMovingMilesPerDayAcrossVehicles(sourceList);
+      const hasMissingVehicles = sourceList.some((vehicle) => !Number.isFinite(getAvgMovingMilesPerDayValue(vehicle)));
+
+      if (Number.isFinite(nextValue)) {
+        vehicleFleetAverageLastFiniteValue = nextValue;
+        vehicleFleetAverageLastSignature = signature;
+        summaryNode.textContent = formatFleetAverageMovingMilesPerDay(nextValue);
+        return;
+      }
+
+      if (
+        keepPreviousOnMissing
+        && hasMissingVehicles
+        && signature
+        && signature === vehicleFleetAverageLastSignature
+        && Number.isFinite(vehicleFleetAverageLastFiniteValue)
+      ) {
+        summaryNode.textContent = formatFleetAverageMovingMilesPerDay(vehicleFleetAverageLastFiniteValue);
+        return;
+      }
+
+      summaryNode.textContent = hasMissingVehicles && sourceList.length ? '...' : '—';
+    }
+
+    function hydrateFleetAverageMovingMilesForVisibleVehicles(list = []) {
+      if (!Array.isArray(list) || !list.length) return;
+      const candidates = list.filter((vehicle) => !Number.isFinite(getAvgMovingMilesPerDayValue(vehicle)));
+      if (!candidates.length) return;
+
+      const runId = ++vehicleFleetAverageHydrationRunId;
+      const maxConcurrent = 4;
+      let nextIndex = 0;
+
+      const runWorker = async () => {
+        while (nextIndex < candidates.length && runId === vehicleFleetAverageHydrationRunId) {
+          const vehicle = candidates[nextIndex];
+          nextIndex += 1;
+          try {
+            await hydrateVehicleAverageMovingMilesPerDay(vehicle, { syncFleetSummary: false });
+          } catch (_error) {
+            // Ignore per-vehicle failures so the rest of the fleet can keep hydrating.
+          }
+        }
+      };
+
+      void Promise.all(
+        Array.from({ length: Math.min(maxConcurrent, candidates.length) }, () => runWorker())
+      ).finally(() => {
+        if (runId !== vehicleFleetAverageHydrationRunId) return;
+        syncVehicleFleetAverageSummary(list);
+      });
     }
 
     function getMaxDaysParkedAcrossVehicles(list = []) {
