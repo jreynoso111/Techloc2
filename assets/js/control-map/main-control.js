@@ -2735,6 +2735,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const movementSegmentThresholdMeters = isTruckOrTrailerUnit(vehicle)
         ? GPS_MOVING_MILES_TRUCK_SEGMENT_THRESHOLD_METERS
         : GPS_MOVING_MILES_SEGMENT_THRESHOLD_METERS;
+      const movementDayThresholdMeters = isTruckOrTrailerUnit(vehicle)
+        ? GPS_MOVING_MILES_TRUCK_DAY_THRESHOLD_METERS
+        : GPS_MOVING_MILES_DAY_THRESHOLD_METERS;
       const rawPoints = records
         .map((record) => {
           const point = toGpsTrailPoint(record);
@@ -2859,18 +2862,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .sort((left, right) => left.dayStartMs - right.dayStartMs);
       if (!observedDays.length) return null;
 
-      const totalDistanceMeters = observedDays.reduce((sum, bucket) => (
+      const movingDays = observedDays.filter((bucket) => (
+        bucket.movingEvidence
+        || (Number.isFinite(bucket.distanceMeters) && bucket.distanceMeters >= movementDayThresholdMeters)
+      ));
+      if (!movingDays.length) return null;
+
+      const totalDistanceMeters = movingDays.reduce((sum, bucket) => (
         sum + (Number.isFinite(bucket.distanceMeters) ? bucket.distanceMeters : 0)
       ), 0);
-      const hasMovementEvidence = observedDays.some((bucket) => (
-        bucket.movingEvidence
-        || (Number.isFinite(bucket.distanceMeters) && bucket.distanceMeters >= movementSegmentThresholdMeters)
-      ));
 
-      if (!hasMovementEvidence || totalDistanceMeters < movementSegmentThresholdMeters) return null;
+      if (totalDistanceMeters < movementSegmentThresholdMeters) return null;
 
       const totalMiles = totalDistanceMeters / 1609.344;
-      return totalMiles > 0 ? (totalMiles / observedDays.length) : null;
+      return totalMiles > 0 ? (totalMiles / movingDays.length) : null;
     };
 
     const applyVehicleAverageMovingMilesPerDayFromGpsHistory = (vehicle, records = []) => {
