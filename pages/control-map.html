@@ -112,10 +112,10 @@
 
     <!-- Floating Legend -->
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-black/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl shadow-black/55 backdrop-blur">
-        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-8">
-          <div class="flex-1 space-y-2">
+        <div class="legend-shell">
+          <div class="legend-group flex-1 space-y-2">
             <p class="legend-heading">Services</p>
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-1.5">
               <div class="legend-pill" data-legend="tech">
                 <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#3b82f6" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
                 Tech
@@ -128,10 +128,17 @@
                 <span class="inline-flex items-center justify-center"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#fb923c" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
                 Repair
               </div>
-              <div id="custom-legend-slot" class="flex flex-wrap gap-2"></div>
+              <div id="custom-legend-slot" class="flex flex-wrap gap-1.5"></div>
             </div>
           </div>
-          <div class="flex-1 space-y-2 md:text-right">
+          <div id="legend-reset-separator" class="legend-reset-separator" aria-hidden="false">
+            <span class="legend-reset-line"></span>
+            <button id="legend-reset-view" type="button" class="legend-reset-button" title="Reset map view" aria-label="Reset map view" hidden>
+              <span class="legend-reset-icon" aria-hidden="true">◎</span>
+            </button>
+            <span class="legend-reset-line"></span>
+          </div>
+          <div class="legend-group flex-1 space-y-2 md:text-right">
             <p class="legend-heading md:justify-end">Vehicles</p>
             <div class="flex flex-wrap items-center gap-2 md:justify-end">
               <div class="legend-pill">
@@ -249,6 +256,11 @@
               <button id="filter-kpi-positive-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false">
                 <span class="vehicle-filter-value">Balance &gt; 0</span>
                 <span class="text-slate-500" data-kpi-filter-state>Off</span>
+              </button>
+              <button id="filter-stale-ping-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false" title="Filter vehicles shown gray on the map">
+                <span class="inline-block h-2 w-2 rounded-full bg-slate-400"></span>
+                <span class="vehicle-filter-value">Gray</span>
+                <span class="text-slate-500" data-stale-filter-state>Off</span>
               </button>
               <button id="vehicle-filters-collapse" type="button" class="vehicle-filters-collapse-btn text-cyan-300 hover:text-cyan-200 text-[8px] font-bold uppercase tracking-wide" aria-expanded="true">Hide</button>
               <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[8px] font-bold uppercase tracking-wide">Reset</button>
