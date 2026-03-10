@@ -73,6 +73,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
     let selectedVehicleKey = null;
+    let pinnedVehicleListCardKey = null;
+    let pinnedVehicleListCardOffsetTop = null;
     const expandedVehicleCardKeys = new Set();
     const checkedVehicleIds = new Set();
     const checkedVehicleClickTimes = new Map();
@@ -7038,6 +7040,104 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         || findVehicleById(card.dataset.id);
     }
 
+    function getVehicleListCardKey(vehicleOrKey) {
+      if (typeof vehicleOrKey === 'string') return vehicleOrKey.trim();
+      return getVehicleKey(vehicleOrKey);
+    }
+
+    function findVehicleListCardByKey(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const vehicleKey = getVehicleListCardKey(vehicleOrKey);
+      if (!container || !vehicleKey) return null;
+      const escapedKey = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(vehicleKey)
+        : null;
+      if (escapedKey) {
+        const matched = container.querySelector(`[data-type="vehicle"][data-vehicle-key="${escapedKey}"]`);
+        if (matched) return matched;
+      }
+      return [...container.querySelectorAll('[data-type="vehicle"]')]
+        .find((node) => `${node?.dataset?.vehicleKey ?? ''}` === vehicleKey)
+        || null;
+    }
+
+    function captureVehicleListCardAnchor(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const vehicleKey = getVehicleListCardKey(vehicleOrKey);
+      const card = findVehicleListCardByKey(vehicleKey, container);
+      if (!card || !container || !vehicleKey) return null;
+      const containerRect = container.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return {
+        vehicleKey,
+        offsetTop: cardRect.top - containerRect.top
+      };
+    }
+
+    function pinVehicleListCardPosition(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const anchor = captureVehicleListCardAnchor(vehicleOrKey, container);
+      if (!anchor) return null;
+      pinnedVehicleListCardKey = anchor.vehicleKey;
+      pinnedVehicleListCardOffsetTop = anchor.offsetTop;
+      return anchor;
+    }
+
+    function clearPinnedVehicleListCardPosition() {
+      pinnedVehicleListCardKey = null;
+      pinnedVehicleListCardOffsetTop = null;
+    }
+
+    function getPinnedVehicleListCardAnchor(container = document.getElementById('vehicle-list')) {
+      const fallbackVehicleKey = pinnedVehicleListCardKey
+        || `${selectedVehicleKey || ''}`.trim()
+        || getVehicleKey(getSelectedVehicleEntry());
+      if (!fallbackVehicleKey) return null;
+      const liveAnchor = captureVehicleListCardAnchor(fallbackVehicleKey, container);
+      if (liveAnchor) {
+        pinnedVehicleListCardOffsetTop = liveAnchor.offsetTop;
+        pinnedVehicleListCardKey = liveAnchor.vehicleKey;
+        return liveAnchor;
+      }
+      if (!Number.isFinite(pinnedVehicleListCardOffsetTop)) return null;
+      return {
+        vehicleKey: fallbackVehicleKey,
+        offsetTop: pinnedVehicleListCardOffsetTop
+      };
+    }
+
+    function setElementScrollTopInstant(element, nextScrollTop) {
+      if (!element) return;
+      const previousBehavior = element.style.scrollBehavior;
+      element.style.scrollBehavior = 'auto';
+      element.scrollTop = nextScrollTop;
+      requestAnimationFrame(() => {
+        element.style.scrollBehavior = previousBehavior;
+      });
+    }
+
+    function restoreVehicleListAnchor(container, { anchor = null, fallbackScrollTop = null } = {}) {
+      if (!container) return;
+      requestAnimationFrame(() => {
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        let nextScrollTop = Number.isFinite(fallbackScrollTop)
+          ? Math.min(Math.max(fallbackScrollTop, 0), maxScrollTop)
+          : Math.min(Math.max(container.scrollTop, 0), maxScrollTop);
+
+        if (anchor?.vehicleKey) {
+          const card = findVehicleListCardByKey(anchor.vehicleKey, container);
+          if (card) {
+            const containerRect = container.getBoundingClientRect();
+            const cardRect = card.getBoundingClientRect();
+            const currentOffsetTop = cardRect.top - containerRect.top;
+            const delta = currentOffsetTop - anchor.offsetTop;
+            nextScrollTop = Math.min(Math.max(container.scrollTop + delta, 0), maxScrollTop);
+            pinnedVehicleListCardKey = anchor.vehicleKey;
+            pinnedVehicleListCardOffsetTop = anchor.offsetTop;
+          }
+        }
+
+        setElementScrollTopInstant(container, nextScrollTop);
+      });
+    }
+
     function isVehicleCardExpanded(vehicleOrKey) {
       const key = typeof vehicleOrKey === 'string'
         ? vehicleOrKey.trim()
@@ -7053,6 +7153,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         ? vehicleOrKey.trim()
         : getVehicleKey(vehicleOrKey);
       if (!key) return;
+      pinVehicleListCardPosition(key);
       const willExpand = !expandedVehicleCardKeys.has(key);
       if (expandedVehicleCardKeys.has(key)) {
         expandedVehicleCardKeys.delete(key);
@@ -7140,6 +7241,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
+      pinVehicleListCardPosition(vehicle);
       focusVehicle(vehicle);
     }
 
@@ -7155,6 +7257,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!vehicle) return;
 
       event.preventDefault();
+      pinVehicleListCardPosition(vehicle);
       focusVehicle(vehicle);
       focusMapOnVehicleQuick(vehicle, { targetZoom: 15 });
     }
@@ -7288,6 +7391,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const container = document.getElementById('vehicle-list');
       if (!container) return;
       const previousScrollTop = preserveScrollTop ? container.scrollTop : null;
+      const currentPinnedAnchor = getPinnedVehicleListCardAnchor(container);
 
       if (map) map.closePopup();
       container.replaceChildren();
@@ -7305,6 +7409,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const searchBox = document.getElementById('vehicle-search');
       const filtered = getVehicleList(searchBox?.value || '');
+      const renderAnchor = currentPinnedAnchor?.vehicleKey
+        && filtered.some((vehicle) => `${getVehicleKey(vehicle)}` === `${currentPinnedAnchor.vehicleKey}`)
+        ? currentPinnedAnchor
+        : null;
+      if (!renderAnchor && currentPinnedAnchor?.vehicleKey) {
+        clearPinnedVehicleListCardPosition();
+      }
+      const shouldInsertAnchorSpacer = Boolean(
+        renderAnchor?.vehicleKey
+        && Number.isFinite(renderAnchor.offsetTop)
+        && renderAnchor.offsetTop > 0
+        && filtered.length === 1
+        && `${getVehicleKey(filtered[0])}` === `${renderAnchor.vehicleKey}`
+      );
       const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
       document.getElementById('vehicles-count').textContent = filtered.length;
 
@@ -7380,6 +7498,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
 
           if (idx >= VEHICLE_RENDER_LIMIT) return;
+
+          if (idx === 0 && shouldInsertAnchorSpacer) {
+            const spacer = document.createElement('div');
+            spacer.setAttribute('aria-hidden', 'true');
+            spacer.style.pointerEvents = 'none';
+            spacer.style.height = `${Math.max(0, Math.round(renderAnchor.offsetTop))}px`;
+            fragment.appendChild(spacer);
+          }
 
           const card = document.createElement('div');
           const prepStatusStyles = getStatusCardStyles(vehicle.invPrepStatus, 'prep');
@@ -7586,10 +7712,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         container.replaceChildren(fragment);
 
-        if (previousScrollTop !== null) {
-          requestAnimationFrame(() => {
-            const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
-            container.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+        if (renderAnchor || previousScrollTop !== null) {
+          restoreVehicleListAnchor(container, {
+            anchor: renderAnchor,
+            fallbackScrollTop: previousScrollTop
           });
         }
 
@@ -7619,6 +7745,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const vehicleKey = getVehicleKey(vehicle);
       const shouldAutoExpandCard = Boolean(autoExpandSidebarCard && vehicleKey);
       if (shouldAutoExpandCard) {
+        pinVehicleListCardPosition(vehicleKey);
         expandedVehicleCardKeys.add(vehicleKey);
         void hydrateVehicleAverageMovingMilesPerDay(vehicle);
       }
@@ -8302,6 +8429,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const nextVehicleKey = vehicleId === null
         ? null
         : getVehicleKey(resolvedVehicle || { id: vehicleId });
+      if (vehicleId !== null) {
+        pinVehicleListCardPosition(resolvedVehicle || nextVehicleKey);
+        pinnedVehicleListCardKey = `${nextVehicleKey || ''}`.trim() || pinnedVehicleListCardKey;
+      }
 
       if (
         `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
@@ -8331,6 +8462,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         setSelectedVehicle(null);
       }
       if (vehicleId === null) {
+        clearPinnedVehicleListCardPosition();
         gpsTrailRequestCounter += 1;
         resetRouteSegmentState({ clearEntries: true });
         highlightLayer?.clearLayers();

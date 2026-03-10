@@ -464,6 +464,7 @@
     const toNumber = (value) => {
       if (value === undefined || value === null) return null;
       const cleaned = typeof value === 'string' ? value.replace(/,/g, '').trim() : value;
+      if (cleaned === '') return null;
       const num = Number(cleaned);
       return Number.isFinite(num) ? num : null;
     };
@@ -555,8 +556,8 @@
         VIN: clean(row?.['VIN']),
         Date: clean(row?.['Date']),
         address: clean(row?.['address']),
-        Lat: numericOrValue(row?.['Lat']),
-        Long: numericOrValue(row?.['Long']),
+        Lat: toNumber(row?.['Lat']),
+        Long: toNumber(row?.['Long']),
       };
 
       return Object.entries(slim).reduce((acc, [key, value]) => {
@@ -580,6 +581,12 @@
     const normalizeUpperTrimmedValue = (value) => {
       const normalized = String(value || '').trim().toUpperCase();
       return normalized || '';
+    };
+
+    const hasValidPtCoordinates = (row = {}) => {
+      const lat = toNumber(row?.['Lat'] ?? row?.Lat ?? row?.lat);
+      const lng = toNumber(row?.['Long'] ?? row?.Long ?? row?.long ?? row?.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
     };
 
     const parsePtComparableTimestamp = (value) => {
@@ -611,7 +618,9 @@
           return recordSerial === resolvedWinnerSerial;
         })
         : records;
-      const sourceRecords = scopedRecords.length ? scopedRecords : records;
+      const sourceRecords = (scopedRecords.length ? scopedRecords : records)
+        .filter((record) => hasValidPtCoordinates(record));
+      if (!sourceRecords.length) return null;
       const orderedRecords = [...sourceRecords].sort((left, right) => (
         parsePtComparableTimestamp(left?.Date) - parsePtComparableTimestamp(right?.Date)
       ));
@@ -1755,6 +1764,15 @@
       }
     };
 
+    const purgePtRowsMissingCoordinates = async () => {
+      const { error, count } = await supabaseClient
+        .from('PT-LastPing')
+        .delete({ count: 'exact' })
+        .or('Lat.is.null,Long.is.null');
+      if (error) throw error;
+      return Number.isFinite(Number(count)) ? Number(count) : 0;
+    };
+
     const uploadPtPingRows = async (rows, parseErrors = 0) => {
       if (!supabaseClient) throw new Error('Database client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload PT ping data.');
@@ -1800,7 +1818,9 @@
       const aggregated = {
         inserted: 0,
         batches: 0,
+        deletedMissingCoordinates: 0,
         rejectedMissingRequired: 0,
+        rejectedMissingCoordinates: 0,
         rejectedInvalidDate: 0,
         skippedDeduplication: 0,
         skippedSupabaseDuplicates: 0,
@@ -1872,7 +1892,19 @@
       resetErrorBox();
       setProgress(0, 'Preparing upload...');
 
-      setStatus(`Validating ${cleanedRows.length} rows (Serial and Date required)...`);
+      try {
+        setStatus('Removing PT rows without coordinates...');
+        aggregated.deletedMissingCoordinates = await purgePtRowsMissingCoordinates();
+      } catch (err) {
+        console.error('Failed to purge PT rows without coordinates', err);
+        showToast('Unable to remove PT rows without coordinates.', 'error');
+        setStatus('PT cleanup failed.');
+        setProgress(0, 'Cleanup failed');
+        showPtError(err, 'PT rows without coordinates cleanup failed');
+        return;
+      }
+
+      setStatus(`Validating ${cleanedRows.length} rows (Serial, Date, Lat and Long required)...`);
       let dealsVinSet;
       try {
         setStatus('Loading reference VINs...');
@@ -1916,14 +1948,20 @@
           rejectedRows.push({ ...rest, error: 'VIN not in Deals (last 6 mismatch)' });
           return;
         }
+        if (!hasValidPtCoordinates(row)) {
+          aggregated.rejectedMissingCoordinates += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'Missing Lat or Long' });
+          return;
+        }
         delete row.__invalidDate;
         validRows.push({ row, readDay, dayHalf });
       });
 
       if (!validRows.length) {
-        setStatus('No rows contained both Serial and Date values.');
+        setStatus('No rows contained Serial, Date, Lat, and Long values.');
         setProgress(0, 'No valid rows');
-        showToast('No rows contained both Serial and Date values.', 'error');
+        showToast('No rows contained Serial, Date, Lat, and Long values.', 'error');
         return;
       }
 
@@ -2103,19 +2141,22 @@
         const summary =
           'Completed.' +
           '\nBatches: ' + aggregated.batches +
+          '\nDeleted existing rows without coordinates: ' + aggregated.deletedMissingCoordinates +
           '\nSent to database: ' + aggregated.inserted +
           '\nVehicles synced: ' + (vehicleSyncResult?.updated ?? 0) +
           '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
+          '\nRejected (missing Lat/Long): ' + aggregated.rejectedMissingCoordinates +
           '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
           '\nSkipped duplicates (client 8-hour bucket): ' + aggregated.skippedDeduplication +
           '\nDuplicate handling: ON CONFLICT DO NOTHING' +
           '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
           '\nErrors: ' + parseErrors;
         setStatus(
-          `Upload complete. Sent: ${aggregated.inserted} ` +
+          `Upload complete. Removed invalid existing rows: ${aggregated.deletedMissingCoordinates} ` +
+          `Sent: ${aggregated.inserted} ` +
           `Vehicles synced: ${vehicleSyncResult?.updated ?? 0} ` +
           `Skipped (client dedup): ${aggregated.skippedDeduplication} ` +
-          `Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`
+          `Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedMissingCoordinates + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`
         );
         showToast(summary, 'success');
         if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
