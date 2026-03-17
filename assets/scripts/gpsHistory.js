@@ -23,6 +23,17 @@ const normalizeSerial = (value) => {
   return String(value).trim().toUpperCase();
 };
 
+const normalizeVinComparable = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+};
+
+const getVinSuffix = (value, length = 6) => {
+  const comparable = normalizeVinComparable(value);
+  if (!comparable) return '';
+  return comparable.slice(-Math.max(1, Number(length) || 6));
+};
+
 const splitConfiguredSerials = (value) => {
   if (value === null || value === undefined) return [];
   return String(value)
@@ -120,6 +131,7 @@ const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
 const GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 25000;
 const GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 1000;
 const GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS = 220;
+const GPS_DAILY_MOVEMENT_PARKED_THRESHOLD_METERS = 25 * 1609.344;
 
 const parseCoordinate = (record = {}, key = 'lat') => {
   const candidates = key === 'lat'
@@ -133,6 +145,20 @@ const parseCoordinate = (record = {}, key = 'lat') => {
   }
   return null;
 };
+
+const hasValidCoordinatePair = (lat, lng) => (
+  Number.isFinite(lat)
+  && Number.isFinite(lng)
+  && lat !== 0
+  && lng !== 0
+);
+
+const hasValidGpsHistoryCoordinates = (record = {}) => (
+  hasValidCoordinatePair(
+    parseCoordinate(record, 'lat'),
+    parseCoordinate(record, 'long')
+  )
+);
 
 const isWiredSerial = (serial = '') => /^[0-7]/.test(normalizeSerial(serial));
 
@@ -277,6 +303,35 @@ const getStationaryClusterRadiusMetersForVehicle = (vehicle = {}) => (
     : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS
 );
 
+const parseRecordMovementState = (record = {}) => {
+  const candidates = [
+    record?.moved,
+    record?.Moved,
+    record?.moving,
+    record?.Moving,
+    record?.moving_calc,
+    record?.['Moving (Calc)'],
+    record?.gps_moving,
+    record?.['GPS Moving']
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const raw = `${candidate}`.trim();
+    if (!raw) continue;
+    const numeric = Number.parseInt(raw, 10);
+    if (Number.isFinite(numeric)) {
+      if (numeric === 1) return 'moving';
+      if (numeric === 0 || numeric === -1) return 'stopped';
+    }
+    const normalized = raw.toLowerCase();
+    if (['moving', 'move', 'true', 'yes'].includes(normalized)) return 'moving';
+    if (['stopped', 'not moving', 'stop', 'false', 'no', 'parked'].includes(normalized)) return 'stopped';
+  }
+
+  return 'unknown';
+};
+
 const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusMeters } = {}) => {
   if (!Array.isArray(entries) || !entries.length) return entries;
 
@@ -284,39 +339,79 @@ const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusM
     ? stationaryClusterRadiusMeters
     : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS;
 
-  const ordered = [...entries].sort((a, b) => {
+  const ordered = [...entries].filter((entry) => hasValidCoordinatePair(entry.lat, entry.lng)).sort((a, b) => {
     if (a.timestamp === b.timestamp) return a.index - b.index;
     return a.timestamp - b.timestamp;
   });
+  if (!ordered.length) return ordered;
+
+  const dayBuckets = new Map();
+  const getDayBucket = (dayStartMs) => {
+    if (!Number.isFinite(dayStartMs)) return null;
+    const existing = dayBuckets.get(dayStartMs);
+    if (existing) return existing;
+    const next = {
+      dayStartMs,
+      entries: [],
+      distanceMeters: 0,
+      movingEvidence: false
+    };
+    dayBuckets.set(dayStartMs, next);
+    return next;
+  };
 
   let previous = null;
-  let sessionStartDayMs = null;
   ordered.forEach((entry) => {
-    const hasCoords = Number.isFinite(entry.lat) && Number.isFinite(entry.lng);
-    const previousHasCoords = Number.isFinite(previous?.lat) && Number.isFinite(previous?.lng);
-    const distance = (hasCoords && previousHasCoords)
-      ? getPointDistanceMeters({ lat: previous.lat, lng: previous.lng }, { lat: entry.lat, lng: entry.lng })
-      : Number.POSITIVE_INFINITY;
-
-    if (!previous || !Number.isFinite(distance) || distance > threshold) {
-      entry.derivedMoved = previous ? 'Moving' : 'Parked';
-      sessionStartDayMs = entry.dayStartMs;
-    } else {
-      entry.derivedMoved = 'Parked';
-      if (!Number.isFinite(sessionStartDayMs) && Number.isFinite(entry.dayStartMs)) {
-        sessionStartDayMs = entry.dayStartMs;
+    const bucket = getDayBucket(entry.dayStartMs);
+    if (bucket) {
+      bucket.entries.push(entry);
+      const explicitMovement = parseRecordMovementState(entry.record);
+      if (explicitMovement === 'moving') {
+        bucket.movingEvidence = true;
       }
     }
 
-    if (Number.isFinite(entry.dayStartMs) && Number.isFinite(sessionStartDayMs)) {
-      entry.derivedDaysStationary = Math.max(
-        0,
-        Math.floor((entry.dayStartMs - sessionStartDayMs) / GPS_HISTORY_DAY_MS)
+    if (previous) {
+      const distance = getPointDistanceMeters(
+        { lat: previous.lat, lng: previous.lng },
+        { lat: entry.lat, lng: entry.lng }
       );
+      if (Number.isFinite(distance)) {
+        if (previous.dayStartMs === entry.dayStartMs) {
+          if (bucket) bucket.distanceMeters += distance;
+        } else {
+          const splitDistance = distance / 2;
+          if (bucket) bucket.distanceMeters += splitDistance;
+          const previousBucket = getDayBucket(previous.dayStartMs);
+          if (previousBucket) {
+            previousBucket.distanceMeters += splitDistance;
+          }
+        }
+      }
     }
-
     previous = entry;
   });
+
+  let stationaryStartDayMs = null;
+  [...dayBuckets.values()]
+    .sort((a, b) => a.dayStartMs - b.dayStartMs)
+    .forEach((bucket) => {
+      const isMoving = bucket.movingEvidence || bucket.distanceMeters >= GPS_DAILY_MOVEMENT_PARKED_THRESHOLD_METERS;
+      if (isMoving) {
+        stationaryStartDayMs = null;
+      } else if (!Number.isFinite(stationaryStartDayMs)) {
+        stationaryStartDayMs = bucket.dayStartMs;
+      }
+      const derivedMoved = isMoving ? 'Moving' : 'Parked';
+      const derivedDaysStationary = isMoving
+        ? 0
+        : Math.max(0, Math.floor((bucket.dayStartMs - stationaryStartDayMs) / GPS_HISTORY_DAY_MS));
+
+      bucket.entries.forEach((entry) => {
+        entry.derivedMoved = derivedMoved;
+        entry.derivedDaysStationary = derivedDaysStationary;
+      });
+    });
 
   return ordered;
 };
@@ -560,6 +655,7 @@ const createGpsHistoryManager = ({
   const fetchGpsHistory = async ({ vin, vehicleId } = {}) => {
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
     const normalizedVehicleId = typeof vehicleId === 'string' ? vehicleId.trim() : '';
+    const vinSuffix = getVinSuffix(normalizedVin);
     if (!supabaseClient || (!normalizedVin && !normalizedVehicleId)) {
       return { records: [], error: supabaseClient ? new Error('VIN missing') : new Error('Database unavailable') };
     }
@@ -567,16 +663,18 @@ const createGpsHistoryManager = ({
       await ensureSupabaseSession?.();
       const sourceTable = tableName || 'PT-LastPing';
       const pageSize = 1000;
-      const fetchRecordsByFilter = async (column, value) => {
+      const fetchRecordsByFilter = async ({ column, value, operator = 'eq' } = {}) => {
         const records = [];
         let offset = 0;
         let hasMore = true;
         while (hasMore) {
-          const pageQuery = supabaseClient
+          let pageQuery = supabaseClient
             .from(sourceTable)
             .select('*')
-            .eq(column, value)
             .range(offset, offset + pageSize - 1);
+          pageQuery = operator === 'ilike'
+            ? pageQuery.ilike(column, value)
+            : pageQuery.eq(column, value);
           const { data, error } = await runWithTimeout(
             pageQuery,
             timeoutMs,
@@ -595,12 +693,18 @@ const createGpsHistoryManager = ({
       const lookupFilters = [];
       if (normalizedVehicleId) lookupFilters.push({ column: 'vehicle_id', value: normalizedVehicleId });
       if (normalizedVin) lookupFilters.push({ column: 'VIN', value: normalizedVin });
+      if (vinSuffix.length >= 4) {
+        lookupFilters.push({ column: 'VIN', value: `%${vinSuffix}`, operator: 'ilike' });
+      }
 
       let records = [];
       let lastError = null;
       for (const filter of lookupFilters) {
         try {
-          records = await fetchRecordsByFilter(filter.column, filter.value);
+          records = await fetchRecordsByFilter(filter);
+          if (records.length && filter.operator === 'ilike' && vinSuffix) {
+            records = records.filter((record) => getVinSuffix(record?.VIN ?? record?.vin) === vinSuffix);
+          }
           if (records.length) break;
         } catch (error) {
           lastError = error;
@@ -630,6 +734,7 @@ const createGpsHistoryManager = ({
         if (Number.isNaN(timeB)) return -1;
         return timeB - timeA;
       });
+      records = records.filter((record) => hasValidGpsHistoryCoordinates(record));
       return { records, error: null };
     } catch (error) {
       console.error('Failed to load GPS history:', error);
