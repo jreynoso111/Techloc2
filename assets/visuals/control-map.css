@@ -101,6 +101,11 @@ body {
   border-right: 2px solid rgba(239, 68, 68, 0.9);
 }
 
+.gps-history-serial-toggle.is-blacklisted {
+  border-left: 2px solid rgba(245, 158, 11, 0.95);
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(0, 0, 0, 0.7) 22%);
+}
+
 .gps-history-serial-toggle-main {
   display: inline-flex;
   align-items: center;
@@ -140,6 +145,20 @@ body {
   border: 1px solid rgba(248, 113, 113, 0.75);
   background: rgba(239, 68, 68, 0.18);
   color: #fca5a5;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.gps-history-serial-blacklist-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.8);
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.08em;

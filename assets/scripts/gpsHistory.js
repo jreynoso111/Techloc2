@@ -1028,6 +1028,19 @@ const createGpsHistoryManager = ({
       || toLooseColumnKey(normalizedKey) === 'daysparked'
       || toLooseColumnKey(normalizedKey) === 'daysstationarycalc';
 
+    const getRecordDaysParkedValue = (record = {}) => {
+      if (Number.isFinite(record?.__derivedDaysStationary)) {
+        return record.__derivedDaysStationary;
+      }
+      const match = Object.entries(record || {}).find(([key]) => (
+        isDaysStationaryColumnKey(normalizeColumnKey(key))
+      ));
+      if (!match) return null;
+      const [, rawValue] = match;
+      const parsed = Number.parseInt(`${rawValue ?? ''}`.trim(), 10);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
     const getDisplayValue = (record, key, rawValue) => {
       const normalizedKey = normalizeColumnKey(key);
       if (isMovedColumnKey(normalizedKey) && record?.__derivedMoved) {
@@ -1178,10 +1191,17 @@ const createGpsHistoryManager = ({
         const serialLabel = group.serial === SERIAL_UNASSIGNED ? 'No serial' : group.serial;
         const isWinnerSerial = Boolean(winnerSerial) && group.serial === winnerSerial;
         const hasWirelessAlarm = wirelessAlarmSerials.has(group.serial);
+        const isBlacklistedSerial = group.serial !== SERIAL_UNASSIGNED
+          && serialIsBlacklisted(group.serial, Date.now());
         const expanded = serialSectionState.get(group.serial) === true;
         const hasHistory = group.records.length > 0;
-        const latestLabel = hasHistory ? getDateDisplayFromRecord(group.records[0]) : 'No history';
+        const latestRecord = hasHistory ? group.records[0] : null;
+        const latestLabel = latestRecord ? getDateDisplayFromRecord(latestRecord) : 'No history';
         const oldestLabel = hasHistory ? getDateDisplayFromRecord(group.records[group.records.length - 1]) : 'No history';
+        const latestDaysParked = latestRecord ? getRecordDaysParkedValue(latestRecord) : null;
+        const latestDaysParkedLabel = Number.isFinite(latestDaysParked)
+          ? `${latestDaysParked} parked day${latestDaysParked === 1 ? '' : 's'}`
+          : 'Parked days: —';
         const rowsMarkup = expanded
           ? group.records.map((record) => `
             <tr class="gps-history-record-row" data-gps-serial-row="${safeEscape(group.serial)}">
@@ -1206,15 +1226,16 @@ const createGpsHistoryManager = ({
         return `
           <tr class="gps-history-serial-section-row">
             <td colspan="${colSpan}" class="py-0 pr-0">
-              <button type="button" class="gps-history-serial-toggle${isWinnerSerial ? ' is-winner' : ''}${hasWirelessAlarm ? ' is-alarm' : ''}" data-gps-serial-toggle="${safeEscape(group.serial)}" aria-expanded="${expanded ? 'true' : 'false'}">
+              <button type="button" class="gps-history-serial-toggle${isWinnerSerial ? ' is-winner' : ''}${hasWirelessAlarm ? ' is-alarm' : ''}${isBlacklistedSerial ? ' is-blacklisted' : ''}" data-gps-serial-toggle="${safeEscape(group.serial)}" aria-expanded="${expanded ? 'true' : 'false'}">
                 <span class="gps-history-serial-toggle-main">
                   <span class="gps-history-serial-chevron">${expanded ? '▼' : '▶'}</span>
                   <span class="gps-history-serial-label">Serial: ${safeEscape(serialLabel)}</span>
                   ${isWinnerSerial ? '<span class="gps-history-serial-winner-badge" title="Winner serial" aria-label="Winner serial"></span>' : ''}
+                  ${isBlacklistedSerial ? '<span class="gps-history-serial-blacklist-badge">BLACKLIST</span>' : ''}
                   ${hasWirelessAlarm ? '<span class="gps-history-serial-alarm-badge">ALARM</span>' : ''}
                   ${!hasHistory ? '<span class="gps-history-serial-alarm-badge">NO HISTORY</span>' : ''}
                 </span>
-                <span class="gps-history-serial-stats">${group.records.length} row${group.records.length === 1 ? '' : 's'} · Latest: ${safeEscape(`${latestLabel}`)} · Oldest: ${safeEscape(`${oldestLabel}`)}</span>
+                <span class="gps-history-serial-stats">${group.records.length} row${group.records.length === 1 ? '' : 's'} · Latest: ${safeEscape(`${latestLabel}`)} · ${safeEscape(latestDaysParkedLabel)} · Oldest: ${safeEscape(`${oldestLabel}`)}</span>
               </button>
             </td>
           </tr>

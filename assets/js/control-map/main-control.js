@@ -7711,16 +7711,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         && filtered.some((vehicle) => `${getVehicleKey(vehicle)}` === `${currentPinnedAnchor.vehicleKey}`)
         ? currentPinnedAnchor
         : null;
-      if (!renderAnchor && currentPinnedAnchor?.vehicleKey) {
-        clearPinnedVehicleListCardPosition();
-      }
-      const shouldInsertAnchorSpacer = Boolean(
+      const shouldPinSingleVisibleVehicleToTop = Boolean(
         renderAnchor?.vehicleKey
-        && Number.isFinite(renderAnchor.offsetTop)
-        && renderAnchor.offsetTop > 0
         && filtered.length === 1
         && `${getVehicleKey(filtered[0])}` === `${renderAnchor.vehicleKey}`
       );
+      const normalizedRenderAnchor = shouldPinSingleVisibleVehicleToTop
+        ? {
+          ...renderAnchor,
+          offsetTop: 0
+        }
+        : renderAnchor;
+      if (!renderAnchor && currentPinnedAnchor?.vehicleKey) {
+        clearPinnedVehicleListCardPosition();
+      }
       const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
       document.getElementById('vehicles-count').textContent = filtered.length;
 
@@ -7797,14 +7801,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           }
 
           if (idx >= VEHICLE_RENDER_LIMIT) return;
-
-          if (idx === 0 && shouldInsertAnchorSpacer) {
-            const spacer = document.createElement('div');
-            spacer.setAttribute('aria-hidden', 'true');
-            spacer.style.pointerEvents = 'none';
-            spacer.style.height = `${Math.max(0, Math.round(renderAnchor.offsetTop))}px`;
-            fragment.appendChild(spacer);
-          }
 
           const card = document.createElement('div');
           const prepStatusStyles = getStatusCardStyles(vehicle.invPrepStatus, 'prep');
@@ -8013,7 +8009,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         if (renderAnchor || previousScrollTop !== null) {
           restoreVehicleListAnchor(container, {
-            anchor: renderAnchor,
+            anchor: normalizedRenderAnchor,
             fallbackScrollTop: previousScrollTop
           });
         }
@@ -10258,17 +10254,32 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             }
           });
 
-          syncServiceSearchInputs();
+	          syncServiceSearchInputs();
 
-          setupEventDelegation();
+	          setupEventDelegation();
 
-          let vehicleSearchTimer;
-          document.getElementById('vehicle-search').addEventListener('input', () => {
-            clearTimeout(vehicleSearchTimer);
-            vehicleSearchTimer = setTimeout(() => renderVehicles(), 250);
-          });
+	          let vehicleSearchTimer;
+	          const vehicleSearchInput = document.getElementById('vehicle-search');
+	          const vehicleSearchClearButton = document.getElementById('vehicle-search-clear');
+	          const syncVehicleSearchClearButton = () => {
+	            if (!vehicleSearchClearButton || !vehicleSearchInput) return;
+	            vehicleSearchClearButton.classList.toggle('hidden', !vehicleSearchInput.value.trim());
+	          };
+	          vehicleSearchInput.addEventListener('input', () => {
+	            syncVehicleSearchClearButton();
+	            clearTimeout(vehicleSearchTimer);
+	            vehicleSearchTimer = setTimeout(() => renderVehicles(), 250);
+	          });
+	          vehicleSearchClearButton?.addEventListener('click', () => {
+	            vehicleSearchInput.value = '';
+	            syncVehicleSearchClearButton();
+	            clearTimeout(vehicleSearchTimer);
+	            renderVehicles();
+	            vehicleSearchInput.focus();
+	          });
+	          syncVehicleSearchClearButton();
 
-          document.getElementById('clear-selection')?.addEventListener('click', () => resetSelection());
+	          document.getElementById('clear-selection')?.addEventListener('click', () => resetSelection());
           document.getElementById('vehicle-modal-close')?.addEventListener('click', closeVehicleModal);
           document.getElementById('vehicle-modal-columns-toggle')?.addEventListener('click', () => {
             const panel = document.getElementById('vehicle-modal-columns-panel');
