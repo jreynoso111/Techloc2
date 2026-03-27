@@ -127,6 +127,7 @@ const getRecordSerial = (record = {}) => {
 };
 
 const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+const GPS_HISTORY_NO_PING_THRESHOLD_MS = 2 * GPS_HISTORY_DAY_MS;
 const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
 const GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 25000;
 const GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 1000;
@@ -629,6 +630,7 @@ const createGpsHistoryManager = ({
   timeoutMs = 10000,
   tableName,
   isSerialBlacklisted,
+  getSerialBlacklistEffectiveFromMs,
   escapeHTML,
   formatDateTime
 } = {}) => {
@@ -642,6 +644,17 @@ const createGpsHistoryManager = ({
       return resolveSerialBlacklistState(isSerialBlacklisted, normalized, timestampMs, record);
     } catch (_error) {
       return false;
+    }
+  };
+
+  const getSerialBlacklistSinceMs = (serial = '') => {
+    try {
+      const normalized = normalizeSerial(serial);
+      if (!normalized || typeof getSerialBlacklistEffectiveFromMs !== 'function') return null;
+      const value = getSerialBlacklistEffectiveFromMs(normalized);
+      return Number.isFinite(value) ? value : null;
+    } catch (_error) {
+      return null;
     }
   };
 
@@ -1006,6 +1019,20 @@ const createGpsHistoryManager = ({
       return safeEscape(`${value}`);
     };
 
+    const formatBadgeDate = (value) => {
+      const timeMs = typeof value === 'number' ? value : Date.parse(value);
+      if (!Number.isFinite(timeMs)) return '';
+      try {
+        return new Intl.DateTimeFormat('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        }).format(new Date(timeMs));
+      } catch (_error) {
+        return new Date(timeMs).toISOString().slice(0, 10);
+      }
+    };
+
     const normalizeColumnKey = (key = '') => `${key}`.trim().toLowerCase().replace(/\s+/g, '_');
     const toLooseColumnKey = (normalizedKey = '') => `${normalizedKey}`.replace(/[^a-z0-9_]/g, '');
     const isMovedColumnKey = (normalizedKey = '') => {
@@ -1039,6 +1066,14 @@ const createGpsHistoryManager = ({
       const [, rawValue] = match;
       const parsed = Number.parseInt(`${rawValue ?? ''}`.trim(), 10);
       return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const getRecordMovementDisplay = (record = {}) => {
+      if (record?.__derivedMoved) return `${record.__derivedMoved}`.trim();
+      const parsedState = parseRecordMovementState(record);
+      if (parsedState === 'moving') return 'Moving';
+      if (parsedState === 'stopped') return 'Parked';
+      return '';
     };
 
     const getDisplayValue = (record, key, rawValue) => {
@@ -1193,15 +1228,30 @@ const createGpsHistoryManager = ({
         const hasWirelessAlarm = wirelessAlarmSerials.has(group.serial);
         const isBlacklistedSerial = group.serial !== SERIAL_UNASSIGNED
           && serialIsBlacklisted(group.serial, Date.now());
+        const blacklistSinceMs = isBlacklistedSerial ? getSerialBlacklistSinceMs(group.serial) : null;
         const expanded = serialSectionState.get(group.serial) === true;
         const hasHistory = group.records.length > 0;
         const latestRecord = hasHistory ? group.records[0] : null;
+        const latestTimestampMs = latestRecord ? getRecordTimestampMs(latestRecord) : Number.NEGATIVE_INFINITY;
+        const isNoPingSerial = Number.isFinite(latestTimestampMs)
+          && ((Date.now() - latestTimestampMs) > GPS_HISTORY_NO_PING_THRESHOLD_MS);
         const latestLabel = latestRecord ? getDateDisplayFromRecord(latestRecord) : 'No history';
         const oldestLabel = hasHistory ? getDateDisplayFromRecord(group.records[group.records.length - 1]) : 'No history';
+        const latestMovementDisplay = latestRecord ? getRecordMovementDisplay(latestRecord) : '';
         const latestDaysParked = latestRecord ? getRecordDaysParkedValue(latestRecord) : null;
         const latestDaysParkedLabel = Number.isFinite(latestDaysParked)
           ? `${latestDaysParked} parked day${latestDaysParked === 1 ? '' : 's'}`
           : 'Parked days: —';
+        const centerStatusTone = latestMovementDisplay === 'Parked'
+          ? 'parked'
+          : (latestMovementDisplay === 'Moving' ? 'moving' : 'unknown');
+        const centerStatusLabel = !hasHistory
+          ? 'NO HISTORY'
+          : latestMovementDisplay === 'Parked'
+            ? `PARKED${Number.isFinite(latestDaysParked) ? ` · ${latestDaysParked} DAY${latestDaysParked === 1 ? '' : 'S'}` : ''}`
+            : latestMovementDisplay === 'Moving'
+              ? 'MOVING'
+              : 'STATUS UNKNOWN';
         const rowsMarkup = expanded
           ? group.records.map((record) => `
             <tr class="gps-history-record-row" data-gps-serial-row="${safeEscape(group.serial)}">
@@ -1231,10 +1281,12 @@ const createGpsHistoryManager = ({
                   <span class="gps-history-serial-chevron">${expanded ? '▼' : '▶'}</span>
                   <span class="gps-history-serial-label">Serial: ${safeEscape(serialLabel)}</span>
                   ${isWinnerSerial ? '<span class="gps-history-serial-winner-badge" title="Winner serial" aria-label="Winner serial"></span>' : ''}
-                  ${isBlacklistedSerial ? '<span class="gps-history-serial-blacklist-badge">BLACKLIST</span>' : ''}
+                  ${isBlacklistedSerial ? `<span class="gps-history-serial-blacklist-badge">BLACKLIST${blacklistSinceMs ? ` · ${safeEscape(formatBadgeDate(blacklistSinceMs))}` : ''}</span>` : ''}
+                  ${isNoPingSerial ? '<span class="gps-history-serial-stale-badge">NO PING</span>' : ''}
                   ${hasWirelessAlarm ? '<span class="gps-history-serial-alarm-badge">ALARM</span>' : ''}
                   ${!hasHistory ? '<span class="gps-history-serial-alarm-badge">NO HISTORY</span>' : ''}
                 </span>
+                <span class="gps-history-serial-center-status is-${centerStatusTone}">${safeEscape(centerStatusLabel)}</span>
                 <span class="gps-history-serial-stats">${group.records.length} row${group.records.length === 1 ? '' : 's'} · Latest: ${safeEscape(`${latestLabel}`)} · ${safeEscape(latestDaysParkedLabel)} · Oldest: ${safeEscape(`${oldestLabel}`)}</span>
               </button>
             </td>

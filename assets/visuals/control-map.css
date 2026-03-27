@@ -77,8 +77,8 @@ body {
 
 .gps-history-serial-toggle {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 0.75rem;
   padding: 0.45rem 0.6rem;
@@ -109,6 +109,8 @@ body {
 .gps-history-serial-toggle-main {
   display: inline-flex;
   align-items: center;
+  justify-self: start;
+  flex-wrap: wrap;
   gap: 0.4rem;
   min-width: 0;
 }
@@ -164,12 +166,63 @@ body {
   letter-spacing: 0.08em;
 }
 
+.gps-history-serial-stale-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.7);
+  background: rgba(71, 85, 105, 0.24);
+  color: #cbd5e1;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.gps-history-serial-center-status {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 150px;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(100, 116, 139, 0.75);
+  background: rgba(15, 23, 42, 0.78);
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+.gps-history-serial-center-status.is-parked {
+  border-color: rgba(245, 158, 11, 0.85);
+  background: rgba(245, 158, 11, 0.18);
+  color: #fde68a;
+}
+
+.gps-history-serial-center-status.is-moving {
+  border-color: rgba(34, 197, 94, 0.85);
+  background: rgba(34, 197, 94, 0.18);
+  color: #bbf7d0;
+}
+
+.gps-history-serial-center-status.is-unknown {
+  border-color: rgba(148, 163, 184, 0.7);
+  background: rgba(71, 85, 105, 0.22);
+  color: #cbd5e1;
+}
+
 .gps-history-serial-stats {
+  justify-self: end;
   font-weight: 500;
   color: #94a3b8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: right;
 }
 
 .gps-history-record-row td {
@@ -412,8 +465,8 @@ body.gps-column-resizing {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 0.45rem;
-      min-height: 34px;
+      gap: 0.35rem;
+      min-height: 30px;
     }
 
     .legend-reset-separator {
@@ -497,6 +550,14 @@ body.gps-column-resizing {
         gap: 1.25rem;
       }
 
+      .legend-row-vehicles-primary,
+      .legend-row-vehicles-secondary {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, max-content));
+        justify-content: end;
+        gap: 0.35rem;
+      }
+
       .legend-reset-separator {
         flex: 0 0 auto;
         flex-direction: column;
@@ -539,15 +600,17 @@ body.gps-column-resizing {
     .legend-pill {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 6px 10px;
+      gap: 0.38rem;
+      padding: 5px 8px;
       border-radius: 9999px;
       background: rgba(0, 0, 0, 0.76);
       border: 1px solid rgba(148, 163, 184, 0.25);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
       color: #e2e8f0;
       font-weight: 600;
-      font-size: 11px;
+      font-size: 10px;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .legend-service-icon {

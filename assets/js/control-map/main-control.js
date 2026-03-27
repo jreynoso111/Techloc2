@@ -31,6 +31,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     import { createControlMapApiService } from './services/apiService.js';
     import { startSupabaseKeepAlive } from './services/realtime.js';
     import { createVehicleService } from './services/vehicleService.js';
+    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js';
     import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js';
     import { createLayerToggle } from './utils/layer-toggles.js';
     import { syncVehicleMarkers } from './utils/vehicle-markers.js';
@@ -69,6 +70,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       PARKING_SPOTS_HIDDEN: 'parking-spots-hidden',
       HIDDEN: 'hidden'
     });
+    const MAP_DISTANCE_ROUTE_UPLIFT_MULTIPLIER = 1.25;
     let routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.ALL;
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
@@ -2351,6 +2353,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       isSerialBlacklisted: (serial = '', timestampMs = Date.now()) => (
         isGpsDeviceSerialBlacklistedAt(serial, timestampMs)
       ),
+      getSerialBlacklistEffectiveFromMs: (serial = '') => (
+        getGpsDeviceSerialBlacklistEffectiveFromMs(serial)
+      ),
       escapeHTML,
       formatDateTime
     });
@@ -3404,6 +3409,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const evaluationTimestamp = Number.isFinite(timestampMs) ? timestampMs : Date.now();
       return evaluationTimestamp >= effectiveFromMs;
+    };
+
+    const getGpsDeviceSerialBlacklistEffectiveFromMs = (
+      serial = '',
+      { blacklistBySerial = gpsDeviceBlacklistSerialsCache } = {}
+    ) => {
+      const normalized = normalizeGpsSerial(serial);
+      if (!normalized) return null;
+      if (!(blacklistBySerial instanceof Map)) return null;
+      const effectiveFromMs = blacklistBySerial.get(normalized);
+      return Number.isFinite(effectiveFromMs) ? effectiveFromMs : null;
     };
 
     const getGpsDeviceBlacklistSerials = async ({ force = false } = {}) => {
@@ -6901,7 +6917,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         filteredTechList,
         origin,
         distanceCaches.tech,
-        (tech) => getDistance(origin.lat, origin.lng, tech.lat, tech.lng)
+        (tech) => getMapTravelDistanceMiles(origin, tech)
       );
       const sortedList = origin
         ? techWithDistances.sort((a, b) => a.distance - b.distance)
@@ -6978,8 +6994,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             </div>
           </div>
           <p class="text-[10px] text-slate-500 mt-1">Note: ${escapeHTML(techNoteText)}</p>
+          <div class="mt-2 flex justify-end">
+            <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+          </div>
 
         `;
+
+        card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openServiceModal(tech, 'tech');
+        });
 
         listContainer.appendChild(card);
       });
@@ -7060,6 +7085,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return null;
     };
 
+    const getMapTravelDistanceMiles = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return Number.NaN;
+      const baseMiles = getDistance(fromPoint.lat, fromPoint.lng, toPoint.lat, toPoint.lng);
+      if (!Number.isFinite(baseMiles) || baseMiles < 0) return Number.NaN;
+      return baseMiles * MAP_DISTANCE_ROUTE_UPLIFT_MULTIPLIER;
+    };
+
     const getSelectedService = (type) => selectedServiceByType[type] || null;
 
     const syncServiceSearchInputs = () => {
@@ -7099,7 +7131,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         filteredPartners,
         origin,
         distanceCaches.partners,
-        (partner) => getDistance(origin.lat, origin.lng, partner.lat, partner.lng)
+        (partner) => getMapTravelDistanceMiles(origin, partner)
       );
       const sorted = origin
         ? partnersWithDistances.sort((a, b) => a.distance - b.distance)
@@ -7174,10 +7206,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           card.dataset.type = 'partner';
           card.dataset.partnerType = type;
           const canOpenRepairHistory = isAuthenticatedCached();
-          card.innerHTML = `
-            <div class="flex justify-between items-start gap-3">
-              <div class="min-w-0">
-                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">${badgeLabel}</p>
+	          card.innerHTML = `
+	            <div class="flex justify-between items-start gap-3">
+	              <div class="min-w-0">
+	                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">${badgeLabel}</p>
                 <h3 class="font-bold text-white text-sm break-words leading-tight" title="${partner.company}">${partner.company}</h3>
               </div>
               <div class="text-right text-[11px] text-slate-400 leading-tight">
@@ -7191,11 +7223,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 	              ${origin ? `<div class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation')}<span class="font-semibold text-slate-100">${Math.round(partner.distance)} mi</span></div>` : ''}
 		              <div class="col-span-2 text-[10px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</div>
 	            </div>
+              <div class="mt-2 flex justify-end">
+                <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+              </div>
 
-          `;
+	          `;
 
-        fragment.appendChild(card);
-      });
+          card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openServiceModal(partner, type);
+          });
+
+	        fragment.appendChild(card);
+	      });
 
       if (prioritized.length > cardLimit) {
         const notice = document.createElement('p');
@@ -7238,7 +7279,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const origin = getCurrentOrigin();
       const withDistances = attachDistances(constrainedFiltered, origin, distanceCaches.partners, (partner) => {
         if (!origin) return 0;
-        return getDistance(origin.lat, origin.lng, partner.lat, partner.lng);
+        return getMapTravelDistanceMiles(origin, partner);
       });
       const sorted = origin ? [...withDistances].sort((a, b) => a.distance - b.distance) : [...withDistances];
       const filtered = sorted;
@@ -7265,21 +7306,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         card.dataset.partnerType = 'custom';
 
         const distanceLabel = origin && typeof partner.distance === 'number' ? `${Math.round(partner.distance)} mi` : '';
-        card.innerHTML = `
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-sm font-bold text-white leading-tight">${escapeHTML(partner.company || partner.name || 'Service')}</p>
+	        card.innerHTML = `
+	          <div class="flex items-start justify-between gap-3">
+	            <div class="min-w-0">
+	              <p class="text-sm font-bold text-white leading-tight">${escapeHTML(partner.company || partner.name || 'Service')}</p>
               <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${escapeHTML(locationText)}</span></p>
             </div>
             <div class="text-right text-[11px] text-slate-400 leading-tight space-y-0.5">
               ${partner.phone ? `<a class="font-bold text-blue-200 block" href="tel:${partner.phoneDial || partner.phone}">${partner.phone}</a>` : ''}
               ${distanceLabel ? `<p class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation', 'h-3 w-3')}<span class="font-semibold text-slate-100">${distanceLabel}</span></p>` : ''}
-            </div>
-          </div>
-		          <p class="mt-2 text-[11px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</p>
-	        `;
+	            </div>
+	          </div>
+			          <p class="mt-2 text-[11px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</p>
+              <div class="mt-2 flex justify-end">
+                <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+              </div>
+		        `;
 
-        fragment.appendChild(card);
+        card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openServiceModal(partner, 'custom');
+        });
+
+	        fragment.appendChild(card);
 
         if (markersAllowed && map && meta?.layer) {
           if (!map.hasLayer(meta.layer)) {
@@ -8131,7 +8181,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .filter(hasValidCoords)
         .map(v => ({
           vehicle: v,
-          distance: getDistance(v.lat, v.lng, tech.lat, tech.lng)
+          distance: getMapTravelDistanceMiles(v, tech)
         }));
       return withDistance
         .filter(item => item.distance <= 180)
@@ -8664,7 +8714,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const sorted = origin
         ? baseList
-            .map(t => ({ ...t, distance: getDistance(origin.lat, origin.lng, t.lat, t.lng) }))
+            .map(t => ({ ...t, distance: getMapTravelDistanceMiles(origin, t) }))
             .sort((a, b) => a.distance - b.distance)
         : [...baseList];
 
@@ -9234,6 +9284,168 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       partnerType: 'repair'
     });
 
+    const SERVICE_MODAL_FIELD_RESOLVERS = {
+      company_name: (service) => service?.company || service?.name || '',
+      company: (service) => service?.company || service?.name || '',
+      contact: (service) => service?.contact || '',
+      contact_name: (service) => service?.contact || '',
+      phone: (service) => service?.phone || '',
+      email: (service) => service?.email || '',
+      city: (service) => service?.city || '',
+      state: (service) => service?.state || '',
+      region: (service) => service?.region || '',
+      zip: (service) => service?.zip || service?.zipcode || '',
+      zipcode: (service) => service?.zipcode || service?.zip || '',
+      postal_code: (service) => service?.zipcode || service?.zip || '',
+      availability: (service) => service?.availability || '',
+      authorization: (service) => service?.authorization || '',
+      notes: (service) => service?.notes || service?.note || '',
+      note: (service) => service?.note || service?.notes || '',
+      lat: (service) => service?.lat,
+      lng: (service) => service?.lng,
+      long: (service) => service?.lng,
+      longitude: (service) => service?.lng,
+      latitude: (service) => service?.lat
+    };
+
+    const normalizeServiceModalHeader = (value = '') => `${value}`.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const getServiceTypeDisplayLabel = (type = '') => {
+      if (type === 'tech') return 'Technician';
+      if (type === 'reseller') return 'Reseller';
+      if (type === 'repair') return 'Repair shop';
+      if (type === 'custom') return 'Service';
+      return 'Service';
+    };
+
+    const getServiceModalFallbackHeaders = (service = {}) => {
+      const detailKeys = Object.keys(service?.details || {});
+      const seen = new Set(detailKeys.map((key) => normalizeServiceModalHeader(key)));
+      return Object.keys(SERVICE_MODAL_FIELD_RESOLVERS).filter((key) => {
+        if (seen.has(normalizeServiceModalHeader(key))) return false;
+        const value = SERVICE_MODAL_FIELD_RESOLVERS[key]?.(service);
+        return value !== null && value !== undefined && `${value}`.trim() !== '';
+      });
+    };
+
+    const getServiceModalValue = (service = {}, header = '') => {
+      const details = service?.details || {};
+      if (details[header] !== undefined && details[header] !== null && `${details[header]}` !== '') {
+        return details[header];
+      }
+      const resolver = SERVICE_MODAL_FIELD_RESOLVERS[header];
+      if (typeof resolver === 'function') {
+        const value = resolver(service);
+        if (value !== undefined && value !== null && `${value}` !== '') return value;
+      }
+      if (service?.[header] !== undefined && service?.[header] !== null && `${service[header]}` !== '') {
+        return service[header];
+      }
+      const lowerHeader = `${header}`.toLowerCase();
+      if (service?.[lowerHeader] !== undefined && service?.[lowerHeader] !== null && `${service[lowerHeader]}` !== '') {
+        return service[lowerHeader];
+      }
+      return '—';
+    };
+
+    const formatServiceModalValue = (header = '', value = null) => {
+      if (value === null || value === undefined || value === '') return '—';
+      const normalizedHeader = `${header}`.toLowerCase();
+      if ((normalizedHeader.includes('date') || normalizedHeader.includes('time')) && !Number.isNaN(Date.parse(`${value}`))) {
+        return escapeHTML(`${formatDateTime(new Date(Date.parse(`${value}`)).toISOString())}`);
+      }
+      if (typeof value === 'object') {
+        return escapeHTML(JSON.stringify(value));
+      }
+      return escapeHTML(`${value}`);
+    };
+
+    function attachServiceModalRowDrag() {
+      const modal = document.getElementById('service-modal');
+      if (!modal) return;
+      const rows = modal.querySelectorAll('tr[data-service-header]');
+      let draggedRow = null;
+
+      rows.forEach((row) => {
+        row.addEventListener('dragstart', (event) => {
+          draggedRow = row;
+          row.classList.add('opacity-50');
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', row.dataset.serviceHeader || '');
+        });
+
+        row.addEventListener('dragend', () => {
+          row.classList.remove('opacity-50');
+          draggedRow = null;
+        });
+
+        row.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        });
+
+        row.addEventListener('drop', (event) => {
+          event.preventDefault();
+          if (!draggedRow || draggedRow === row) return;
+          const tbody = row.parentElement;
+          if (!tbody) return;
+          const rowList = [...tbody.querySelectorAll('tr[data-service-header]')];
+          const draggedIndex = rowList.indexOf(draggedRow);
+          const targetIndex = rowList.indexOf(row);
+          if (draggedIndex < targetIndex) {
+            tbody.insertBefore(draggedRow, row.nextSibling);
+          } else {
+            tbody.insertBefore(draggedRow, row);
+          }
+          const prefs = loadServiceModalPrefs();
+          prefs.order = [...tbody.querySelectorAll('tr[data-service-header]')].map((entry) => entry.dataset.serviceHeader);
+          saveServiceModalPrefs(prefs);
+        });
+      });
+    }
+
+    function openServiceModal(service, type = 'service') {
+      const modal = document.getElementById('service-modal');
+      const title = document.getElementById('service-modal-title');
+      const subtitle = document.getElementById('service-modal-subtitle');
+      const body = document.getElementById('service-modal-body');
+      const columnsPanel = document.getElementById('service-modal-columns-panel');
+      if (!modal || !title || !subtitle || !body) return;
+
+      const detailRecord = service?.details || {};
+      const fallbackHeaders = getServiceModalFallbackHeaders(service);
+      const { headers, hidden } = getServiceModalHeaders(detailRecord, fallbackHeaders);
+      const serviceTypeLabel = getServiceTypeDisplayLabel(type);
+      const locationText = formatPartnerLocation(service) || 'US';
+
+      title.textContent = service?.company || service?.name || serviceTypeLabel;
+      subtitle.textContent = `${serviceTypeLabel} • ${locationText}${service?.phone ? ` • ${service.phone}` : ''}`;
+      columnsPanel?.classList.add('hidden');
+
+      const detailRows = headers.map((header) => {
+        const displayHeader = SERVICE_HEADER_LABELS[header] || `${header}`.replace(/_/g, ' ');
+        const value = getServiceModalValue(service, header);
+        const safeHeader = escapeHTML(header);
+        return `
+          <tr class="border-b border-slate-800/80 ${hidden.has(header) ? 'hidden' : ''}" draggable="true" data-service-header="${safeHeader}">
+            <th class="text-left text-xs font-semibold text-slate-300 py-2 pr-3">
+              <span class="inline-flex items-center gap-2">
+                <span class="text-slate-600 text-sm">⋮⋮</span>
+                ${escapeHTML(displayHeader)}
+              </span>
+            </th>
+            <td class="text-xs text-slate-100 py-2 break-words">${formatServiceModalValue(header, value)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      body.innerHTML = `<table class="w-full text-left"><tbody>${detailRows}</tbody></table>`;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      renderServiceModalColumnsList(headers, hidden);
+      attachServiceModalRowDrag();
+    }
+
     function openVehicleModal(vehicle) {
       const modal = document.getElementById('vehicle-modal');
       const title = document.getElementById('vehicle-modal-title');
@@ -9752,6 +9964,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       panel?.classList.add('hidden');
     }
 
+    function closeServiceModal() {
+      const modal = document.getElementById('service-modal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      const panel = document.getElementById('service-modal-columns-panel');
+      panel?.classList.add('hidden');
+    }
+
     function getPartnerListByType(type) {
       if (type === 'reseller') return resellers;
       if (type === 'repair') return repairShops;
@@ -9789,7 +10010,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       let nearest = null;
       let bestDist = Infinity;
       list.forEach(item => {
-        const dist = getDistance(point.lat, point.lng, item.lat, item.lng);
+        const dist = getMapTravelDistanceMiles(point, item);
         if (dist < bestDist) {
           bestDist = dist;
           nearest = item;
@@ -9877,7 +10098,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           map.flyTo([chosen.lat, chosen.lng], 15, { duration: 1.2 });
         });
 
-        const distance = getDistance(origin.lat, origin.lng, chosen.lat, chosen.lng);
+        const distance = getMapTravelDistanceMiles(origin, chosen);
         addLabeledConnection(
           serviceConnectionLayer,
           origin,
@@ -9897,7 +10118,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const baseColor = SERVICE_COLORS[type] || '#818cf8';
       const color = getPartnerColor(target, baseColor);
       connectionLayer.clearLayers();
-      const miles = getDistance(origin.lat, origin.lng, target.lat, target.lng);
+      const miles = getMapTravelDistanceMiles(origin, target);
       addLabeledConnection(
         connectionLayer,
         origin,
@@ -10286,11 +10507,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             if (!panel) return;
             panel.classList.toggle('hidden');
           });
-          document.getElementById('vehicle-modal')?.addEventListener('click', (e) => {
-            if (e.target.id === 'vehicle-modal') closeVehicleModal();
+	          document.getElementById('vehicle-modal')?.addEventListener('click', (e) => {
+	            if (e.target.id === 'vehicle-modal') closeVehicleModal();
+	          });
+          document.getElementById('service-modal-close')?.addEventListener('click', closeServiceModal);
+          document.getElementById('service-modal-columns-toggle')?.addEventListener('click', () => {
+            const panel = document.getElementById('service-modal-columns-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+          });
+          document.getElementById('service-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'service-modal') closeServiceModal();
           });
 
-          const refreshVehicles = debounceAsync(async () => {
+	          const refreshVehicles = debounceAsync(async () => {
             await loadVehicles({ force: true, silent: true });
             lastDataSyncRefreshAt = Date.now();
           }, 600);

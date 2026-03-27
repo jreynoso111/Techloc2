@@ -1840,12 +1840,126 @@
         return `${serialVal}__${readDay}__${dayHalf}`;
       };
 
+      const PT_STATIONARY_COORDINATE_THRESHOLD_METERS = 120;
+
+      const getPtPointDistanceMeters = (fromPoint, toPoint) => {
+        if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
+        const fromLat = toNumber(fromPoint?.lat);
+        const fromLng = toNumber(fromPoint?.lng);
+        const toLat = toNumber(toPoint?.lat);
+        const toLng = toNumber(toPoint?.lng);
+        if (!Number.isFinite(fromLat) || !Number.isFinite(fromLng) || !Number.isFinite(toLat) || !Number.isFinite(toLng)) {
+          return Number.POSITIVE_INFINITY;
+        }
+        const toRadians = (value) => value * (Math.PI / 180);
+        const earthRadiusMeters = 6371000;
+        const deltaLat = toRadians(toLat - fromLat);
+        const deltaLng = toRadians(toLng - fromLng);
+        const lat1 = toRadians(fromLat);
+        const lat2 = toRadians(toLat);
+        const a = (Math.sin(deltaLat / 2) ** 2)
+          + (Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2));
+        const boundedA = Math.min(1, Math.max(0, a));
+        const c = 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+        return earthRadiusMeters * c;
+      };
+
+      const parsePtRowMovingState = (row = {}) => {
+        const candidates = [
+          row?.moved,
+          row?.Moved,
+          row?.moving,
+          row?.Moving,
+          row?.moving_calc,
+          row?.['Moving (Calc)'],
+          row?.['GPS Moving'],
+          row?.gps_moving
+        ];
+        for (const candidate of candidates) {
+          if (candidate === null || candidate === undefined) continue;
+          const raw = `${candidate}`.trim();
+          if (!raw) continue;
+          const numeric = Number.parseInt(raw, 10);
+          if (Number.isFinite(numeric)) {
+            if (numeric === 1) return 'moving';
+            if (numeric === 0 || numeric === -1) return 'stopped';
+          }
+          const normalized = raw.toLowerCase();
+          if (['moving', 'move', 'true', 'yes'].includes(normalized)) return 'moving';
+          if (['stopped', 'not moving', 'stop', 'false', 'no', 'parked'].includes(normalized)) return 'stopped';
+        }
+        return 'unknown';
+      };
+
+      const isStationaryPtDayGroup = (entries = []) => {
+        if (!Array.isArray(entries) || entries.length <= 1) return true;
+        const normalizedEntries = entries
+          .map((entry) => ({
+            ...entry,
+            timestamp: Date.parse(entry?.row?.['Date'] || ''),
+            lat: toNumber(entry?.row?.['Lat'] ?? entry?.row?.Lat ?? entry?.row?.lat),
+            lng: toNumber(entry?.row?.['Long'] ?? entry?.row?.Long ?? entry?.row?.long ?? entry?.row?.lng),
+            movementState: parsePtRowMovingState(entry?.row)
+          }))
+          .sort((a, b) => {
+            const timeA = Number.isFinite(a.timestamp) ? a.timestamp : Number.NEGATIVE_INFINITY;
+            const timeB = Number.isFinite(b.timestamp) ? b.timestamp : Number.NEGATIVE_INFINITY;
+            return timeA - timeB;
+          });
+
+        if (normalizedEntries.some((entry) => entry.movementState === 'moving')) return false;
+
+        const firstWithCoords = normalizedEntries.find((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lng));
+        if (!firstWithCoords) {
+          return !normalizedEntries.some((entry) => entry.movementState === 'unknown');
+        }
+
+        return normalizedEntries.every((entry) => {
+          if (!Number.isFinite(entry.lat) || !Number.isFinite(entry.lng)) return true;
+          const distanceMeters = getPtPointDistanceMeters(firstWithCoords, entry);
+          return Number.isFinite(distanceMeters) && distanceMeters <= PT_STATIONARY_COORDINATE_THRESHOLD_METERS;
+        });
+      };
+
       const deduplicateValidRows = (rowsToDedup) => {
+        const entriesBySerialDay = new Map();
+        rowsToDedup.forEach((entry) => {
+          const serialVal = `${entry?.row?.['Serial'] || ''}`.trim();
+          if (!serialVal || !entry?.readDay) return;
+          const bucketKey = `${serialVal}__${entry.readDay}`;
+          const bucket = entriesBySerialDay.get(bucketKey) || [];
+          bucket.push(entry);
+          entriesBySerialDay.set(bucketKey, bucket);
+        });
+
         const latestByKey = new Map();
+        const latestByStationaryDay = new Map();
+        const stationaryStateByDay = new Map();
 
         rowsToDedup.forEach(({ row, readDay, dayHalf }, index) => {
           const serialVal = row?.['Serial'];
           const dateVal = row?.['Date'];
+          const stationaryDayKey = `${serialVal || ''}__${readDay || ''}`;
+          const dayEntries = entriesBySerialDay.get(stationaryDayKey) || [];
+          const isStationaryDay = stationaryStateByDay.has(stationaryDayKey)
+            ? stationaryStateByDay.get(stationaryDayKey)
+            : isStationaryPtDayGroup(dayEntries);
+          stationaryStateByDay.set(stationaryDayKey, isStationaryDay);
+          if (serialVal && readDay && isStationaryDay) {
+            const currentTime = new Date(dateVal).getTime();
+            const existing = latestByStationaryDay.get(stationaryDayKey);
+            if (existing) {
+              aggregated.skippedDeduplication += 1;
+              const existingTime = new Date(existing.row?.['Date']).getTime();
+              if (!Number.isNaN(currentTime) && (Number.isNaN(existingTime) || currentTime >= existingTime)) {
+                latestByStationaryDay.set(stationaryDayKey, { row, index });
+              }
+            } else {
+              latestByStationaryDay.set(stationaryDayKey, { row, index });
+            }
+            return;
+          }
+
           const key = buildPtPingDedupKey(serialVal, dateVal) || `${serialVal}__${readDay}__${dayHalf}`;
           const currentTime = new Date(dateVal).getTime();
           const existing = latestByKey.get(key);
@@ -1860,7 +1974,10 @@
           latestByKey.set(key, { row, index });
         });
 
-        return Array.from(latestByKey.values())
+        return Array.from([
+          ...latestByKey.values(),
+          ...latestByStationaryDay.values()
+        ])
           .sort((a, b) => a.index - b.index)
           .map((entry) => entry.row);
       };
