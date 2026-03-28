@@ -1,5 +1,4 @@
 import { logAdminEvent } from './adminAudit.js';
-import { getWebAdminSession } from './web-admin-session.js';
 
 const ACTIVITY_TABLE = 'web_activity';
 const MAX_LABEL_LENGTH = 90;
@@ -17,11 +16,10 @@ const shouldSkipEvent = (key) => {
 };
 
 const resolveProfile = () => {
-  const localAdminSession = getWebAdminSession();
   return {
-    email: localAdminSession?.email || null,
-    role: String(document.body?.dataset.userRole || window.currentUserRole || localAdminSession?.role || 'guest').toLowerCase(),
-    status: String(document.body?.dataset.userStatus || window.currentUserStatus || localAdminSession?.status || 'unknown').toLowerCase(),
+    email: null,
+    role: String(document.body?.dataset.userRole || window.currentUserRole || 'guest').toLowerCase(),
+    status: String(document.body?.dataset.userStatus || window.currentUserStatus || 'unknown').toLowerCase(),
     pagePath: window.location.pathname || '/',
   };
 };

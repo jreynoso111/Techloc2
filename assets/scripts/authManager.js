@@ -122,10 +122,10 @@ import {
   };
 
   const resolveFallbackProfileForSession = (session) => {
-    const sessionRole = session?.user?.app_metadata?.role || session?.user?.user_metadata?.role || null;
-    const sessionStatus = session?.user?.app_metadata?.status || session?.user?.user_metadata?.status || null;
-    const fallbackRole = normalizeAccessValue(window.currentUserRole || sessionRole, 'user');
-    const fallbackStatus = normalizeAccessValue(window.currentUserStatus || sessionStatus, 'active');
+    const sessionRole = session?.user?.app_metadata?.role || null;
+    const sessionStatus = session?.user?.app_metadata?.status || null;
+    const fallbackRole = normalizeAccessValue(sessionRole, 'user');
+    const fallbackStatus = normalizeAccessValue(sessionStatus, 'active');
     return {
       role: fallbackRole,
       status: fallbackStatus,
@@ -381,8 +381,8 @@ import {
 
     if (hasSession && session.user) {
       const fallbackProfile = resolveFallbackProfileForSession(session);
-      userRole = normalizeAccessValue(window.currentUserRole || fallbackProfile.role, 'user');
-      userStatus = normalizeAccessValue(window.currentUserStatus || fallbackProfile.status, 'active');
+      userRole = normalizeAccessValue(fallbackProfile.role, 'user');
+      userStatus = normalizeAccessValue(fallbackProfile.status, 'active');
       updateHeaderAccount(session, fallbackProfile.email);
     } else {
       updateHeaderAccount(null);

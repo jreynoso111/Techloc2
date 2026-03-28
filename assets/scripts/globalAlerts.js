@@ -35,6 +35,22 @@ const ensureRoot = () => {
   return root;
 };
 
+const makeElement = (tag, { text = null, style = {}, attrs = {}, open = false } = {}) => {
+  const element = document.createElement(tag);
+  Object.entries(style).forEach(([key, value]) => {
+    element.style[key] = value;
+  });
+  Object.entries(attrs).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    element.setAttribute(key, String(value));
+  });
+  if (open && tag.toLowerCase() === 'details') {
+    element.open = true;
+  }
+  if (text !== null) element.textContent = text;
+  return element;
+};
+
 const buildCard = ({ title, message, details = '', level = 'error' }) => {
   const card = document.createElement('article');
   const accent = level === 'warn' ? '#f59e0b' : '#ef4444';
@@ -54,19 +70,85 @@ const buildCard = ({ title, message, details = '', level = 'error' }) => {
   const safeMessage = toText(message || 'Unknown issue');
   const safeDetails = toText(details);
 
-  card.innerHTML = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-      <div style="min-width:0;">
-        <div style="font-weight:800;letter-spacing:0.02em;color:${accent};">${safeTitle}</div>
-        <div style="margin-top:4px;color:#f8fafc;word-break:break-word;">${safeMessage}</div>
-        ${safeDetails ? `<details style="margin-top:6px;"><summary style="cursor:pointer;color:#93c5fd;">Details</summary><pre style="white-space:pre-wrap;margin:6px 0 0;color:#cbd5e1;max-height:180px;overflow:auto;">${safeDetails}</pre></details>` : ''}
-        <div style="margin-top:6px;color:#94a3b8;font-size:11px;">${stamp}</div>
-      </div>
-      <button type="button" aria-label="Dismiss alert" style="border:1px solid #334155;background:#050505;color:#e2e8f0;border-radius:999px;padding:2px 8px;cursor:pointer;">x</button>
-    </div>
-  `;
+  const layout = makeElement('div', {
+    style: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: '8px',
+    },
+  });
+  const content = makeElement('div', { style: { minWidth: '0' } });
+  const titleEl = makeElement('div', {
+    text: safeTitle,
+    style: {
+      fontWeight: '800',
+      letterSpacing: '0.02em',
+      color: accent,
+    },
+  });
+  const messageEl = makeElement('div', {
+    text: safeMessage,
+    style: {
+      marginTop: '4px',
+      color: '#f8fafc',
+      wordBreak: 'break-word',
+    },
+  });
+  const stampEl = makeElement('div', {
+    text: stamp,
+    style: {
+      marginTop: '6px',
+      color: '#94a3b8',
+      fontSize: '11px',
+    },
+  });
+  content.append(titleEl, messageEl);
 
-  card.querySelector('button')?.addEventListener('click', () => card.remove());
+  if (safeDetails) {
+    const detailsEl = makeElement('details', { style: { marginTop: '6px' } });
+    const summaryEl = makeElement('summary', {
+      text: 'Details',
+      style: {
+        cursor: 'pointer',
+        color: '#93c5fd',
+      },
+    });
+    const preEl = makeElement('pre', {
+      text: safeDetails,
+      style: {
+        whiteSpace: 'pre-wrap',
+        margin: '6px 0 0',
+        color: '#cbd5e1',
+        maxHeight: '180px',
+        overflow: 'auto',
+      },
+    });
+    detailsEl.append(summaryEl, preEl);
+    content.appendChild(detailsEl);
+  }
+
+  content.appendChild(stampEl);
+
+  const dismissButton = makeElement('button', {
+    text: 'x',
+    attrs: {
+      type: 'button',
+      'aria-label': 'Dismiss alert',
+    },
+    style: {
+      border: '1px solid #334155',
+      background: '#050505',
+      color: '#e2e8f0',
+      borderRadius: '999px',
+      padding: '2px 8px',
+      cursor: 'pointer',
+    },
+  });
+  dismissButton.addEventListener('click', () => card.remove());
+
+  layout.append(content, dismissButton);
+  card.appendChild(layout);
   return card;
 };
 

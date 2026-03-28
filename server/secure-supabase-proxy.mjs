@@ -15,6 +15,7 @@ const SUPABASE_SERVICE_ROLE_KEY = String(process.env.SUPABASE_SERVICE_ROLE_KEY |
 const SUPABASE_ANON_KEY = String(
   process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || ''
 ).trim();
+const APP_ORIGIN = String(process.env.APP_ORIGIN || `http://127.0.0.1:${PORT}`).trim().replace(/\/+$/, '');
 const SUPABASE_PROJECT_REF = 'lnfmogsjvdkqgwprlmtn';
 
 const REPAIR_HISTORY_TABLE = 'repair_history';
@@ -252,7 +253,20 @@ const validateConfig = () => {
       `Blocked SUPABASE_ANON_KEY ref: ${anonRef}. Expected ${SUPABASE_PROJECT_REF}.`
     );
   }
+
+  let appOriginUrl = null;
+  try {
+    appOriginUrl = new URL(APP_ORIGIN);
+  } catch (_error) {
+    throw new Error(`Invalid APP_ORIGIN: ${APP_ORIGIN}`);
+  }
+  if (!['http:', 'https:'].includes(appOriginUrl.protocol)) {
+    throw new Error(`Blocked APP_ORIGIN protocol: ${appOriginUrl.protocol}`);
+  }
 };
+
+const buildResetPasswordRedirect = () =>
+  new URL('/pages/reset-password.html', `${APP_ORIGIN}/`).toString();
 
 const getUserFromAccessToken = async (token) => {
   if (!token) return null;
@@ -371,11 +385,7 @@ const requireActiveAdministrator = async (req, res) => {
   return { user, profile };
 };
 
-const resolveUserEmailForReset = async ({ userId, email }) => {
-  if (email) {
-    return String(email).trim().toLowerCase();
-  }
-
+const resolveUserEmailForReset = async ({ userId }) => {
   if (userId) {
     const response = await supabaseRequest(
       `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=email&limit=1`
@@ -410,13 +420,20 @@ const handleAdminApi = async (req, res, pathname) => {
   }
 
   const targetUserId = String(body?.userId || '').trim();
-  const targetEmailRaw = String(body?.email || '').trim();
   let targetEmail = '';
+
+  if (!targetUserId) {
+    json(res, 400, {
+      error: {
+        message: 'Target userId is required.',
+      },
+    });
+    return;
+  }
 
   try {
     targetEmail = await resolveUserEmailForReset({
       userId: targetUserId,
-      email: targetEmailRaw,
     });
   } catch (error) {
     json(res, 400, { error: { message: error?.message || 'Invalid target account.' } });
@@ -432,7 +449,7 @@ const handleAdminApi = async (req, res, pathname) => {
     return;
   }
 
-  const redirectTo = new URL('/pages/reset-password.html', `http://${req.headers.host || '127.0.0.1'}`).toString();
+  const redirectTo = buildResetPasswordRedirect();
 
   const response = await supabaseRequest('/auth/v1/admin/generate_link', {
     method: 'POST',
@@ -630,7 +647,7 @@ const start = () => {
 
   const server = createServer(async (req, res) => {
     try {
-      const url = new URL(req.url || '/', `http://${req.headers.host || '127.0.0.1'}`);
+      const url = new URL(req.url || '/', `${APP_ORIGIN}/`);
       const { pathname, searchParams } = url;
 
       if (pathname === '/api/health') {

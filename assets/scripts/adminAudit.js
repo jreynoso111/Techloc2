@@ -1,5 +1,4 @@
 import { supabase as sharedSupabase } from '../js/supabaseClient.js';
-import { getWebAdminSession } from './web-admin-session.js';
 
 const CHANGE_LOG_TABLE = 'admin_change_log';
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -36,12 +35,6 @@ const resolveActor = async (client, explicitActor) => {
       }
     }
 
-    const localAdminSession = getWebAdminSession();
-    if (localAdminSession?.email) {
-      cachedActor = { value: localAdminSession.email, expiresAt: now() + CACHE_TTL_MS };
-      return localAdminSession.email;
-    }
-
     if (client?.auth && typeof client.auth.getSession === 'function') {
       const { data } = await client.auth.getSession();
       const actor = data?.session?.user?.email || data?.session?.user?.id || 'anon';
@@ -55,10 +48,9 @@ const resolveActor = async (client, explicitActor) => {
 };
 
 const resolveProfile = () => {
-  const localAdminSession = getWebAdminSession();
-  const role = document.body?.dataset.userRole || window.currentUserRole || localAdminSession?.role || 'guest';
-  const status = document.body?.dataset.userStatus || window.currentUserStatus || localAdminSession?.status || 'unknown';
-  const email = localAdminSession?.email || null;
+  const role = document.body?.dataset.userRole || window.currentUserRole || 'guest';
+  const status = document.body?.dataset.userStatus || window.currentUserStatus || 'unknown';
+  const email = null;
 
   return {
     email,

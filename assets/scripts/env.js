@@ -1,5 +1,3 @@
-const DEFAULT_SUPABASE_URL = 'https://lnfmogsjvdkqgwprlmtn.supabase.co';
-const DEFAULT_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_HhPw8JLinAfDtUNWXnQg8Q_KhXvprNM';
 const DEFAULT_SUPABASE_PROJECT_REF = 'lnfmogsjvdkqgwprlmtn';
 
 const getRuntimeConfig = () => {
@@ -20,8 +18,8 @@ const getRuntimeConfig = () => {
     : null;
 
   return {
-    supabaseUrl: browserConfig?.supabaseUrl || nodeConfig?.supabaseUrl || DEFAULT_SUPABASE_URL,
-    supabaseAnonKey: browserConfig?.supabaseAnonKey || nodeConfig?.supabaseAnonKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+    supabaseUrl: browserConfig?.supabaseUrl || nodeConfig?.supabaseUrl || '',
+    supabaseAnonKey: browserConfig?.supabaseAnonKey || nodeConfig?.supabaseAnonKey || '',
     supabaseProjectRef: browserConfig?.supabaseProjectRef || nodeConfig?.supabaseProjectRef || DEFAULT_SUPABASE_PROJECT_REF
   };
 };
