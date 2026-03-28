@@ -91,6 +91,13 @@ const setFeedback = (message, tone = 'neutral') => {
 
 const normalizeColumnName = (value) => String(value || '').trim().toLowerCase();
 const normalizeRole = (value) => String(value || '').trim().toLowerCase();
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 const toText = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
@@ -304,7 +311,7 @@ const getFilteredRows = () => {
 
 const renderColumnSelectors = () => {
   const options = state.visibleColumns
-    .map((col) => `<option value="${col}">${col}</option>`)
+    .map((col) => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`)
     .join('');
 
   if (els.sortColumn) {
@@ -320,11 +327,11 @@ const renderColumnSelectors = () => {
 
 const formatCell = (columnName, value) => {
   if (value === null || value === undefined || value === '') return '—';
-  if (isAddedAtColumn(columnName)) return formatAddedAt(value);
-  if (isEffectiveFromColumn(columnName)) return formatEffectiveFromDate(value);
-  if (typeof value === 'object') return JSON.stringify(value);
+  if (isAddedAtColumn(columnName)) return escapeHtml(formatAddedAt(value));
+  if (isEffectiveFromColumn(columnName)) return escapeHtml(formatEffectiveFromDate(value));
+  if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
   const valueText = String(value);
-  return valueText.length > 80 ? `${valueText.slice(0, 77)}...` : valueText;
+  return escapeHtml(valueText.length > 80 ? `${valueText.slice(0, 77)}...` : valueText);
 };
 
 const renderHeader = () => {
@@ -332,7 +339,7 @@ const renderHeader = () => {
   const headers = state.visibleColumns
     .map(
       (col) =>
-        `<th class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-300">${col.toUpperCase()}</th>`,
+        `<th class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-300">${escapeHtml(col.toUpperCase())}</th>`,
     )
     .join('');
   els.headRow.innerHTML = `${headers}<th class="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-300">ACCIONES</th>`;
@@ -353,7 +360,7 @@ const renderTable = () => {
     .map((row) => {
       const rowKey = state.primaryKey ? row[state.primaryKey] : '';
       const cells = state.visibleColumns
-        .map((col) => `<td class="max-w-[260px] truncate px-3 py-2 text-slate-200" title="${String(row[col] ?? '')}">${formatCell(col, row[col])}</td>`)
+        .map((col) => `<td class="max-w-[260px] truncate px-3 py-2 text-slate-200" title="${escapeHtml(String(row[col] ?? ''))}">${formatCell(col, row[col])}</td>`)
         .join('');
 
       return `
@@ -361,8 +368,8 @@ const renderTable = () => {
           ${cells}
           <td class="px-3 py-2">
             <div class="flex justify-end gap-2">
-              <button type="button" title="Edit" data-edit="${String(rowKey ?? '')}" class="h-7 w-7 rounded-md border border-blue-700/60 text-sm text-blue-200 hover:bg-blue-600/20">✎</button>
-              <button type="button" title="Delete" data-delete="${String(rowKey ?? '')}" class="h-7 w-7 rounded-md border border-red-700/60 text-sm text-red-200 hover:bg-red-600/20">🗑</button>
+              <button type="button" title="Edit" data-edit="${escapeHtml(String(rowKey ?? ''))}" class="h-7 w-7 rounded-md border border-blue-700/60 text-sm text-blue-200 hover:bg-blue-600/20">✎</button>
+              <button type="button" title="Delete" data-delete="${escapeHtml(String(rowKey ?? ''))}" class="h-7 w-7 rounded-md border border-red-700/60 text-sm text-red-200 hover:bg-red-600/20">🗑</button>
             </div>
           </td>
         </tr>

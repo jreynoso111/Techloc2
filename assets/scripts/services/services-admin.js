@@ -100,16 +100,12 @@ const applySessionState = async (session) => {
   if (session?.user?.id) {
     state.currentUserId = session.user.id;
     state.currentUserEmail = session.user.email || '';
-    if (window.currentUserRole) {
-      state.currentUserRole = window.currentUserRole;
-    } else {
-      const { data: profile } = await supabaseClient
-        .from('profiles')
-        .select('role')
-        .eq('id', session.user.id)
-        .single();
-      state.currentUserRole = profile?.role || 'user';
-    }
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single();
+    state.currentUserRole = profile?.role || 'user';
   } else {
     state.currentUserRole = 'anon';
     state.currentUserId = 'anon';

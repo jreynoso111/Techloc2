@@ -407,8 +407,33 @@
 
     const ADMIN_ROLE = 'administrator';
     const CHANGE_LOG_TABLE = 'admin_change_log';
+    let hasVerifiedAdminAccess = false;
 
     const actor = { id: 'anon', email: '' };
+    const isAdminUser = () => hasVerifiedAdminAccess;
+    const refreshAdminAccess = async () => {
+      if (!supabaseClient?.auth?.getSession || !supabaseClient?.from) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      hasVerifiedAdminAccess = !profileError && String(profile?.role || '').toLowerCase() === ADMIN_ROLE;
+      return hasVerifiedAdminAccess;
+    };
 
     const normalizeHeader = (header = '') => {
       const aliases = {
@@ -1088,8 +1113,6 @@
 
 
 
-    const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
-
     const ALLOWED_VEHICLE_STATUSES = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
 
     const normalizeVehicleStatus = (value = '') => String(value).trim().toUpperCase();
@@ -1158,7 +1181,7 @@
 
       if (!supabaseClient) throw new Error('Database client is not available.');
 
-      if (!isAdminUser()) throw new Error('Only administrators can upload vehicle data.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload vehicle data.');
 
       updateUploadProgress(5, 'Reading CSV');
 
@@ -1719,14 +1742,20 @@
 
       if (!els.uploadForm || !els.uploadInput) return;
 
-      setUploadAvailability(isAdminUser());
+      refreshAdminAccess()
+        .then((allowed) => setUploadAvailability(allowed))
+        .catch((error) => {
+          console.warn('Unable to verify vehicle upload access', error);
+          setUploadAvailability(false);
+        });
 
-      window.addEventListener('auth:role-ready', (event) => {
-
-        const role = (event.detail?.role || '').toLowerCase();
-
-        setUploadAvailability(role === ADMIN_ROLE);
-
+      window.addEventListener('auth:role-ready', () => {
+        refreshAdminAccess()
+          .then((allowed) => setUploadAvailability(allowed))
+          .catch((error) => {
+            console.warn('Unable to refresh vehicle upload access', error);
+            setUploadAvailability(false);
+          });
       });
 
       els.uploadInput.addEventListener('change', () => {
@@ -1747,7 +1776,7 @@
 
         event.preventDefault();
 
-        if (!isAdminUser()) {
+        if (!(await refreshAdminAccess())) {
 
           alert('You must be an administrator to upload vehicle data.');
 
@@ -1915,10 +1944,8 @@
 
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
-    import { getWebAdminSession } from '../../assets/scripts/web-admin-session.js';
 
     const redirectToLogin = async () => {
-      if (getWebAdminSession()) return;
       if (!supabaseClient?.auth?.getSession) {
         window.location.href = '../login.html';
         return;

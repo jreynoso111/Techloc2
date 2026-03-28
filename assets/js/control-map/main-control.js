@@ -1,7 +1,6 @@
 import '../../scripts/authManager.js';
 import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     import { APP_SETTINGS_STORAGE_KEY, getAppSettings, normalizeAppSettings, saveAppSettings } from '../../scripts/appSettings.js';
-    import { getWebAdminSession } from '../../scripts/web-admin-session.js';
     import { supabase as supabaseClient } from '../supabaseClient.js';
     import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
     import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js';
@@ -1112,11 +1111,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const hasAuthenticatedAccess = async () => {
-      return Boolean(window.currentUserRole || getWebAdminSession());
+      return Boolean(await getCurrentUserId());
     };
 
     const isAuthenticatedCached = () => {
-      return Boolean(window.currentUserRole || getWebAdminSession());
+      return Boolean(window.currentUserRole);
     };
 
     const notifyAuthRequired = () => {

@@ -114,32 +114,22 @@ const withTimeout = (promise, timeoutMs = 2500, label = 'operation') =>
 
 const resolveFallbackAccess = (session) => {
   const appRole = session?.user?.app_metadata?.role || null;
-  const userRole = session?.user?.user_metadata?.role || null;
   const appStatus = session?.user?.app_metadata?.status || null;
-  const userStatus = session?.user?.user_metadata?.status || null;
 
   const roleSource = cachedUserRole
     ? 'cache'
-    : window.currentUserRole
-      ? 'window'
-      : appRole
-        ? 'app-metadata'
-        : userRole
-          ? 'user-metadata'
-          : 'default';
+    : appRole
+      ? 'app-metadata'
+      : 'default';
 
   const statusSource = cachedUserStatus
     ? 'cache'
-    : window.currentUserStatus
-      ? 'window'
-      : appStatus
-        ? 'app-metadata'
-        : userStatus
-          ? 'user-metadata'
-          : 'default';
+    : appStatus
+      ? 'app-metadata'
+      : 'default';
 
-  const role = normalizeRoleValue(cachedUserRole || window.currentUserRole || appRole || userRole || 'user', 'user');
-  const status = normalizeStatusValue(cachedUserStatus || window.currentUserStatus || appStatus || userStatus || 'active', 'active');
+  const role = normalizeRoleValue(cachedUserRole || appRole || 'user', 'user');
+  const status = normalizeStatusValue(cachedUserStatus || appStatus || 'active', 'active');
 
   return {
     role,
@@ -676,10 +666,7 @@ const enforceAdminGuard = async () => {
 
   if (routeInfo.isSettingsPage) {
     const hintedRole = normalizeRoleValue(
-      window.currentUserRole
-      || session?.user?.app_metadata?.role
-      || session?.user?.user_metadata?.role
-      || role,
+      session?.user?.app_metadata?.role || role,
       'user',
     );
     const hintedIsAdmin = roleIsAdministrator(hintedRole);

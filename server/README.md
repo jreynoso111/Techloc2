@@ -10,6 +10,7 @@ Run these before starting the server:
 export SUPABASE_URL="https://lnfmogsjvdkqgwprlmtn.supabase.co"
 export SUPABASE_ANON_KEY="<your-anon-key>"
 export SUPABASE_SERVICE_ROLE_KEY="<your-service-role-key>"
+export APP_ORIGIN="http://127.0.0.1:8080"
 export PORT="8080"
 ```
 
@@ -17,6 +18,7 @@ You can also copy values from `/.env.example` into a local `.env` file (ignored 
 
 `SUPABASE_SERVICE_ROLE_KEY` is required for privileged proxy endpoints (`/api/repair-history`, `/api/admin/password-reset`).  
 The frontend can still boot with only `SUPABASE_URL` + `SUPABASE_ANON_KEY`.
+`APP_ORIGIN` must be the public base URL for this app in any proxied or production deployment. The password reset flow now uses this fixed origin and does not trust the incoming `Host` header.
 
 Optional:
 

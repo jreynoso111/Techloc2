@@ -24,6 +24,16 @@ const getDefaultHelpers = () => ({
   formatDateTime: (value) => value,
 });
 
+const toText = (value) => {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch (_error) {
+    return String(value);
+  }
+};
+
 const toDateInputValue = (value) => {
   if (!value) return '';
   const asText = String(value).trim();
@@ -63,26 +73,49 @@ const createRepairHistoryManager = ({
   const safeEscape = escapeHTML || helpers.escapeHTML;
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
 
+  const getAccessToken = async () => {
+    if (!supabaseClient?.auth?.getSession) {
+      throw new Error('Authentication session is unavailable.');
+    }
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) throw error;
+    const accessToken = data?.session?.access_token || '';
+    if (!accessToken) {
+      throw new Error('You need an active authenticated session to access Repair History.');
+    }
+    return accessToken;
+  };
+
+  const requestRepairHistory = async (path, { method = 'GET', payload = null } = {}) => {
+    const accessToken = await getAccessToken();
+    const request = fetch(path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(payload ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(payload ? { body: JSON.stringify(payload) } : {}),
+    }).then(async (response) => {
+      const body = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(body?.error?.message || `Repair history request failed (${response.status}).`);
+      }
+      return body?.data || [];
+    });
+
+    return runWithTimeout
+      ? runWithTimeout(request, timeoutMs, 'Repair history request timed out.')
+      : request;
+  };
+
   const fetchRepairs = async (vin) => {
     const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
-    const normalizedShortVin = normalizedVin ? normalizedVin.slice(-6) : '';
-    if (!supabaseClient || !normalizedVin) {
-      return { data: [], error: new Error('Missing database client or VIN.') };
+    if (!normalizedVin) {
+      return { data: [], error: new Error('Missing VIN.') };
     }
     try {
-      const vinFilter = normalizedVin.replace(/[%_,]/g, '').slice(-17);
-      const shortVinFilter = normalizedShortVin.replace(/[%_,]/g, '').slice(-6);
-      const searchClauses = [`VIN.ilike.%${vinFilter}%`];
-      if (shortVinFilter) searchClauses.push(`shortvin.ilike.%${shortVinFilter}%`);
-      const query = supabaseClient
-        .from(tableName)
-        .select('*')
-        .or(searchClauses.join(','))
-        .order('created_at', { ascending: false });
-      const { data, error } = runWithTimeout
-        ? await runWithTimeout(query, timeoutMs, 'Repair history request timed out.')
-        : await query;
-      if (error) throw error;
+      const params = new URLSearchParams({ vin: normalizedVin });
+      const data = await requestRepairHistory(`/api/repair-history?${params.toString()}`);
       return { data: data || [], error: null };
     } catch (error) {
       console.error('Failed to load repair history:', error);
@@ -92,9 +125,6 @@ const createRepairHistoryManager = ({
 
   const saveRepair = async (vehicle, formData, editId) => {
     try {
-      if (!supabaseClient) {
-        throw new Error('Database unavailable');
-      }
       const cleanPrice = Number.parseFloat(`${formData.get('repair_price') || '0'}`.replace(/[$,]/g, '')) || 0;
       const payload = {
         ...buildRepairSnapshot(vehicle, getRepairVehicleVin),
@@ -112,20 +142,9 @@ const createRepairHistoryManager = ({
         repair_price: cleanPrice,
         repair_notes: formData.get('repair_notes') || null
       };
-
-      const query = supabaseClient.from(tableName);
-      const request = editId
-        ? query.update(payload).eq('id', editId).select('*')
-        : query.insert(payload).select('*');
-      const { data, error } = runWithTimeout
-        ? await runWithTimeout(
-          request,
-          timeoutMs,
-          editId ? 'Repair update request timed out.' : 'Repair create request timed out.'
-        )
-        : await request;
-      if (error) throw error;
-      return data || [];
+      const path = editId ? `/api/repair-history/${encodeURIComponent(editId)}` : '/api/repair-history';
+      const method = editId ? 'PATCH' : 'POST';
+      return await requestRepairHistory(path, { method, payload });
     } catch (error) {
       console.error('Failed to save repair entry:', error);
       throw error;
@@ -376,17 +395,12 @@ const createRepairHistoryManager = ({
     };
 
     const deleteRepair = async (repairId) => {
-      if (!supabaseClient) {
-        throw new Error('Database unavailable');
-      }
       if (!repairId) return;
       const confirmed = window.confirm('Are you sure you want to delete this repair entry?');
       if (!confirmed) return;
-      const { error } = await supabaseClient
-        .from(tableName)
-        .delete()
-        .eq('id', repairId);
-      if (error) throw error;
+      await requestRepairHistory(`/api/repair-history/${encodeURIComponent(repairId)}`, {
+        method: 'DELETE',
+      });
       await loadRepairs({ showLoading: false });
     };
 
@@ -421,10 +435,7 @@ const createRepairHistoryManager = ({
       updateConnectionStatus({ state: 'connecting…' });
       const { data, error } = await fetchRepairs(VIN);
       if (error) {
-        const rawMessage = `${error?.message || 'Unable to load repair history.'}`;
-        const message = rawMessage.toLowerCase().includes('permission denied')
-          ? 'Permission denied on repair_history. Add RLS policies for anon/authenticated access as needed.'
-          : rawMessage;
+        const message = toText(error?.message || 'Unable to load repair history.');
         updateConnectionStatus({
           state: 'error',
           detail: message,

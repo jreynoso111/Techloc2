@@ -452,7 +452,31 @@
     ];
 
     const ADMIN_ROLE = 'administrator';
-    const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
+    let hasVerifiedAdminAccess = false;
+    const isAdminUser = () => hasVerifiedAdminAccess;
+    const refreshAdminAccess = async () => {
+      if (!supabaseClient?.auth?.getSession || !supabaseClient?.from) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      hasVerifiedAdminAccess = !profileError && String(profile?.role || '').toLowerCase() === ADMIN_ROLE;
+      return hasVerifiedAdminAccess;
+    };
 
     const toNumber = (value) => {
       if (value === undefined || value === null) return null;
@@ -951,7 +975,7 @@
     // Deals upload with row normalization and duplicate filtering.
     const uploadDealsRows = async (rows, parseErrors = 0, rawHeaders = []) => {
       if (!supabaseClient) throw new Error('Supabase client unavailable.');
-      if (!isAdminUser()) throw new Error('Only administrators can upload deals data.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload deals data.');
 
       const submitBtn = document.getElementById('deals-upload-button');
       const progressWrap = document.getElementById('deals-progress');
@@ -1198,7 +1222,7 @@
 
     const uploadInvoicesRows = async (rows, parseErrors = 0, rawHeaders = []) => {
       if (!supabaseClient) throw new Error('Database client unavailable.');
-      if (!isAdminUser()) throw new Error('Only administrators can upload invoice data.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload invoice data.');
 
       const submitBtn = document.getElementById('ns-invoices-upload-button');
       const progressWrap = document.getElementById('ns-invoices-progress');
@@ -1411,8 +1435,8 @@
       const form = document.getElementById('deals-upload-form');
       const fileInput = document.getElementById('deals-file');
       const submitBtn = document.getElementById('deals-upload-button');
-      const requireAdmin = () => {
-        const allowed = isAdminUser();
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1421,13 +1445,13 @@
         return allowed;
       };
       if (!form || !fileInput || !submitBtn) return;
-      const syncAccess = () => requireAdmin();
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify deals admin access', error));
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
       
-      submitBtn.addEventListener('click', (event) => {
+      submitBtn.addEventListener('click', async (event) => {
         event.preventDefault(); 
-        if (!requireAdmin()) {
+        if (!(await requireAdmin())) {
           showToast('Only administrators can upload deals data.', 'error');
           return;
         }
@@ -1471,8 +1495,8 @@
       const form = document.getElementById('ns-invoices-upload-form');
       const fileInput = document.getElementById('ns-invoices-file');
       const submitBtn = document.getElementById('ns-invoices-upload-button');
-      const requireAdmin = () => {
-        const allowed = isAdminUser();
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1481,13 +1505,13 @@
         return allowed;
       };
       if (!form || !fileInput || !submitBtn) return;
-      const syncAccess = () => requireAdmin();
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify invoice admin access', error));
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
 
-      submitBtn.addEventListener('click', (event) => {
+      submitBtn.addEventListener('click', async (event) => {
         event.preventDefault();
-        if (!requireAdmin()) {
+        if (!(await requireAdmin())) {
           showToast('Only administrators can upload invoice data.', 'error');
           return;
         }
@@ -1537,8 +1561,8 @@
         if (status) status.textContent = text;
       };
 
-      const requireAdmin = () => {
-        const allowed = isAdminUser();
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1548,13 +1572,13 @@
       };
 
       if (!form || !fileInput || !submitBtn) return;
-      const syncAccess = () => requireAdmin();
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify PT ping admin access', error));
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
 
       submitBtn.addEventListener('click', async (event) => {
         event.preventDefault();
-        if (!requireAdmin()) {
+        if (!(await requireAdmin())) {
           showToast('Only administrators can upload PT ping data.', 'error');
           return;
         }
@@ -1768,7 +1792,7 @@
 
     const uploadPtPingRows = async (rows, parseErrors = 0) => {
       if (!supabaseClient) throw new Error('Database client unavailable.');
-      if (!isAdminUser()) throw new Error('Only administrators can upload PT ping data.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload PT ping data.');
 
       const normalizeVinLast6 = (vin) => {
         if (!vin && vin !== 0) return null;
@@ -2298,10 +2322,8 @@
   </script>
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
-    import { getWebAdminSession } from '../../assets/scripts/web-admin-session.js';
 
     const redirectToLogin = async () => {
-      if (getWebAdminSession()) return;
       if (!supabaseClient?.auth?.getSession) {
         window.location.href = '../login.html';
         return;
