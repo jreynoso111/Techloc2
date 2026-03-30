@@ -26,6 +26,7 @@
   </script>
 
     <link rel="stylesheet" href="../assets/visuals/control-map.css" />
+<<<<<<< HEAD
 
   <link rel="stylesheet" href="../assets/visuals/theme.css" />
 </head>
@@ -42,6 +43,32 @@
 
   <div id="loading-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm pointer-events-none">
     <div class="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-slate-900/90 px-4 py-2 text-sm font-semibold text-slate-100 shadow-lg shadow-slate-900/50">
+=======
+  <link rel="stylesheet" href="../assets/visuals/home-entry-3d.css" />
+
+  <link rel="stylesheet" href="../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-black font-sans text-slate-50 text-sm overflow-hidden flex flex-col" data-page-title="Control Map" data-active-nav="control-map">
+  <div class="pointer-events-none fixed inset-0 -z-10 opacity-80 mix-blend-screen" aria-hidden="true">
+    <canvas id="constellation-canvas" class="h-full w-full"></canvas>
+  </div>
+  <div data-auth-loading data-auth-loading-mode="defer" class="fixed inset-0 z-50 bg-black">
+    <div id="home-intro" class="home-intro" aria-hidden="true">
+      <div id="home-intro-scene" class="home-intro__scene">
+        <canvas id="home-intro-canvas" class="home-intro__canvas" aria-hidden="true"></canvas>
+        <div class="home-intro__copy">
+          <p class="home-intro__eyebrow">TechLoc System</p>
+          <h2 class="home-intro__title">Booting Fleet Intelligence Grid</h2>
+          <p class="home-intro__status">Calibrating geospatial telemetry, dispatch channels, and live operations.</p>
+          <div class="home-intro__progress"><span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading-overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/65 backdrop-blur-sm pointer-events-none">
+    <div class="flex items-center gap-3 rounded-xl border border-slate-800/70 bg-black/90 px-4 py-2 text-sm font-semibold text-slate-100 shadow-lg shadow-black/60">
+>>>>>>> impte
       <span class="spinner h-5 w-5 animate-spin rounded-full border-2 border-slate-500"></span>
       <span id="loading-text">Loading…</span>
     </div>
@@ -50,7 +77,11 @@
   <div data-auth-protected class="hidden min-h-0 flex-1 flex flex-col">
     <div data-shared-header></div>
 
+<<<<<<< HEAD
     <main id="map-layout" class="relative flex-1 overflow-hidden bg-slate-950">
+=======
+    <main id="map-layout" class="relative flex-1 overflow-hidden bg-black">
+>>>>>>> impte
 
     <div class="absolute inset-0">
       <div id="tech-map"></div>
@@ -70,15 +101,46 @@
       </div>
     </div>
     <div id="map-visibility-group" class="pointer-events-none absolute top-4 left-1/2 z-[500] -translate-x-1/2 transform flex flex-wrap justify-center gap-2">
+<<<<<<< HEAD
+=======
+      <button id="toggle-route-lines" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Route Labels</button>
+>>>>>>> impte
       <button id="toggle-hotspots" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Hotspot Areas</button>
       <button id="toggle-blacklist" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto" aria-pressed="false">Show Blacklist Marks</button>
       <button id="toggle-vehicle-markers" class="sidebar-toggle-btn sidebar-toggle-pill pointer-events-auto active" aria-pressed="true">Hide Vehicles Marks</button>
     </div>
+<<<<<<< HEAD
+=======
+    <div id="floating-search-shell" class="pointer-events-none absolute top-16 right-4 z-[510] flex flex-col items-end gap-2">
+      <button id="legend-search-toggle" type="button" class="pointer-events-auto inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-700/80 bg-black/85 text-slate-200 shadow-lg shadow-black/60 hover:border-cyan-400/70 hover:text-cyan-200 transition-colors" aria-expanded="false" aria-label="Toggle map search">
+        <span id="legend-search-chevron">▸</span>
+      </button>
+      <div id="legend-search-panel" class="pointer-events-auto hidden w-[min(86vw,340px)] rounded-xl border border-slate-800/90 bg-black/92 px-2.5 py-2 shadow-xl shadow-black/65 backdrop-blur">
+        <form id="legend-search-form" class="relative">
+          <input
+            id="legend-search-input"
+            type="text"
+            class="block w-full rounded-lg border border-slate-700 bg-slate-800 pl-2.5 pr-20 py-1.5 text-[11px] text-white placeholder-slate-500 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 outline-none transition-all"
+            placeholder="ZIP, VIN, customer, company..."
+            autocomplete="off"
+          >
+          <button id="legend-search-btn" type="submit" class="absolute inset-y-0.5 right-0.5 rounded-md bg-cyan-600 px-2.5 text-[9px] font-bold uppercase tracking-[0.08em] text-white hover:bg-cyan-500 transition-colors">
+            Search
+          </button>
+        </form>
+        <div class="mt-1.5 flex items-center justify-between gap-2">
+          <p id="legend-search-status" class="hidden text-[9px] font-medium text-cyan-300">Searching...</p>
+          <p id="legend-search-feedback" class="text-[9px] text-slate-400">33101, VIN, customer ID, Techloc</p>
+        </div>
+      </div>
+    </div>
+>>>>>>> impte
     <div id="right-toggle-group" class="sidebar-toggle-group right-3 items-end">
       <button id="open-right-sidebar" class="sidebar-toggle-btn text-[11px]">Show Vehicles</button>
     </div>
 
     <!-- Floating Legend -->
+<<<<<<< HEAD
       <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl backdrop-blur">
         <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-8">
           <div class="flex-1 space-y-2">
@@ -113,13 +175,96 @@
               <div class="legend-pill">
                 <span class="legend-dot bg-amber-500"></span>
                 Other states
+=======
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-[400] w-[min(95vw,1100px)] rounded-2xl border border-slate-800 bg-black/85 px-4 py-3 text-[11px] text-slate-200 shadow-xl shadow-black/55 backdrop-blur">
+        <div class="legend-shell">
+          <div class="legend-group flex-1 space-y-2">
+            <p class="legend-heading">Services</p>
+            <div class="legend-row legend-row-services">
+              <div class="legend-pill" data-legend="tech">
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#3b82f6" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Tech
+              </div>
+              <div class="legend-pill" data-legend="reseller">
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#34d399" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Reseller
+              </div>
+              <div class="legend-pill" data-legend="repair">
+                <span class="legend-service-icon"><svg class="h-3 w-3" viewBox="0 0 18 16" fill="#fb923c" stroke="#0f172a" stroke-width="1.2"><path d="M9 1.2L16.2 14.5H1.8L9 1.2Z"></path></svg></span>
+                Repair
+              </div>
+            </div>
+            <div id="custom-legend-slot" class="legend-row hidden"></div>
+          </div>
+          <div id="legend-reset-separator" class="legend-reset-separator" aria-hidden="false">
+            <span class="legend-reset-line"></span>
+            <button id="legend-reset-view" type="button" class="legend-reset-button legend-reset-button-hidden" title="Reset map view" aria-label="Reset map view" aria-hidden="true">
+              <span class="legend-reset-icon" aria-hidden="true">◎</span>
+            </button>
+            <span class="legend-reset-line"></span>
+          </div>
+          <div class="legend-group flex-1 space-y-2 md:text-right">
+            <p class="legend-heading md:justify-end">Vehicles</p>
+            <div class="legend-row legend-row-vehicles-primary md:justify-end">
+              <div class="legend-pill">
+                <span class="legend-vehicle-icon" style="--vehicle-marker-fill:#ef4444; --vehicle-marker-stroke:#991b1b">
+                  <svg class="vehicle-marker-truck" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+                    <ellipse class="vehicle-marker-shadow" cx="13.8" cy="16.9" rx="9.8" ry="1.6"></ellipse>
+                    <rect class="vehicle-marker-body" x="2.8" y="7" width="11.8" height="6.1" rx="1.7"></rect>
+                    <path class="vehicle-marker-body" d="M14.2 8h4.1c0.56 0 1.1 0.22 1.5 0.62l2.26 2.26c0.4 0.4 0.62 0.94 0.62 1.5v0.76c0 0.81-0.65 1.46-1.46 1.46h-0.98a2.63 2.63 0 0 1-5.06 0H9.78a2.63 2.63 0 0 1-5.06 0H4.26A1.26 1.26 0 0 1 3 13.34V8.26C3 7.56 3.56 7 4.26 7h9.94V8Z"></path>
+                    <path class="vehicle-marker-window" d="M16.2 8.9h2c0.33 0 0.65 0.13 0.88 0.36l1.45 1.45H16.2V8.9Z"></path>
+                    <path class="vehicle-marker-detail" d="M5.2 9.45h6.8"></path>
+                    <circle class="vehicle-marker-wheel" cx="7.2" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="7.2" cy="14.6" r="0.92"></circle>
+                    <circle class="vehicle-marker-wheel" cx="17.8" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="17.8" cy="14.6" r="0.92"></circle>
+                  </svg>
+                </span>
+                GPS Fix: All
+              </div>
+              <div class="legend-pill">
+                <span class="legend-vehicle-icon" style="--vehicle-marker-fill:#22c55e; --vehicle-marker-stroke:#166534">
+                  <svg class="vehicle-marker-truck" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+                    <ellipse class="vehicle-marker-shadow" cx="13.8" cy="16.9" rx="9.8" ry="1.6"></ellipse>
+                    <rect class="vehicle-marker-body" x="2.8" y="7" width="11.8" height="6.1" rx="1.7"></rect>
+                    <path class="vehicle-marker-body" d="M14.2 8h4.1c0.56 0 1.1 0.22 1.5 0.62l2.26 2.26c0.4 0.4 0.62 0.94 0.62 1.5v0.76c0 0.81-0.65 1.46-1.46 1.46h-0.98a2.63 2.63 0 0 1-5.06 0H9.78a2.63 2.63 0 0 1-5.06 0H4.26A1.26 1.26 0 0 1 3 13.34V8.26C3 7.56 3.56 7 4.26 7h9.94V8Z"></path>
+                    <path class="vehicle-marker-window" d="M16.2 8.9h2c0.33 0 0.65 0.13 0.88 0.36l1.45 1.45H16.2V8.9Z"></path>
+                    <path class="vehicle-marker-detail" d="M5.2 9.45h6.8"></path>
+                    <circle class="vehicle-marker-wheel" cx="7.2" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="7.2" cy="14.6" r="0.92"></circle>
+                    <circle class="vehicle-marker-wheel" cx="17.8" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="17.8" cy="14.6" r="0.92"></circle>
+                  </svg>
+                </span>
+                Fully Working
+              </div>
+              <div class="legend-pill">
+                <span class="legend-vehicle-icon" style="--vehicle-marker-fill:#f59e0b; --vehicle-marker-stroke:#92400e">
+                  <svg class="vehicle-marker-truck" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
+                    <ellipse class="vehicle-marker-shadow" cx="13.8" cy="16.9" rx="9.8" ry="1.6"></ellipse>
+                    <rect class="vehicle-marker-body" x="2.8" y="7" width="11.8" height="6.1" rx="1.7"></rect>
+                    <path class="vehicle-marker-body" d="M14.2 8h4.1c0.56 0 1.1 0.22 1.5 0.62l2.26 2.26c0.4 0.4 0.62 0.94 0.62 1.5v0.76c0 0.81-0.65 1.46-1.46 1.46h-0.98a2.63 2.63 0 0 1-5.06 0H9.78a2.63 2.63 0 0 1-5.06 0H4.26A1.26 1.26 0 0 1 3 13.34V8.26C3 7.56 3.56 7 4.26 7h9.94V8Z"></path>
+                    <path class="vehicle-marker-window" d="M16.2 8.9h2c0.33 0 0.65 0.13 0.88 0.36l1.45 1.45H16.2V8.9Z"></path>
+                    <path class="vehicle-marker-detail" d="M5.2 9.45h6.8"></path>
+                    <circle class="vehicle-marker-wheel" cx="7.2" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="7.2" cy="14.6" r="0.92"></circle>
+                    <circle class="vehicle-marker-wheel" cx="17.8" cy="14.6" r="2.15"></circle>
+                    <circle class="vehicle-marker-wheel-core" cx="17.8" cy="14.6" r="0.92"></circle>
+                  </svg>
+                </span>
+                Partially Working
+>>>>>>> impte
               </div>
               <div class="legend-pill">
                 <span class="vehicle-cross-badge">✕</span>
                 Not moving
               </div>
             </div>
+<<<<<<< HEAD
             <div class="flex flex-wrap items-center gap-2 md:justify-end">
+=======
+            <div class="legend-row legend-row-vehicles-secondary md:justify-end">
+>>>>>>> impte
               <div class="legend-pill">
                 <span class="legend-dot bg-red-500 border-white/90"></span>
                 Client location
@@ -129,6 +274,13 @@
                 Hotspot Area
               </div>
               <div class="legend-pill">
+<<<<<<< HEAD
+=======
+                <span class="legend-history-hotspot"></span>
+                Parking Spot
+              </div>
+              <div class="legend-pill">
+>>>>>>> impte
                 <span class="legend-badge">!</span>
                 Blacklist
               </div>
@@ -141,7 +293,11 @@
       <div class="resize-handle right-0"></div>
 
       <!-- Search -->
+<<<<<<< HEAD
       <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10 space-y-4">
+=======
+      <div class="p-5 border-b border-slate-800 bg-black shadow-md shadow-black/40 z-10 space-y-4">
+>>>>>>> impte
         <div class="flex items-start justify-between gap-3">
           <div>
             <p class="text-[10px] font-bold uppercase text-slate-400 mb-1">Client starting point</p>
@@ -159,7 +315,11 @@
           <input
             id="address-input"
             type="text"
+<<<<<<< HEAD
             class="block w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+=======
+            class="block w-full rounded-xl border border-slate-700 bg-black/70 pl-4 pr-24 py-3 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+>>>>>>> impte
             placeholder="Ex: 33101, Phoenix, AZ..."
             autocomplete="off"
           >
@@ -175,7 +335,11 @@
       </div>
 
       <!-- Technicians List -->
+<<<<<<< HEAD
       <div id="tech-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+=======
+      <div id="tech-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-black/92 scroll-smooth relative">
+>>>>>>> impte
         <div class="text-center mt-10 text-slate-600 text-xs">Waiting for installer data...</div>
       </div>
     </aside>
@@ -185,15 +349,24 @@
     <!-- Vehicles Sidebar -->
     <aside id="right-sidebar" class="resizable-sidebar right-0 border-l border-slate-800 flex flex-col z-30 shadow-2xl collapsed-right" style="width: var(--right-sidebar-width)">
       <div class="resize-handle left-0"></div>
+<<<<<<< HEAD
       <div class="p-5 border-b border-slate-800 bg-slate-900 shadow-md z-10">
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-[10px] font-bold uppercase text-amber-300 mb-1">Control Map</p>
             <h2 class="text-xl font-black text-white leading-tight">GPS issues around the network</h2>
+=======
+      <div class="vehicle-sidebar-head p-5 border-b border-slate-800 bg-black shadow-md shadow-black/40 z-10">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-[9px] font-bold uppercase text-amber-300 mb-0.5">Control Map</p>
+            <h2 class="text-lg font-black text-white leading-tight">Vehicles</h2>
+>>>>>>> impte
           </div>
           <div class="flex items-center gap-3">
             <div class="text-right">
               <p class="text-[10px] uppercase text-slate-400 font-bold">Total</p>
+<<<<<<< HEAD
               <p id="vehicles-count" class="text-2xl font-black text-white leading-none">0</p>
             </div>
             <button id="collapse-right" class="h-8 w-8 rounded-full border border-slate-700 bg-slate-800/80 text-lg font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize vehicles sidebar">-</button>
@@ -201,11 +374,24 @@
         </div>
         <div class="mt-4 relative">
           <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-slate-800 pl-4 pr-10 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
+=======
+              <p id="vehicles-count" class="text-xl font-black text-white leading-none">0</p>
+            </div>
+            <button id="collapse-right" class="h-7 w-7 rounded-full border border-slate-700 bg-slate-800/80 text-base font-bold text-slate-200 hover:border-amber-400 hover:text-amber-200" aria-label="Minimize vehicles sidebar">-</button>
+          </div>
+        </div>
+        <div class="vehicle-sidebar-search mt-4 relative">
+          <input id="vehicle-search" type="text" placeholder="Search by VIN, model, city..." class="w-full rounded-xl border border-slate-700 bg-black/70 pl-4 pr-16 py-2.5 text-sm text-white placeholder-slate-500 focus:border-amber-400 focus:ring-1 focus:ring-amber-400 outline-none transition-all">
+          <button id="vehicle-search-clear" type="button" class="hidden absolute right-9 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-700 bg-slate-900/90 text-[11px] font-bold leading-none text-slate-300 transition-colors hover:border-amber-400 hover:text-amber-200" aria-label="Clear vehicle search">
+            ×
+          </button>
+>>>>>>> impte
           <svg class="h-4 w-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
         </div>
+<<<<<<< HEAD
         <div class="mt-2 space-y-2 rounded-xl border border-slate-800 bg-slate-900/70 p-2.5">
           <div class="flex items-center justify-between text-[11px] font-semibold text-slate-300">
             <span>Vehicle filters</span>
@@ -284,6 +470,120 @@
         </div>
       </div>
       <div id="vehicle-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-900 scroll-smooth relative">
+=======
+        <div class="vehicle-filter-panel mt-1.5 space-y-1.5 rounded-lg border border-slate-800 bg-black/70 p-2">
+          <div class="flex items-center justify-between text-[10px] font-semibold text-slate-300">
+            <span class="text-[9px] uppercase tracking-wide text-slate-400">Vehicle filters</span>
+            <div class="flex items-center gap-1.5">
+              <button id="filter-kpi-positive-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false">
+                <span class="vehicle-filter-value">Balance &gt; 0</span>
+                <span class="text-slate-500" data-kpi-filter-state>Off</span>
+              </button>
+              <button id="filter-stale-ping-toggle" type="button" class="vehicle-filter-btn inline-flex items-center gap-1 rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-pressed="false" title="Filter vehicles shown gray on the map">
+                <span class="inline-block h-2 w-2 rounded-full bg-slate-400"></span>
+                <span class="vehicle-filter-value">Gray</span>
+                <span class="text-slate-500" data-stale-filter-state>Off</span>
+              </button>
+              <button id="vehicle-filters-collapse" type="button" class="vehicle-filters-collapse-btn text-cyan-300 hover:text-cyan-200 text-[8px] font-bold uppercase tracking-wide" aria-expanded="true">Hide</button>
+              <button id="vehicle-filters-reset" class="text-amber-300 hover:text-amber-200 text-[8px] font-bold uppercase tracking-wide">Reset</button>
+            </div>
+          </div>
+          <div id="vehicle-filters-body" class="vehicle-filters-body">
+            <div class="vehicle-filter-grid grid grid-cols-2 gap-1 text-[9px]">
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Inv. Prep. Stat</span>
+              <div class="relative">
+                <button id="filter-invprep-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-invprep-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-invprep" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Physical Location</span>
+              <div class="relative">
+                <button id="filter-physloc-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-physloc-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-physloc" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">GPS Fix</span>
+              <div class="relative">
+                <button id="filter-gps-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-gps-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-gps" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Moving</span>
+              <div class="relative">
+                <button id="filter-moving-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-moving-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-moving" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal status</span>
+              <div class="relative">
+                <button id="filter-deal-status-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-deal-status-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-deal-status" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <div class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">PT Status</span>
+              <div class="relative">
+                <button id="filter-pt-toggle" type="button" class="vehicle-filter-btn flex w-full items-center justify-between rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] font-semibold text-slate-300" aria-expanded="false">
+                  <span class="vehicle-filter-value">Select</span>
+                  <span class="text-slate-500">▾</span>
+                </button>
+                <div id="filter-pt-panel" class="absolute left-0 right-0 z-30 mt-1 hidden max-h-32 overflow-auto rounded-md border border-slate-800 bg-black/95 p-1.5 shadow-lg shadow-black/50">
+                  <div id="filter-pt" class="grid gap-1"></div>
+                </div>
+              </div>
+            </div>
+            <label class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">Deal completion %</span>
+              <div class="vehicle-filter-inline-controls">
+                <select id="filter-deal-operator" class="vehicle-filter-range-input vehicle-filter-operator rounded-md border border-slate-800 bg-black text-[9px] font-semibold text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400">
+                  <option value="gt">&gt;</option>
+                  <option value="lt">&lt;</option>
+                </select>
+                <input id="filter-deal-value" type="number" min="0" max="100" step="1" class="vehicle-filter-range-input vehicle-filter-number rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" placeholder="0">
+              </div>
+            </label>
+            <label class="vehicle-filter-field space-y-0">
+              <span class="vehicle-filter-label block text-[9px] text-slate-400 font-semibold">History points</span>
+              <div class="vehicle-filter-inline-controls">
+                <input id="filter-trail-points" type="number" min="1" max="120" step="1" class="vehicle-filter-range-input vehicle-filter-number is-short rounded-md border border-slate-800 bg-black px-1.5 py-0.5 text-[9px] text-white focus:border-amber-400 focus:ring-1 focus:ring-amber-400" value="10">
+              </div>
+            </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="vehicle-list" class="vehicle-list-scroll flex-1 overflow-y-auto p-4 space-y-2 bg-black/92 scroll-smooth relative">
+>>>>>>> impte
         <div class="text-center mt-10 text-slate-600 text-xs">Waiting for vehicle data...</div>
       </div>
     </aside>
@@ -291,19 +591,32 @@
 
   <!-- Vehicle detail modal -->
   <div id="vehicle-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+<<<<<<< HEAD
     <div class="flex w-[90vw] max-w-7xl flex-col border border-slate-800 bg-slate-950 shadow-2xl overflow-hidden max-h-[85vh]">
       <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-slate-900/80 px-4 py-3 backdrop-blur">
+=======
+    <div class="flex w-[96vw] max-w-[1880px] flex-col border border-slate-800 bg-black shadow-2xl shadow-black/60 overflow-hidden max-h-[90vh]">
+      <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-black/80 px-4 py-3 backdrop-blur">
+>>>>>>> impte
         <div>
           <p class="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Vehicle details</p>
           <h3 id="vehicle-modal-title" class="text-lg font-bold text-white"></h3>
           <p id="vehicle-modal-vin" class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400"></p>
         </div>
         <div class="flex items-center gap-2">
+<<<<<<< HEAD
           <button id="vehicle-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
           <button id="vehicle-modal-close" class="rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
         </div>
       </div>
       <div id="vehicle-modal-columns-panel" class="hidden border-b border-slate-800 bg-slate-950/70 px-4 py-3">
+=======
+          <button id="vehicle-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
+          <button id="vehicle-modal-close" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
+        </div>
+      </div>
+      <div id="vehicle-modal-columns-panel" class="hidden border-b border-slate-800 bg-black/70 px-4 py-3">
+>>>>>>> impte
         <div class="flex items-center justify-between gap-4">
           <div>
             <p class="text-xs font-semibold text-slate-200">Choose columns</p>
@@ -315,6 +628,46 @@
       <div class="flex-1 overflow-y-auto p-4" id="vehicle-modal-body"></div>
     </div>
   </div>
+<<<<<<< HEAD
+=======
+  <div id="service-modal" class="fixed inset-0 z-[500] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div class="flex w-[96vw] max-w-[1600px] flex-col border border-slate-800 bg-black shadow-2xl shadow-black/60 overflow-hidden max-h-[90vh]">
+      <div class="sticky top-0 z-20 flex items-center justify-between border-b border-slate-800 bg-black/80 px-4 py-3 backdrop-blur">
+        <div>
+          <p class="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Service details</p>
+          <h3 id="service-modal-title" class="text-lg font-bold text-white"></h3>
+          <p id="service-modal-subtitle" class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400"></p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="service-modal-columns-toggle" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Columns</button>
+          <button id="service-modal-close" class="rounded-lg border border-slate-700 bg-black/75 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:border-amber-400 hover:text-amber-200 transition-colors">Close</button>
+        </div>
+      </div>
+      <div id="service-modal-columns-panel" class="hidden border-b border-slate-800 bg-black/70 px-4 py-3">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <p class="text-xs font-semibold text-slate-200">Choose columns</p>
+            <p class="text-[10px] text-slate-400">Drag rows in the report to reorder fields.</p>
+          </div>
+        </div>
+        <div id="service-modal-columns-list" class="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-200"></div>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4" id="service-modal-body"></div>
+    </div>
+  </div>
+  <script type="module">
+    import { initHomeEntry3d } from '../assets/scripts/homeEntry3d.js';
+
+    initHomeEntry3d();
+
+    document.addEventListener('control-map:boot-complete', () => {
+      const loadingLayer = document.querySelector('[data-auth-loading][data-auth-loading-mode="defer"]');
+      if (!loadingLayer) return;
+      loadingLayer.classList.add('transition-opacity', 'duration-500', 'opacity-0');
+      setTimeout(() => loadingLayer.remove(), 520);
+    }, { once: true });
+  </script>
+>>>>>>> impte
   <script type="module" src="../assets/js/control-map/main-control.js"></script>
   <script type="module" src="../assets/scripts/sharedHeader.js"></script>
 

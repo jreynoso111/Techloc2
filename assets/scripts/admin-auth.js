@@ -1,5 +1,13 @@
+<<<<<<< HEAD
 import { SUPABASE_KEY, SUPABASE_URL } from './env.js';
 import { supabase as sharedSupabaseClient } from '../js/supabaseClient.js';
+=======
+import { SUPABASE_KEY, SUPABASE_URL, assertSupabaseTarget } from './env.js';
+import { supabase as sharedSupabaseClient } from '../js/supabaseClient.js';
+import {
+  clearWebAdminSession,
+} from './web-admin-session.js';
+>>>>>>> impte
 
 const LOGIN_PAGE = new URL('../../pages/login.html', import.meta.url).toString();
 const ADMIN_HOME = new URL('../../pages/admin/index.html', import.meta.url).toString();
@@ -9,7 +17,11 @@ const CONTROL_VIEW = new URL('../../pages/control-map.html', import.meta.url).to
 const supabaseClient =
   sharedSupabaseClient ||
   window.supabaseClient ||
+<<<<<<< HEAD
   (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY
+=======
+  (window.supabase?.createClient && SUPABASE_URL && SUPABASE_KEY && assertSupabaseTarget(SUPABASE_URL, SUPABASE_KEY)
+>>>>>>> impte
     ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
           persistSession: true,
@@ -18,6 +30,7 @@ const supabaseClient =
       })
     : null);
 
+<<<<<<< HEAD
 if (!supabaseClient) {
   console.error('Supabase client not initialized. Verify the Supabase library and credentials.');
   const loading = typeof document !== 'undefined' ? document.querySelector('[data-auth-loading]') : null;
@@ -33,6 +46,18 @@ if (!supabaseClient) {
 }
 
 window.supabaseClient = supabaseClient;
+=======
+const hasSupabaseAuth =
+  Boolean(supabaseClient?.auth) && typeof supabaseClient.auth.getSession === 'function';
+
+if (!hasSupabaseAuth) {
+  console.warn('Supabase auth unavailable in admin guard.');
+}
+
+if (supabaseClient) {
+  window.supabaseClient = supabaseClient;
+}
+>>>>>>> impte
 
 let currentSession = null;
 let initialSessionResolved = false;
@@ -40,6 +65,11 @@ let initializationPromise = null;
 let cachedUserRole = null;
 let cachedUserStatus = null;
 let cachedUserProfile = null;
+<<<<<<< HEAD
+=======
+const ACCESS_LOOKUP_TIMEOUT_MS = 2500;
+const PROFILE_LOOKUP_TIMEOUT_MS = 1800;
+>>>>>>> impte
 const sessionListeners = new Set();
 const broadcastRoleStatus = (role, status) =>
   window.dispatchEvent(
@@ -71,12 +101,83 @@ const notifySessionListeners = (session) => {
 };
 
 const roleAllowsDashboard = (role) => ['administrator', 'moderator'].includes(String(role || '').toLowerCase());
+<<<<<<< HEAD
+=======
+const roleIsAdministrator = (role) => String(role || '').toLowerCase() === 'administrator';
+const normalizeRoleValue = (value, fallback = 'user') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || fallback;
+};
+const normalizeStatusValue = (value, fallback = 'active') => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized || fallback;
+};
+
+const isMissingProfilesStatusColumnError = (error) => {
+  const code = String(error?.code || '').trim().toUpperCase();
+  const details = String(error?.details || '').toLowerCase();
+  const hint = String(error?.hint || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  if (code === '42703') return true;
+  if (message.includes('column') && message.includes('status')) return true;
+  if (details.includes('status') && details.includes('column')) return true;
+  if (hint.includes('status') && hint.includes('column')) return true;
+  return false;
+};
+
+const withTimeout = (promise, timeoutMs = 2500, label = 'operation') =>
+  new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      const timeoutError = new Error(`${label} timed out after ${timeoutMs}ms`);
+      timeoutError.name = 'TimeoutError';
+      reject(timeoutError);
+    }, timeoutMs);
+
+    Promise.resolve(promise)
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+
+const resolveFallbackAccess = (session) => {
+  const appRole = session?.user?.app_metadata?.role || null;
+  const appStatus = session?.user?.app_metadata?.status || null;
+
+  const roleSource = cachedUserRole
+    ? 'cache'
+    : appRole
+      ? 'app-metadata'
+      : 'default';
+
+  const statusSource = cachedUserStatus
+    ? 'cache'
+    : appStatus
+      ? 'app-metadata'
+      : 'default';
+
+  const role = normalizeRoleValue(cachedUserRole || appRole || 'user', 'user');
+  const status = normalizeStatusValue(cachedUserStatus || appStatus || 'active', 'active');
+
+  return {
+    role,
+    status,
+    source: roleSource === 'default' ? statusSource : roleSource,
+    confident: roleSource !== 'default',
+  };
+};
+>>>>>>> impte
 
 const setSession = (session) => {
   currentSession = session;
   notifySessionListeners(session);
 };
 
+<<<<<<< HEAD
 const getUserAccess = async (session) => {
   if (window.currentUserRole && window.currentUserStatus) {
     return { role: window.currentUserRole, status: window.currentUserStatus };
@@ -89,11 +190,17 @@ const getUserAccess = async (session) => {
     return { role: cachedUserRole, status: cachedUserStatus };
   }
 
+=======
+const getEffectiveSession = (session) => session || null;
+
+const getUserAccess = async (session, { timeoutMs = ACCESS_LOOKUP_TIMEOUT_MS, preferCache = true } = {}) => {
+>>>>>>> impte
   const userId = session?.user?.id;
   if (!userId) {
     window.currentUserRole = 'user';
     window.currentUserStatus = 'active';
     broadcastRoleStatus('user', 'active');
+<<<<<<< HEAD
     return { role: 'user', status: 'active' };
   }
 
@@ -110,15 +217,119 @@ const getUserAccess = async (session) => {
 
   const normalizedRole = (data?.role || 'user').toLowerCase();
   const normalizedStatus = (data?.status || 'active').toLowerCase();
+=======
+    return { role: 'user', status: 'active', source: 'default', confident: true };
+  }
+
+  const fallbackAccess = resolveFallbackAccess(session);
+  const fallbackRole = fallbackAccess.role;
+  const fallbackStatus = fallbackAccess.status;
+
+  if (preferCache && cachedUserRole && cachedUserStatus) {
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return fallbackAccess;
+  }
+
+  if (!supabaseClient?.from) {
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return fallbackAccess;
+  }
+
+  let response;
+  try {
+    response = await withTimeout(
+      supabaseClient
+        .from('profiles')
+        .select('role, status')
+        .eq('id', userId)
+        .maybeSingle(),
+      timeoutMs,
+      'Profile access lookup',
+    );
+  } catch (error) {
+    const isTimeout = String(error?.name || '') === 'TimeoutError';
+    console.warn(
+      isTimeout ? 'Profile access lookup timed out; using fallback role.' : 'Unable to fetch user role',
+      error,
+    );
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return fallbackAccess;
+  }
+
+  const { data, error } = response;
+
+  if (error) {
+    if (isMissingProfilesStatusColumnError(error)) {
+      try {
+        const roleOnlyResponse = await withTimeout(
+          supabaseClient
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .maybeSingle(),
+          timeoutMs,
+          'Profile role-only lookup',
+        );
+        const roleOnlyData = roleOnlyResponse?.data || null;
+        const roleOnlyError = roleOnlyResponse?.error || null;
+        if (!roleOnlyError && roleOnlyData) {
+          const normalizedRole = normalizeRoleValue(roleOnlyData.role, fallbackRole);
+          const normalizedStatus = normalizeStatusValue(fallbackStatus, fallbackStatus);
+          cachedUserRole = normalizedRole;
+          cachedUserStatus = normalizedStatus;
+          window.currentUserRole = normalizedRole;
+          window.currentUserStatus = normalizedStatus;
+          broadcastRoleStatus(normalizedRole, normalizedStatus);
+          return { role: normalizedRole, status: normalizedStatus, source: 'db-role-only', confident: true };
+        }
+      } catch (roleOnlyLookupError) {
+        console.warn('Role-only lookup failed', roleOnlyLookupError);
+      }
+    }
+    console.warn('Unable to fetch user role', error);
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return fallbackAccess;
+  }
+
+  if (!data) {
+    window.currentUserRole = fallbackRole;
+    window.currentUserStatus = fallbackStatus;
+    broadcastRoleStatus(fallbackRole, fallbackStatus);
+    return fallbackAccess;
+  }
+
+  const normalizedRole = normalizeRoleValue(data.role, fallbackRole);
+  const normalizedStatus = normalizeStatusValue(data.status, fallbackStatus);
+>>>>>>> impte
   cachedUserRole = normalizedRole;
   cachedUserStatus = normalizedStatus;
   window.currentUserRole = normalizedRole;
   window.currentUserStatus = normalizedStatus;
   broadcastRoleStatus(normalizedRole, normalizedStatus);
+<<<<<<< HEAD
   return { role: normalizedRole, status: normalizedStatus };
 };
 
 const getUserProfile = async (session) => {
+=======
+  return { role: normalizedRole, status: normalizedStatus, source: 'db', confident: true };
+};
+
+const getUserProfile = async (session, { timeoutMs = PROFILE_LOOKUP_TIMEOUT_MS } = {}) => {
+  const fallbackProfile = {
+    name: null,
+    email: session?.user?.email || null,
+  };
+
+>>>>>>> impte
   if (window.currentUserProfile) return window.currentUserProfile;
   if (cachedUserProfile) {
     window.currentUserProfile = cachedUserProfile;
@@ -128,6 +339,7 @@ const getUserProfile = async (session) => {
   const userId = session?.user?.id;
   if (!userId) {
     cachedUserProfile = null;
+<<<<<<< HEAD
     return null;
   }
 
@@ -136,6 +348,40 @@ const getUserProfile = async (session) => {
   if (error) {
     console.warn('Unable to fetch user profile', error);
     return null;
+=======
+    return fallbackProfile;
+  }
+
+  if (!supabaseClient?.from) {
+    return fallbackProfile;
+  }
+
+  let response;
+  try {
+    response = await withTimeout(
+      supabaseClient.from('profiles').select('name, email').eq('id', userId).maybeSingle(),
+      timeoutMs,
+      'Profile header lookup',
+    );
+  } catch (error) {
+    const isTimeout = String(error?.name || '') === 'TimeoutError';
+    console.warn(
+      isTimeout ? 'Profile header lookup timed out; using fallback email.' : 'Unable to fetch user profile',
+      error,
+    );
+    return fallbackProfile;
+  }
+
+  const { data, error } = response;
+
+  if (error) {
+    console.warn('Unable to fetch user profile', error);
+    return fallbackProfile;
+  }
+
+  if (!data) {
+    return fallbackProfile;
+>>>>>>> impte
   }
 
   cachedUserProfile = data || null;
@@ -146,6 +392,10 @@ const getUserProfile = async (session) => {
 const recordLastConnection = async (session) => {
   const userId = session?.user?.id;
   if (!userId) return;
+<<<<<<< HEAD
+=======
+  if (!supabaseClient?.from) return;
+>>>>>>> impte
   if (typeof localStorage === 'undefined') return;
 
   const storageKey = `techloc:last-connection:${userId}`;
@@ -164,7 +414,11 @@ const recordLastConnection = async (session) => {
   }
 };
 
+<<<<<<< HEAD
 const updateHeaderAccount = async (session) => {
+=======
+const updateHeaderAccount = (session) => {
+>>>>>>> impte
   const accountName = document.querySelector('[data-account-name]');
   if (!accountName) return;
 
@@ -173,10 +427,24 @@ const updateHeaderAccount = async (session) => {
     return;
   }
 
+<<<<<<< HEAD
   const profile = await getUserProfile(session);
   const fallbackEmail = session.user.email || profile?.email || 'Account';
   const label = session.user.email || profile?.email || fallbackEmail;
   accountName.textContent = label;
+=======
+  const immediateLabel = session.user.email || 'Account';
+  accountName.textContent = immediateLabel;
+
+  getUserProfile(session)
+    .then((profile) => {
+      const label = profile?.email || session.user.email || 'Account';
+      if (accountName.isConnected) accountName.textContent = label;
+    })
+    .catch((error) => {
+      console.warn('Unable to update account label from profile', error);
+    });
+>>>>>>> impte
 };
 
 const applyRoleVisibility = (role) => {
@@ -203,6 +471,10 @@ const routeInfo = (() => {
     isControlView: path.endsWith('/pages/control-map.html') || path.endsWith('pages/control-map.html'),
     isLoginPage: path.endsWith('/login.html') || path.endsWith('login.html'),
     isProfilesPage: path.includes('/admin/profiles.html'),
+<<<<<<< HEAD
+=======
+    isSettingsPage: path.includes('/admin/settings.html'),
+>>>>>>> impte
   };
 })();
 
@@ -216,15 +488,31 @@ const initializeAuthState = () => {
 
   initializationPromise = (async () => {
     try {
+<<<<<<< HEAD
       const { data } = await supabaseClient.auth.getSession();
       setSession(data?.session ?? null);
     } catch (error) {
       console.error('Session prefetch error', error);
       setSession(null);
+=======
+      if (hasSupabaseAuth) {
+        const { data } = await supabaseClient.auth.getSession();
+        const resolved = getEffectiveSession(data?.session ?? null);
+        if (!resolved) clearWebAdminSession();
+        setSession(resolved);
+      } else {
+        clearWebAdminSession();
+        setSession(getEffectiveSession(null));
+      }
+    } catch (error) {
+      console.error('Session prefetch error', error);
+      setSession(getEffectiveSession(null));
+>>>>>>> impte
     } finally {
       initialSessionResolved = true;
     }
 
+<<<<<<< HEAD
     supabaseClient.auth.onAuthStateChange((event, session) => {
       setSession(session);
 
@@ -245,6 +533,35 @@ const initializeAuthState = () => {
         }
       }
     });
+=======
+    if (hasSupabaseAuth && typeof supabaseClient.auth.onAuthStateChange === 'function') {
+      supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT') {
+          clearWebAdminSession();
+        }
+
+        const effectiveSession = getEffectiveSession(session);
+        setSession(effectiveSession);
+
+        if (!effectiveSession) {
+          cachedUserRole = null;
+          cachedUserStatus = null;
+          cachedUserProfile = null;
+          window.currentUserRole = null;
+          window.currentUserStatus = null;
+          window.currentUserProfile = null;
+          broadcastRoleStatus(null, null);
+        }
+
+        if (event === 'SIGNED_OUT') {
+          const isProtectedRoute = routeInfo.isAdminRoute || routeInfo.isControlView;
+          if (isProtectedRoute && !routeInfo.isLoginPage) {
+            redirectToLogin();
+          }
+        }
+      });
+    }
+>>>>>>> impte
   })();
 
   return initializationPromise;
@@ -266,7 +583,14 @@ const waitForAuthorizedSession = () =>
 
     const handleUnauthorized = async (reason) => {
       cleanup();
+<<<<<<< HEAD
       await supabaseClient.auth.signOut();
+=======
+      clearWebAdminSession();
+      if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+        await supabaseClient.auth.signOut();
+      }
+>>>>>>> impte
       redirectToLogin();
       reject(new Error(reason));
     };
@@ -279,7 +603,11 @@ const waitForAuthorizedSession = () =>
       }
 
       if (session === null && initialSessionResolved && !cleanedUp) {
+<<<<<<< HEAD
         handleUnauthorized('No active Supabase session');
+=======
+        handleUnauthorized('No active authenticated session');
+>>>>>>> impte
       }
     };
 
@@ -334,10 +662,20 @@ const setupLogoutButton = () => {
 
   logoutButton.dataset.bound = 'true';
   logoutButton.addEventListener('click', async () => {
+<<<<<<< HEAD
     const { error } = await supabaseClient.auth.signOut();
     if (error) {
       console.error('Supabase sign out error', error);
       return;
+=======
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) {
+        console.error('Supabase sign out error', error);
+        return;
+      }
+>>>>>>> impte
     }
     redirectToLogin();
   });
@@ -396,14 +734,31 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
 
   const navItems = document.querySelectorAll('[data-auth-visible]');
   const guestItems = document.querySelectorAll('[data-auth-guest]');
+<<<<<<< HEAD
+=======
+  const loginButton = document.getElementById('nav-login');
+  const logoutButton = ensureLogoutButton();
+>>>>>>> impte
   if (!navItems.length && !guestItems.length) return;
 
   const session = sessionFromEvent ?? currentSession;
   const authorized = isAuthorizedUser(session);
+<<<<<<< HEAD
   const { role, status } = authorized ? await getUserAccess(session) : { role: 'user', status: 'active' };
 
   if (status === 'suspended' && (routeInfo.isAdminRoute || routeInfo.isControlView)) {
     await supabaseClient.auth.signOut();
+=======
+  const { role, status } = authorized
+    ? await getUserAccess(session, { timeoutMs: ACCESS_LOOKUP_TIMEOUT_MS })
+    : { role: 'user', status: 'active' };
+
+  if (status === 'suspended' && (routeInfo.isAdminRoute || routeInfo.isControlView)) {
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      await supabaseClient.auth.signOut();
+    }
+>>>>>>> impte
     redirectToLogin();
     return;
   }
@@ -413,6 +768,7 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
   if (authorized) {
     navItems.forEach((item) => item.classList.remove('hidden'));
     guestItems.forEach((item) => item.classList.add('hidden'));
+<<<<<<< HEAD
     setupLogoutButton();
     await updateHeaderAccount(session);
     await recordLastConnection(session);
@@ -424,6 +780,23 @@ const syncNavigationVisibility = async (sessionFromEvent = null) => {
       logoutButton.classList.add('hidden');
     }
     await updateHeaderAccount(null);
+=======
+    loginButton?.classList.add('hidden');
+    logoutButton?.classList.remove('hidden');
+    setupLogoutButton();
+    updateHeaderAccount(session);
+    recordLastConnection(session).catch((error) =>
+      console.warn('Unable to record last connection in navigation sync', error),
+    );
+  } else {
+    navItems.forEach((item) => item.classList.add('hidden'));
+    guestItems.forEach((item) => item.classList.remove('hidden'));
+    loginButton?.classList.remove('hidden');
+    if (logoutButton) {
+      logoutButton.classList.add('hidden');
+    }
+    updateHeaderAccount(null);
+>>>>>>> impte
   }
 };
 
@@ -431,19 +804,70 @@ const enforceAdminGuard = async () => {
   await waitForDom();
   applyLoadingState();
   const session = await requireSession();
+<<<<<<< HEAD
   const { role, status } = await getUserAccess(session);
   setupLogoutButton();
   applyRoleVisibility(role);
 
   if (status === 'suspended') {
     await supabaseClient.auth.signOut();
+=======
+  revealAuthorizedUi();
+  setupLogoutButton();
+  const { role, status, confident } = await getUserAccess(session, { timeoutMs: ACCESS_LOOKUP_TIMEOUT_MS });
+  applyRoleVisibility(role);
+
+  if (status === 'suspended') {
+    clearWebAdminSession();
+    if (hasSupabaseAuth && typeof supabaseClient.auth.signOut === 'function') {
+      await supabaseClient.auth.signOut();
+    }
+>>>>>>> impte
     redirectToLogin();
     return session;
   }
 
   if (routeInfo.isAdminRoute && !roleAllowsDashboard(role)) {
+<<<<<<< HEAD
     redirectToHome();
     return session;
+=======
+    if (confident) {
+      redirectToHome();
+      return session;
+    }
+
+    const strictAccess = await getUserAccess(session, {
+      timeoutMs: ACCESS_LOOKUP_TIMEOUT_MS * 2,
+      preferCache: false,
+    });
+    applyRoleVisibility(strictAccess.role);
+
+    if (!roleAllowsDashboard(strictAccess.role)) {
+      redirectToHome();
+      return session;
+    }
+  }
+
+  if (routeInfo.isSettingsPage) {
+    const hintedRole = normalizeRoleValue(
+      session?.user?.app_metadata?.role || role,
+      'user',
+    );
+    const hintedIsAdmin = roleIsAdministrator(hintedRole);
+
+    const strictSettingsAccess = await getUserAccess(session, {
+      timeoutMs: ACCESS_LOOKUP_TIMEOUT_MS * 2,
+      preferCache: false,
+    });
+    applyRoleVisibility(strictSettingsAccess.role);
+
+    const strictIsAdmin = roleIsAdministrator(strictSettingsAccess.role);
+    if (!strictIsAdmin && (strictSettingsAccess.confident || !hintedIsAdmin)) {
+      redirectToHome();
+      return session;
+    }
+>>>>>>> impte
   }
 
   await waitForPageLoad();
@@ -453,7 +877,10 @@ const enforceAdminGuard = async () => {
     return session;
   }
 
+<<<<<<< HEAD
   revealAuthorizedUi();
+=======
+>>>>>>> impte
   return session;
 };
 
@@ -462,6 +889,10 @@ const startNavigationSync = () => {
     syncNavigationVisibility(session).catch((error) => console.error('Navigation auth sync failed', error));
 
   sessionListeners.add(handleNavigationSync);
+<<<<<<< HEAD
+=======
+  window.addEventListener('shared-header:ready', () => handleNavigationSync(currentSession));
+>>>>>>> impte
   initializeAuthState()
     .then(() => handleNavigationSync(currentSession))
     .catch((error) => console.error('Navigation initialization failed', error));

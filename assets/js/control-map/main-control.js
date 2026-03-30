@@ -1,5 +1,9 @@
 import '../../scripts/authManager.js';
 import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
+<<<<<<< HEAD
+=======
+    import { APP_SETTINGS_STORAGE_KEY, getAppSettings, normalizeAppSettings, saveAppSettings } from '../../scripts/appSettings.js';
+>>>>>>> impte
     import { supabase as supabaseClient } from '../supabaseClient.js';
     import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
     import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js';
@@ -21,6 +25,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       isVehicleNotMoving,
       normalizeFilterValue,
       normalizeKey,
+<<<<<<< HEAD
+=======
+      parsePtLastReadDate,
+>>>>>>> impte
       parseDealCompletion,
       toStateCode
     } from '../utils/formatters.js';
@@ -28,7 +36,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     import { createControlMapApiService } from './services/apiService.js';
     import { startSupabaseKeepAlive } from './services/realtime.js';
     import { createVehicleService } from './services/vehicleService.js';
+<<<<<<< HEAD
     import { vehiclePopupTemplate } from '../templates/vehiclePopup.js';
+=======
+    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js';
+>>>>>>> impte
     import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js';
     import { createLayerToggle } from './utils/layer-toggles.js';
     import { syncVehicleMarkers } from './utils/vehicle-markers.js';
@@ -36,18 +48,27 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       bindNavigationStorageListener,
       getSelectedVehicle,
       getServiceFilterIds,
+<<<<<<< HEAD
       getServiceFilters,
       setSelectedVehicle,
       setServiceFilter,
       setServiceFilters,
       subscribeSelectedVehicle,
       subscribeServiceFilters,
+=======
+      setSelectedVehicle,
+      subscribeSelectedVehicle,
+>>>>>>> impte
       subscribeServiceFilterIds,
     } from '../shared/navigationStore.js';
     
     // --- Base Config ---
 
+<<<<<<< HEAD
     let map, techLayer, targetLayer, connectionLayer, serviceLayer, serviceConnectionLayer, vehicleLayer, highlightLayer, resellerLayer, repairLayer, customServiceLayer, hotspotLayer, blacklistLayer;
+=======
+    let map, techLayer, targetLayer, connectionLayer, serviceLayer, serviceConnectionLayer, vehicleLayer, highlightLayer, gpsTrailLayer, resellerLayer, repairLayer, customServiceLayer, hotspotLayer, blacklistLayer;
+>>>>>>> impte
     let technicians = [];
     let blacklistSites = [];
     let hotspots = [];
@@ -64,17 +85,50 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let vehicleMarkersVisible = true;
     let hotspotsVisible = false;
     let blacklistMarkersVisible = false;
+<<<<<<< HEAD
     const serviceHeadersByCategory = {};
     let selectedVehicleId = null;
+=======
+    let routeLinesVisible = true;
+    const ROUTE_LAYER_VISIBILITY_MODE = Object.freeze({
+      ALL: 'all',
+      LABELS_HIDDEN: 'labels-hidden',
+      PARKING_SPOTS_HIDDEN: 'parking-spots-hidden',
+      HIDDEN: 'hidden'
+    });
+    const MAP_DISTANCE_ROUTE_UPLIFT_MULTIPLIER = 1.25;
+    let routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.ALL;
+    const serviceHeadersByCategory = {};
+    let selectedVehicleId = null;
+    let selectedVehicleKey = null;
+    let pinnedVehicleListCardKey = null;
+    let pinnedVehicleListCardOffsetTop = null;
+    const expandedVehicleCardKeys = new Set();
+>>>>>>> impte
     const checkedVehicleIds = new Set();
     const checkedVehicleClickTimes = new Map();
     const checkedVehicleClickTimesByVin = new Map();
     const checkedVehicleStateByVin = new Map();
     const VEHICLE_CLICK_HISTORY_TABLE = 'control_map_vehicle_clicks';
     const VEHICLE_FILTERS_STORAGE_KEY = 'controlMapVehicleFilters';
+<<<<<<< HEAD
     let syncingVehicleSelection = false;
     let selectedTechId = null;
     const vehicleMarkers = new Map();
+=======
+    const VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY = 'controlMapVehicleFiltersCollapsed';
+    const DEFAULT_GPS_TRAIL_POINT_LIMIT = 10;
+    const MIN_GPS_TRAIL_POINT_LIMIT = 1;
+    const MAX_GPS_TRAIL_POINT_LIMIT = 120;
+    const DATA_SYNC_AUTO_REFRESH_INTERVAL_MS = 90 * 1000;
+    const DATA_SYNC_FOCUS_COOLDOWN_MS = 12 * 1000;
+    let syncingVehicleSelection = false;
+    let selectedTechId = null;
+    const vehicleMarkers = new Map();
+    const vehicleMarkerHeadingPendingRequests = new Map();
+    const VEHICLE_MARKER_HEADING_PREFETCH_LIMIT = 24;
+    const VEHICLE_MARKER_HEADING_PREFETCH_CONCURRENCY = 4;
+>>>>>>> impte
     let sidebarStateController = null;
     let techSidebarVisible = false;
     let resellerSidebarVisible = false;
@@ -85,40 +139,236 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let lastClientLocation = null;
     let renderedTechIds = '';
     let lastOriginPoint = null;
+<<<<<<< HEAD
     const serviceFilters = { ...getServiceFilters() };
     const serviceFilterIds = { ...getServiceFilterIds() };
     const vehicleFilters = {
       invPrep: [],
+=======
+    let lastDataSyncRefreshAt = 0;
+    let dataSyncRefreshPromise = null;
+    const serviceSearchFilters = { tech: '', reseller: '', repair: '', custom: '' };
+    const serviceFilterIds = { ...getServiceFilterIds() };
+    const vehicleFilters = {
+      invPrep: [],
+      physLoc: [],
+>>>>>>> impte
       gpsFix: [],
       moving: [],
       dealStatus: [],
       ptStatus: [],
+<<<<<<< HEAD
       dealMin: 0,
       dealMax: 100,
     };
 
     const getVehicleFiltersStorageKey = (userId) => `${VEHICLE_FILTERS_STORAGE_KEY}:${userId || 'anonymous'}`;
+=======
+      dealOperator: 'gt',
+      dealValue: null,
+      trailPoints: DEFAULT_GPS_TRAIL_POINT_LIMIT,
+      payKpiPositiveOnly: false,
+      stalePingOnly: false,
+    };
+    let gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
+    let vehicleFiltersCollapsed = false;
+    let mapAppSettings = getAppSettings();
+    const STALE_PING_DAY_MS = 24 * 60 * 60 * 1000;
+    const APP_SETTINGS_TABLE = 'app_settings';
+    const APP_SETTINGS_KEY = 'control_map';
+    let mapRemoteSettingsAvailable = true;
+    const MAP_ALERT_IGNORE_PATTERNS = [
+      '/rest/v1/app_settings',
+      'ipapi.co',
+      'ipwho.is',
+    ];
+
+    if (typeof window !== 'undefined') {
+      const currentPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+        ? window.__techlocIgnoredAlertRequestPatterns
+        : [];
+      const mergedPatterns = Array.from(new Set([
+        ...currentPatterns,
+        ...MAP_ALERT_IGNORE_PATTERNS,
+      ]));
+      window.__techlocIgnoredAlertRequestPatterns = mergedPatterns;
+    }
+
+    const isMissingAppSettingsTableError = (error) => {
+      const code = String(error?.code || '').trim().toUpperCase();
+      const message = String(error?.message || '').toLowerCase();
+      return code === 'PGRST205' || message.includes("could not find the table 'public.app_settings'");
+    };
+
+    const refreshMapAppSettings = () => {
+      mapAppSettings = getAppSettings();
+      return mapAppSettings;
+    };
+
+    const hydrateMapSettingsFromSupabase = async () => {
+      if (!supabaseClient?.from || !mapRemoteSettingsAvailable) return;
+      try {
+        const { data, error } = await supabaseClient
+          .from(APP_SETTINGS_TABLE)
+          .select('settings')
+          .eq('key', APP_SETTINGS_KEY)
+          .maybeSingle();
+        if (error) {
+          if (isMissingAppSettingsTableError(error)) {
+            mapRemoteSettingsAvailable = false;
+          }
+          return;
+        }
+        if (!data?.settings || typeof data.settings !== 'object') return;
+        const mergedSettings = normalizeAppSettings({
+          ...getAppSettings(),
+          ...data.settings
+        });
+        saveAppSettings(mergedSettings);
+        mapAppSettings = mergedSettings;
+      } catch (_error) {
+        // Non-blocking: keep local/default settings when remote fetch fails.
+      }
+    };
+
+    const parseEpochCandidateMs = (value) => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return null;
+      if (numeric >= 1_000_000_000_000) return numeric;
+      if (numeric >= 1_000_000_000) return numeric * 1000;
+      return null;
+    };
+
+    const getVehicleLastPingTimestampMs = (vehicle = {}) => {
+      const details = vehicle?.details || {};
+      const candidates = [
+        vehicle?.lastRead,
+        details?.pt_last_read,
+        details?.pt_last_ping,
+        details?.pt_lastread,
+        details?.last_read,
+        details?.['PT Last Read'],
+        details?.['PT Last Read '],
+        details?.['PT-LastPing'],
+        details?.['Last Read'],
+        details?.gps_time,
+        details?.updated_at
+      ];
+
+      for (const candidate of candidates) {
+        if (candidate === null || candidate === undefined || candidate === '') continue;
+        const epochMs = parseEpochCandidateMs(candidate);
+        if (Number.isFinite(epochMs)) return epochMs;
+
+        const parsedDate = parsePtLastReadDate(candidate);
+        if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+          return parsedDate.getTime();
+        }
+      }
+
+      return null;
+    };
+
+    const getVehicleMarkerOpacityByLastPing = (vehicle = {}) => {
+      const settings = mapAppSettings || refreshMapAppSettings();
+      const thresholdDays = Number(settings?.vehicleMarkerStalePingDays);
+      const staleOpacity = Number(settings?.vehicleMarkerStaleOpacity);
+      if (!Number.isFinite(thresholdDays) || thresholdDays < 0) return 1;
+
+      const lastPingMs = getVehicleLastPingTimestampMs(vehicle);
+      if (!Number.isFinite(lastPingMs)) return 1;
+
+      const ageMs = Date.now() - lastPingMs;
+      if (!Number.isFinite(ageMs) || ageMs < 0) return 1;
+
+      if (ageMs < (thresholdDays * STALE_PING_DAY_MS)) return 1;
+      return Math.max(0.2, Math.min(1, Number.isFinite(staleOpacity) ? staleOpacity : 0.55));
+    };
+
+    const isVehicleMarkerStaleByLastPing = (vehicle = {}) => getVehicleMarkerOpacityByLastPing(vehicle) < 0.999;
+
+    const parseDaysParkedCandidate = (value) => {
+      if (typeof value === 'number') return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+      if (typeof value === 'string') {
+        const normalized = value.replace(/,/g, '').trim();
+        const parsed = Number.parseFloat(normalized);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return Number.NEGATIVE_INFINITY;
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (event) => {
+        if (event?.key && event.key !== APP_SETTINGS_STORAGE_KEY) return;
+        refreshMapAppSettings();
+        renderVehicles();
+      });
+    }
+
+    const getVehicleFiltersStorageKey = (userId) => `${VEHICLE_FILTERS_STORAGE_KEY}:${userId || 'anonymous'}`;
+    const getVehicleFiltersStorageKeys = (userId) => {
+      const normalizedUserId = `${userId || ''}`.trim();
+      if (!normalizedUserId) return [getVehicleFiltersStorageKey('anonymous')];
+      return [
+        getVehicleFiltersStorageKey(normalizedUserId),
+        getVehicleFiltersStorageKey('anonymous')
+      ];
+    };
+>>>>>>> impte
 
     const normalizeVehicleFilterPayload = (payload = {}) => {
       const toArray = (value) => (Array.isArray(value)
         ? value.map((item) => String(item).trim()).filter(Boolean)
         : []);
 
+<<<<<<< HEAD
       const toBoundedNumber = (value, fallback) => {
+=======
+      const toBoundedNumber = (value, fallback = null) => {
+>>>>>>> impte
         const parsed = Number(value);
         if (!Number.isFinite(parsed)) return fallback;
         return Math.max(0, Math.min(parsed, 100));
       };
 
+<<<<<<< HEAD
       const min = toBoundedNumber(payload.dealMin, 0);
       const max = toBoundedNumber(payload.dealMax, 100);
 
       return {
         invPrep: toArray(payload.invPrep),
+=======
+      const legacyMin = toBoundedNumber(payload.dealMin, 0);
+      const legacyMax = toBoundedNumber(payload.dealMax, 100);
+      let dealOperator = payload.dealOperator === 'lt' ? 'lt' : 'gt';
+      let dealValue = toBoundedNumber(payload.dealValue, null);
+      if (!Number.isFinite(dealValue)) {
+        if (legacyMin > 0 && legacyMax >= 100) {
+          dealOperator = 'gt';
+          dealValue = legacyMin;
+        } else if (legacyMax < 100 && legacyMin <= 0) {
+          dealOperator = 'lt';
+          dealValue = legacyMax;
+        } else {
+          dealValue = null;
+        }
+      }
+      const parsedTrailPoints = Number.parseInt(payload.trailPoints, 10);
+      const trailPoints = Number.isFinite(parsedTrailPoints)
+        ? Math.max(MIN_GPS_TRAIL_POINT_LIMIT, Math.min(parsedTrailPoints, MAX_GPS_TRAIL_POINT_LIMIT))
+        : DEFAULT_GPS_TRAIL_POINT_LIMIT;
+      const payKpiPositiveOnly = Boolean(payload.payKpiPositiveOnly);
+      const stalePingOnly = Boolean(payload.stalePingOnly);
+
+      return {
+        invPrep: toArray(payload.invPrep),
+        physLoc: toArray(payload.physLoc),
+>>>>>>> impte
         gpsFix: toArray(payload.gpsFix),
         moving: toArray(payload.moving),
         dealStatus: toArray(payload.dealStatus),
         ptStatus: toArray(payload.ptStatus),
+<<<<<<< HEAD
         dealMin: Math.min(min, max),
         dealMax: max,
       };
@@ -127,43 +377,811 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const applyVehicleFilterPayload = (payload = {}) => {
       const normalized = normalizeVehicleFilterPayload(payload);
       Object.assign(vehicleFilters, normalized);
+=======
+        dealOperator,
+        dealValue: Number.isFinite(dealValue) ? dealValue : null,
+        trailPoints,
+        payKpiPositiveOnly,
+        stalePingOnly,
+      };
+    };
+
+    const getVehicleFilterPayloadSavedAt = (payload = {}) => {
+      const savedAt = Number(payload?.savedAt);
+      return Number.isFinite(savedAt) && savedAt > 0 ? savedAt : 0;
+    };
+
+    const applyVehicleFilterPayload = (payload = {}) => {
+      const normalized = normalizeVehicleFilterPayload(payload);
+      Object.assign(vehicleFilters, normalized);
+      gpsTrailPointLimit = normalized.trailPoints;
+    };
+
+    const applyDerivedVehicleMetricsFromPreviousSnapshot = (vehicle, previousVehicle = null) => {
+      if (!vehicle || !previousVehicle) return;
+
+      const previousAvgMovingMiles = Number(previousVehicle?.avgMovingMilesPerDay);
+      if (Number.isFinite(previousAvgMovingMiles) && previousAvgMovingMiles >= 0) {
+        vehicle.avgMovingMilesPerDay = previousAvgMovingMiles;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          vehicle.details.avgMovingMilesPerDay = previousAvgMovingMiles;
+        }
+      }
+
+      const previousLastPingMs = getVehicleLastPingTimestampMs(previousVehicle);
+      const currentLastPingMs = getVehicleLastPingTimestampMs(vehicle);
+      const snapshotDidAdvanceLastPing = (
+        Number.isFinite(previousLastPingMs)
+        && Number.isFinite(currentLastPingMs)
+        && currentLastPingMs > previousLastPingMs
+      );
+
+      if (!snapshotDidAdvanceLastPing) {
+        const previousMovingOverride = `${previousVehicle?.historyMovingOverride || previousVehicle?.details?.historyMovingOverride || ''}`.trim().toLowerCase();
+        if (previousMovingOverride) {
+          vehicle.historyMovingOverride = previousMovingOverride;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.historyMovingOverride = previousMovingOverride;
+          }
+        }
+
+        const previousDaysOverrideRaw = previousVehicle?.historyDaysStationaryOverride
+          ?? previousVehicle?.details?.historyDaysStationaryOverride;
+        const previousDaysOverride = Number(previousDaysOverrideRaw);
+        if (Number.isFinite(previousDaysOverride) && previousDaysOverride >= 0) {
+          vehicle.historyDaysStationaryOverride = previousDaysOverride;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.historyDaysStationaryOverride = previousDaysOverride;
+          }
+        }
+      }
+
+      const previousCoords = getVehicleTrailAnchorPoint(previousVehicle);
+      const currentCoords = getVehicleTrailAnchorPoint(vehicle);
+      if (previousCoords && currentCoords) {
+        const distanceMeters = getGpsPointDistanceMeters(previousCoords, currentCoords);
+        if (Number.isFinite(distanceMeters) && distanceMeters >= 5) {
+          vehicle.markerHeadingDegrees = getGpsTrailBearingDegrees(previousCoords, currentCoords);
+        }
+      } else if (Number.isFinite(normalizeHeadingDegrees(previousVehicle?.markerHeadingDegrees))) {
+        vehicle.markerHeadingDegrees = previousVehicle.markerHeadingDegrees;
+      }
+    };
+
+    const MANUAL_VEHICLE_METADATA_OVERRIDES = Object.freeze({
+      '079591': {
+        customerId: 'Pedro Hilario Hernandez',
+        customerName: 'Pedro Hilario Hernandez'
+      }
+    });
+
+    const applyManualVehicleMetadataOverride = (vehicle) => {
+      if (!vehicle) return;
+      const shortVinKey = `${vehicle?.shortVin || vehicle?.shortvin || ''}`.trim().toUpperCase();
+      const override = MANUAL_VEHICLE_METADATA_OVERRIDES[shortVinKey];
+      if (!override) return;
+
+      if (override.customerId) vehicle.customerId = override.customerId;
+      if (override.customerName) vehicle.customerName = override.customerName;
+
+      if (vehicle?.details && typeof vehicle.details === 'object') {
+        if (override.customerId) {
+          vehicle.details['customer id'] = override.customerId;
+          vehicle.details['Customer ID'] = override.customerId;
+          vehicle.details.Customer = override.customerId;
+        }
+        if (override.customerName) {
+          vehicle.details.customer_name = override.customerName;
+          vehicle.details['Customer Name'] = override.customerName;
+        }
+      }
+
+      vehicle._searchBlob = `${vehicle.model} ${vehicle.vin} ${vehicle.lastLocation} ${vehicle.shortLocation} ${vehicle.physicalLocation} ${vehicle.customerId} ${vehicle.customerName} ${vehicle.customer}`.toLowerCase();
+>>>>>>> impte
     };
 
     const loadVehicleFilterPrefs = async () => {
       if (typeof window === 'undefined' || !window.localStorage) return;
       try {
         const userId = await getCurrentUserId();
+<<<<<<< HEAD
         const raw = localStorage.getItem(getVehicleFiltersStorageKey(userId));
         if (!raw) return;
         const parsed = JSON.parse(raw);
         applyVehicleFilterPayload(parsed);
+=======
+        const storageKeys = getVehicleFiltersStorageKeys(userId);
+        const payloads = storageKeys
+          .map((storageKey) => {
+            const raw = localStorage.getItem(storageKey);
+            if (!raw) return null;
+            try {
+              return JSON.parse(raw);
+            } catch (_error) {
+              return null;
+            }
+          })
+          .filter(Boolean);
+        if (!payloads.length) return;
+        const selectedPayload = payloads.sort((left, right) => (
+          getVehicleFilterPayloadSavedAt(right) - getVehicleFilterPayloadSavedAt(left)
+        ))[0];
+        applyVehicleFilterPayload(selectedPayload);
+>>>>>>> impte
       } catch (error) {
         console.warn('Failed to load vehicle filter preferences.', error);
       }
     };
 
+<<<<<<< HEAD
+=======
+    const clearStoredVehicleFilterPrefs = async () => {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      try {
+        const userId = await getCurrentUserId();
+        const keys = new Set([
+          ...getVehicleFiltersStorageKeys(userId),
+          ...getVehicleFiltersStorageKeys('anonymous')
+        ]);
+        keys.forEach((storageKey) => {
+          localStorage.removeItem(storageKey);
+        });
+      } catch (error) {
+        console.warn('Failed to clear stored vehicle filter preferences.', error);
+      }
+    };
+
+>>>>>>> impte
     const persistVehicleFilterPrefs = async () => {
       if (typeof window === 'undefined' || !window.localStorage) return;
       try {
         const userId = await getCurrentUserId();
+<<<<<<< HEAD
         localStorage.setItem(
           getVehicleFiltersStorageKey(userId),
           JSON.stringify(normalizeVehicleFilterPayload(vehicleFilters))
         );
+=======
+        const payload = JSON.stringify({
+          ...normalizeVehicleFilterPayload(vehicleFilters),
+          savedAt: Date.now()
+        });
+        getVehicleFiltersStorageKeys(userId).forEach((storageKey) => {
+          localStorage.setItem(storageKey, payload);
+        });
+>>>>>>> impte
       } catch (error) {
         console.warn('Failed to save vehicle filter preferences.', error);
       }
     };
 
+<<<<<<< HEAD
+=======
+    const VEHICLE_FILTER_DROPDOWN_IDS = [
+      { toggleId: 'filter-invprep-toggle', panelId: 'filter-invprep-panel' },
+      { toggleId: 'filter-physloc-toggle', panelId: 'filter-physloc-panel' },
+      { toggleId: 'filter-gps-toggle', panelId: 'filter-gps-panel' },
+      { toggleId: 'filter-moving-toggle', panelId: 'filter-moving-panel' },
+      { toggleId: 'filter-deal-status-toggle', panelId: 'filter-deal-status-panel' },
+      { toggleId: 'filter-pt-toggle', panelId: 'filter-pt-panel' }
+    ];
+
+    const closeVehicleFilterDropdowns = () => {
+      VEHICLE_FILTER_DROPDOWN_IDS.forEach(({ toggleId, panelId }) => {
+        const toggle = document.getElementById(toggleId);
+        const panel = document.getElementById(panelId);
+        if (!toggle || !panel) return;
+        panel.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    };
+
+    const loadVehicleFiltersCollapsedPref = () => {
+      if (typeof window === 'undefined' || !window.localStorage) return false;
+      try {
+        const raw = localStorage.getItem(VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY);
+        return raw === '1';
+      } catch (_error) {
+        return false;
+      }
+    };
+
+    const persistVehicleFiltersCollapsedPref = () => {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      try {
+        localStorage.setItem(VEHICLE_FILTERS_COLLAPSED_STORAGE_KEY, vehicleFiltersCollapsed ? '1' : '0');
+      } catch (_error) {
+        // Non-blocking: collapse state persistence can fail silently.
+      }
+    };
+
+    const applyVehicleFiltersCollapsedState = (collapsed = false, { persist = true } = {}) => {
+      vehicleFiltersCollapsed = Boolean(collapsed);
+      const filtersBody = document.getElementById('vehicle-filters-body');
+      const collapseBtn = document.getElementById('vehicle-filters-collapse');
+
+      if (filtersBody) {
+        filtersBody.hidden = vehicleFiltersCollapsed;
+        filtersBody.setAttribute('aria-hidden', String(vehicleFiltersCollapsed));
+        filtersBody.classList.toggle('is-collapsed', vehicleFiltersCollapsed);
+      }
+
+      if (collapseBtn) {
+        collapseBtn.textContent = vehicleFiltersCollapsed ? 'Show' : 'Hide';
+        collapseBtn.setAttribute('aria-expanded', String(!vehicleFiltersCollapsed));
+        collapseBtn.setAttribute(
+          'aria-label',
+          vehicleFiltersCollapsed ? 'Show vehicle filters' : 'Hide vehicle filters'
+        );
+      }
+
+      if (vehicleFiltersCollapsed) {
+        closeVehicleFilterDropdowns();
+      }
+
+      if (persist) {
+        persistVehicleFiltersCollapsedPref();
+      }
+    };
+
+>>>>>>> impte
     const selectedServiceByType = {};
     const distanceCaches = {
       tech: { originKey: null, distances: new Map() },
       partners: { originKey: null, distances: new Map() }
     };
+<<<<<<< HEAD
+=======
+    const OVERLAP_CYCLE_HIT_RADIUS_PX = 18;
+    const OVERLAP_CYCLE_MAX_AGE_MS = 7000;
+    const ROUTE_SEGMENT_CYCLE_HIT_RADIUS_PX = 14;
+    let overlapCycleState = null;
+    let parkingSpotCascadeArmed = false;
+    let routeSegmentEntries = [];
+    let activeRouteSegmentKey = '';
+    let routeSegmentCycleState = null;
+
+    const resetOverlapCycleState = () => {
+      overlapCycleState = null;
+    };
+
+    const clearParkingSpotCascade = () => {
+      parkingSpotCascadeArmed = false;
+    };
+
+    const armParkingSpotCascade = () => {
+      parkingSpotCascadeArmed = true;
+    };
+
+    const resetRouteSegmentCycleState = () => {
+      routeSegmentCycleState = null;
+    };
+
+    const getRouteSegmentEntryByKey = (segmentKey = '') => {
+      const normalizedKey = `${segmentKey || ''}`.trim();
+      if (!normalizedKey) return null;
+      return routeSegmentEntries.find((entry) => `${entry?.key || ''}` === normalizedKey) || null;
+    };
+
+    const setRouteSegmentVisualState = (entry, active = false) => {
+      if (!entry) return;
+
+      const line = entry.line;
+      const baseStyle = entry.baseLineStyle || {};
+      if (line && typeof line.setStyle === 'function') {
+        if (active) {
+          line.setStyle({
+            color: baseStyle.color,
+            weight: Number(baseStyle.weight) + 1.55,
+            opacity: Math.min(1, Number(baseStyle.opacity) + 0.22),
+            dashArray: '0',
+            lineCap: 'round',
+            lineJoin: 'round'
+          });
+          if (typeof line.bringToFront === 'function') {
+            line.bringToFront();
+          }
+        } else {
+          line.setStyle({
+            color: baseStyle.color,
+            weight: baseStyle.weight,
+            opacity: baseStyle.opacity,
+            dashArray: baseStyle.dashArray || '4 6',
+            lineCap: 'round',
+            lineJoin: 'round'
+          });
+        }
+      }
+
+      const labelMarker = entry.labelMarker;
+      if (labelMarker) {
+        if (typeof labelMarker.setZIndexOffset === 'function') {
+          labelMarker.setZIndexOffset(active ? (entry.baseLabelZIndexOffset + 900) : entry.baseLabelZIndexOffset);
+        }
+        const markerElement = typeof labelMarker.getElement === 'function' ? labelMarker.getElement() : null;
+        if (markerElement) {
+          markerElement.classList.toggle('is-active', Boolean(active));
+        }
+      }
+    };
+
+    const clearRouteSegmentSelection = ({ resetCycle = true } = {}) => {
+      const activeEntry = getRouteSegmentEntryByKey(activeRouteSegmentKey);
+      if (activeEntry) {
+        setRouteSegmentVisualState(activeEntry, false);
+      }
+      activeRouteSegmentKey = '';
+      if (resetCycle) {
+        resetRouteSegmentCycleState();
+      }
+    };
+
+    const selectRouteSegment = (entry) => {
+      if (!entry?.key) return false;
+      if (activeRouteSegmentKey && activeRouteSegmentKey !== entry.key) {
+        const previous = getRouteSegmentEntryByKey(activeRouteSegmentKey);
+        if (previous) {
+          setRouteSegmentVisualState(previous, false);
+        }
+      }
+      activeRouteSegmentKey = `${entry.key}`;
+      setRouteSegmentVisualState(entry, true);
+      return true;
+    };
+
+    const resetRouteSegmentState = ({ clearEntries = false } = {}) => {
+      clearRouteSegmentSelection({ resetCycle: true });
+      if (clearEntries) {
+        routeSegmentEntries = [];
+      }
+    };
+
+    const getPointToSegmentDistancePx = (point, segmentStart, segmentEnd) => {
+      if (!point || !segmentStart || !segmentEnd) return Number.POSITIVE_INFINITY;
+      const vx = segmentEnd.x - segmentStart.x;
+      const vy = segmentEnd.y - segmentStart.y;
+      const wx = point.x - segmentStart.x;
+      const wy = point.y - segmentStart.y;
+      const c1 = (wx * vx) + (wy * vy);
+      if (c1 <= 0) {
+        const dx = point.x - segmentStart.x;
+        const dy = point.y - segmentStart.y;
+        return Math.hypot(dx, dy);
+      }
+      const c2 = (vx * vx) + (vy * vy);
+      if (c2 <= c1) {
+        const dx = point.x - segmentEnd.x;
+        const dy = point.y - segmentEnd.y;
+        return Math.hypot(dx, dy);
+      }
+      const ratio = c1 / c2;
+      const projectionX = segmentStart.x + (ratio * vx);
+      const projectionY = segmentStart.y + (ratio * vy);
+      return Math.hypot(point.x - projectionX, point.y - projectionY);
+    };
+
+    const collectRouteSegmentsAtLatLng = (latlng) => {
+      if (!map || !latlng || !routeSegmentEntries.length) return [];
+      const clickPoint = map.latLngToContainerPoint(latlng);
+      const hitRadiusPx = ROUTE_SEGMENT_CYCLE_HIT_RADIUS_PX;
+
+      return routeSegmentEntries
+        .map((entry) => {
+          const startPoint = map.latLngToContainerPoint(entry.fromLatLng);
+          const endPoint = map.latLngToContainerPoint(entry.toLatLng);
+          const distancePx = getPointToSegmentDistancePx(clickPoint, startPoint, endPoint);
+          if (!Number.isFinite(distancePx) || distancePx > hitRadiusPx) return null;
+          return { ...entry, distancePx };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+          if (a.distancePx !== b.distancePx) return a.distancePx - b.distancePx;
+          return (a.index || 0) - (b.index || 0);
+        });
+    };
+
+    const cycleRouteSegmentSelectionAt = (latlng, clickedSegmentKey = '') => {
+      if (!map || !latlng) return false;
+      const candidates = collectRouteSegmentsAtLatLng(latlng);
+      if (!candidates.length) return false;
+
+      const signature = candidates.map((entry) => entry.key).join('|');
+      const now = Date.now();
+      const previous = routeSegmentCycleState;
+      const previousLatLng = previous ? L.latLng(previous.lat, previous.lng) : null;
+      const sameSequence = Boolean(
+        previous
+        && previous.signature === signature
+        && previousLatLng
+        && map.distance(latlng, previousLatLng) <= getOverlapHitRadiusMeters(latlng)
+        && (now - previous.timestamp) <= OVERLAP_CYCLE_MAX_AGE_MS
+      );
+
+      let nextIndex = 0;
+      if (sameSequence && candidates.length > 1) {
+        nextIndex = (previous.index + 1) % candidates.length;
+      } else {
+        const clickedIndex = clickedSegmentKey
+          ? candidates.findIndex((entry) => `${entry.key}` === `${clickedSegmentKey}`)
+          : -1;
+        if (clickedIndex >= 0) {
+          nextIndex = clickedIndex;
+        } else if (activeRouteSegmentKey) {
+          const activeIndex = candidates.findIndex((entry) => `${entry.key}` === `${activeRouteSegmentKey}`);
+          nextIndex = activeIndex >= 0 ? activeIndex : 0;
+        }
+      }
+
+      const target = candidates[nextIndex];
+      if (!selectRouteSegment(target)) return false;
+
+      routeSegmentCycleState = {
+        signature,
+        index: nextIndex,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        timestamp: now
+      };
+      return true;
+    };
+
+    const hasVisibleParkingSpotPopup = () => Boolean(document.querySelector('.vehicle-history-hotspot-popup'));
+    const hasVisibleRoutePointPopup = () => Boolean(document.querySelector('.gps-record-popup'));
+
+    const getRouteToggleLabel = (mode = routeLayerVisibilityMode) => {
+      if (mode === ROUTE_LAYER_VISIBILITY_MODE.ALL) return 'Hide Route Labels';
+      if (mode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN) return 'Hide Parking Spots';
+      if (mode === ROUTE_LAYER_VISIBILITY_MODE.PARKING_SPOTS_HIDDEN) return 'Hide Route Lines';
+      return 'Show All';
+    };
+
+    const isGpsTrailDistanceLabelLayer = (layer) => {
+      const className = `${layer?.options?.icon?.options?.className || ''}`.trim();
+      return className.split(/\s+/).includes('gps-trail-distance');
+    };
+
+    const isVehicleHistoryParkingSpotLayer = (layer) => {
+      const className = `${layer?.options?.className || ''}`.toLowerCase();
+      return className.includes('vehicle-history-hotspot');
+    };
+
+    const updateRouteLayerToggleUi = () => {
+      const toggle = document.getElementById('toggle-route-lines');
+      if (!toggle) return;
+      const routesVisible = routeLayerVisibilityMode !== ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      const buttonLabel = getRouteToggleLabel(routeLayerVisibilityMode);
+      toggle.textContent = buttonLabel;
+      toggle.classList.toggle('active', routesVisible);
+      toggle.setAttribute('aria-pressed', routesVisible ? 'true' : 'false');
+      toggle.setAttribute('aria-label', buttonLabel);
+    };
+
+    const applyRouteLayerVisibilityMode = () => {
+      routeLinesVisible = routeLayerVisibilityMode !== ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      const hideLabelsOnly = (
+        routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN
+        || routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.PARKING_SPOTS_HIDDEN
+      );
+      const hideEverything = routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      const hideParkingSpots = (
+        routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.PARKING_SPOTS_HIDDEN
+        || routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.HIDDEN
+      );
+
+      if (gpsTrailLayer && map) {
+        if (hideEverything) {
+          if (map.hasLayer(gpsTrailLayer)) map.removeLayer(gpsTrailLayer);
+        } else if (!map.hasLayer(gpsTrailLayer)) {
+          gpsTrailLayer.addTo(map);
+        }
+
+        gpsTrailLayer.eachLayer((layer) => {
+          if (!isGpsTrailDistanceLabelLayer(layer)) return;
+          if (typeof layer.setOpacity === 'function') {
+            layer.setOpacity(hideLabelsOnly ? 0 : 1);
+          }
+          const layerElement = typeof layer.getElement === 'function' ? layer.getElement() : null;
+          if (layerElement) {
+            layerElement.style.display = hideLabelsOnly ? 'none' : '';
+          }
+        });
+      }
+
+      if (highlightLayer) {
+        highlightLayer.eachLayer((layer) => {
+          if (!isVehicleHistoryParkingSpotLayer(layer)) return;
+          if (hideParkingSpots && typeof layer.closePopup === 'function') {
+            layer.closePopup();
+          }
+          if (typeof layer.setStyle === 'function') {
+            if (!layer.options.__routeToggleOriginalStyle) {
+              layer.options.__routeToggleOriginalStyle = {
+                opacity: layer.options.opacity,
+                fillOpacity: layer.options.fillOpacity,
+                interactive: layer.options.interactive
+              };
+            }
+            const originalStyle = layer.options.__routeToggleOriginalStyle;
+            layer.setStyle({
+              opacity: hideParkingSpots ? 0 : originalStyle.opacity,
+              fillOpacity: hideParkingSpots ? 0 : originalStyle.fillOpacity,
+              interactive: hideParkingSpots ? false : originalStyle.interactive
+            });
+          }
+          const layerElement = typeof layer.getElement === 'function' ? layer.getElement() : null;
+          if (layerElement) {
+            layerElement.style.display = hideParkingSpots ? 'none' : '';
+            layerElement.style.pointerEvents = hideParkingSpots ? 'none' : '';
+          }
+        });
+      }
+
+      updateRouteLayerToggleUi();
+    };
+
+    const cycleRouteLayerVisibilityMode = () => {
+      if (routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.ALL) {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN;
+      } else if (routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.LABELS_HIDDEN) {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.PARKING_SPOTS_HIDDEN;
+      } else if (routeLayerVisibilityMode === ROUTE_LAYER_VISIBILITY_MODE.PARKING_SPOTS_HIDDEN) {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.HIDDEN;
+      } else {
+        routeLayerVisibilityMode = ROUTE_LAYER_VISIBILITY_MODE.ALL;
+      }
+      applyRouteLayerVisibilityMode();
+    };
+
+    const bindRouteLayerToggle = () => {
+      const toggle = document.getElementById('toggle-route-lines');
+      if (!toggle) return;
+      if (toggle.dataset.routeCycleBound === '1') {
+        applyRouteLayerVisibilityMode();
+        return;
+      }
+      toggle.dataset.routeCycleBound = '1';
+      toggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        cycleRouteLayerVisibilityMode();
+      });
+      applyRouteLayerVisibilityMode();
+    };
+
+    const getOverlapHitRadiusMeters = (latlng) => {
+      if (!map || !latlng) return 45;
+      const centerPoint = map.latLngToContainerPoint(latlng);
+      const edgePoint = L.point(centerPoint.x + OVERLAP_CYCLE_HIT_RADIUS_PX, centerPoint.y);
+      const edgeLatLng = map.containerPointToLatLng(edgePoint);
+      return Math.max(12, map.distance(latlng, edgeLatLng));
+    };
+
+    const getCycleRolePriority = (role = 'other') => {
+      if (role === 'vehicle') return 0;
+      if (role === 'parking-spot') return 1;
+      if (role === 'route-point') return 2;
+      return 3;
+    };
+
+    const getLayerCycleRole = (layer) => {
+      const explicitRole = `${layer?.options?.cycleRole || ''}`.trim();
+      if (explicitRole) return explicitRole;
+
+      if (layer?.options?.vehicleData) return 'vehicle';
+
+      const popupClassName = `${layer?.getPopup?.()?.options?.className || ''}`.toLowerCase();
+      if (popupClassName.includes('vehicle-popup')) return 'vehicle';
+      if (popupClassName.includes('vehicle-history-hotspot-popup')) return 'parking-spot';
+      if (popupClassName.includes('gps-record-popup')) return 'route-point';
+
+      const layerClassName = `${layer?.options?.className || ''}`.toLowerCase();
+      if (layerClassName.includes('vehicle-history-hotspot')) return 'parking-spot';
+      if (layerClassName.includes('gps-trail-point')) return 'route-point';
+
+      return 'other';
+    };
+
+    const getLayerCycleKey = (layer, role) => {
+      const explicitKey = `${layer?.options?.cycleKey || ''}`.trim();
+      if (explicitKey) return explicitKey;
+
+      const latlng = typeof layer?.getLatLng === 'function' ? layer.getLatLng() : null;
+      const coordKey = latlng ? `${latlng.lat.toFixed(6)},${latlng.lng.toFixed(6)}` : '';
+
+      if (role === 'vehicle') {
+        const vehicleId = layer?.options?.vehicleData?.id;
+        if (vehicleId !== undefined && vehicleId !== null) return `vehicle-${vehicleId}`;
+      }
+
+      if (role === 'parking-spot') return `parking-${coordKey}`;
+      if (role === 'route-point') return `route-${coordKey}`;
+      return `layer-${L.stamp(layer)}-${coordKey}`;
+    };
+
+    const collectOverlapCycleCandidates = (latlng) => {
+      if (!map || !latlng) return [];
+      const hitRadiusMeters = getOverlapHitRadiusMeters(latlng);
+      const candidateMap = new Map();
+
+      const registerCandidate = (candidate) => {
+        if (!candidate?.key) return;
+        const existing = candidateMap.get(candidate.key);
+        if (!existing) {
+          candidateMap.set(candidate.key, candidate);
+          return;
+        }
+
+        if (candidate.priority < existing.priority) {
+          candidateMap.set(candidate.key, candidate);
+          return;
+        }
+
+        if (candidate.priority === existing.priority && candidate.distanceMeters < existing.distanceMeters) {
+          candidateMap.set(candidate.key, candidate);
+        }
+      };
+
+      vehicleMarkers.forEach(({ marker }) => {
+        if (!marker || typeof marker.getLatLng !== 'function') return;
+        const markerLatLng = marker.getLatLng();
+        const distanceMeters = map.distance(latlng, markerLatLng);
+        if (!Number.isFinite(distanceMeters) || distanceMeters > hitRadiusMeters) return;
+        const role = 'vehicle';
+        const key = `${marker?.options?.cycleKey || getLayerCycleKey(marker, role)}`;
+        const vehicle = marker?.options?.vehicleData || null;
+        const vehicleKey = `${marker?.options?.vehicleKey || getVehicleKey(vehicle)}`;
+        registerCandidate({
+          key,
+          role,
+          priority: getCycleRolePriority(role),
+          distanceMeters,
+          layer: marker,
+          vehicle,
+          vehicleId: vehicle?.id ?? null,
+          vehicleKey
+        });
+      });
+
+      const collectFromLayerGroup = (layerGroup) => {
+        if (!layerGroup?.eachLayer) return;
+        layerGroup.eachLayer((layer) => {
+          if (!layer || typeof layer.getLatLng !== 'function') return;
+          if (layer?.options?.interactive === false) return;
+          const hasPopup = !!layer.getPopup?.();
+          if (!hasPopup && !layer?.options?.vehicleData) return;
+
+          const layerLatLng = layer.getLatLng();
+          const distanceMeters = map.distance(latlng, layerLatLng);
+          if (!Number.isFinite(distanceMeters) || distanceMeters > hitRadiusMeters) return;
+
+          const role = getLayerCycleRole(layer);
+          const key = getLayerCycleKey(layer, role);
+          registerCandidate({
+            key,
+            role,
+            priority: getCycleRolePriority(role),
+            distanceMeters,
+            layer,
+            vehicle: layer?.options?.vehicleData || null,
+            vehicleId: layer?.options?.vehicleData?.id ?? null,
+            vehicleKey: layer?.options?.vehicleData
+              ? `${layer?.options?.vehicleKey || getVehicleKey(layer?.options?.vehicleData || null)}`
+              : ''
+          });
+        });
+      };
+
+      collectFromLayerGroup(highlightLayer);
+      collectFromLayerGroup(gpsTrailLayer);
+
+      return Array.from(candidateMap.values())
+        .sort((a, b) => {
+          if (a.priority !== b.priority) return a.priority - b.priority;
+          return a.distanceMeters - b.distanceMeters;
+        });
+    };
+
+    const activateOverlapCycleCandidate = (candidate) => {
+      if (!candidate) return false;
+
+      if (candidate.role === 'vehicle') {
+        const targetVehicle = candidate.vehicle
+          || vehicles.find((vehicle) => `${vehicle.id}` === `${candidate.vehicleId}`);
+        if (!targetVehicle || !hasValidCoords(targetVehicle)) return false;
+        const targetVehicleKey = `${candidate?.vehicleKey || getVehicleKey(targetVehicle)}`;
+        const matchesSelectedVehicle = (
+          `${selectedVehicleId ?? ''}` === `${targetVehicle.id ?? ''}`
+          && (!selectedVehicleKey || `${selectedVehicleKey}` === targetVehicleKey)
+        );
+        if (matchesSelectedVehicle) {
+          if (candidate.layer && typeof candidate.layer.openPopup === 'function') {
+            candidate.layer.openPopup();
+          }
+          return true;
+        }
+        applySelection(targetVehicle.id, null, targetVehicleKey);
+        focusVehicle(targetVehicle, { autoExpandSidebarCard: true });
+        return true;
+      }
+
+      if (candidate.layer && typeof candidate.layer.openPopup === 'function') {
+        candidate.layer.openPopup();
+        return true;
+      }
+
+      return false;
+    };
+
+    const cycleOverlappingTargetsAtLatLng = (latlng, originalEvent = null) => {
+      if (!map || !latlng || selectedVehicleId === null) return false;
+      const candidates = collectOverlapCycleCandidates(latlng);
+      if (candidates.length < 2) {
+        resetOverlapCycleState();
+        return false;
+      }
+
+      const signature = candidates.map((candidate) => candidate.key).join('|');
+      const now = Date.now();
+      const previous = overlapCycleState;
+      const previousLatLng = previous
+        ? L.latLng(previous.lat, previous.lng)
+        : null;
+      const sameSequence = Boolean(
+        previous
+        && previous.signature === signature
+        && previousLatLng
+        && map.distance(latlng, previousLatLng) <= previous.hitRadiusMeters
+        && (now - previous.timestamp) <= OVERLAP_CYCLE_MAX_AGE_MS
+      );
+
+      let nextIndex = 0;
+      if (sameSequence) {
+        nextIndex = (previous.index + 1) % candidates.length;
+      } else {
+        const clickedKey = `${originalEvent?.cycleKey || ''}`.trim();
+        const clickedRole = `${originalEvent?.cycleRole || ''}`.trim();
+        const vehicleSelectionChanged = Boolean(originalEvent?.vehicleSelectionChanged);
+        const clickedIndex = clickedKey
+          ? candidates.findIndex((candidate) => candidate.key === clickedKey)
+          : -1;
+        const selectedVehicleIndex = candidates.findIndex((candidate) =>
+          candidate.role === 'vehicle'
+          && (
+            (selectedVehicleKey && `${candidate.vehicleKey ?? ''}` === `${selectedVehicleKey}`)
+            || (!selectedVehicleKey && `${candidate.vehicle?.id ?? candidate.vehicleId ?? ''}` === `${selectedVehicleId}`)
+          )
+        );
+        if (vehicleSelectionChanged) {
+          nextIndex = selectedVehicleIndex >= 0
+            ? selectedVehicleIndex
+            : (clickedIndex >= 0 ? clickedIndex : 0);
+        } else if (clickedRole === 'vehicle' && selectedVehicleIndex >= 0 && candidates.length > 1) {
+          nextIndex = (selectedVehicleIndex + 1) % candidates.length;
+        } else if (clickedIndex >= 0) {
+          nextIndex = clickedIndex;
+        } else {
+          nextIndex = selectedVehicleIndex >= 0 ? selectedVehicleIndex : 0;
+        }
+      }
+
+      const targetCandidate = candidates[nextIndex];
+      if (!activateOverlapCycleCandidate(targetCandidate)) return false;
+
+      overlapCycleState = {
+        signature,
+        index: nextIndex,
+        lat: latlng.lat,
+        lng: latlng.lng,
+        hitRadiusMeters: getOverlapHitRadiusMeters(latlng),
+        timestamp: now
+      };
+      return true;
+    };
+>>>>>>> impte
 
     const ensureSupabaseSession = () => ensureSupabaseSessionBase(supabaseClient);
     const vehicleService = createVehicleService({ client: supabaseClient, tableName: TABLES.vehicles });
 
+<<<<<<< HEAD
     const areDepsEqual = (next = [], prev = []) =>
       next.length === prev.length && next.every((value, index) => Object.is(value, prev[index]));
 
@@ -180,6 +1198,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const useCallback = createCallbackMemo();
 
+=======
+>>>>>>> impte
     const parseNumber = (value) => {
       if (value === undefined || value === null) return null;
       const cleaned = typeof value === 'string' ? value.replace(/[$,]/g, '').trim() : value;
@@ -204,6 +1224,34 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       || ''
     );
 
+<<<<<<< HEAD
+=======
+    const getVehicleKey = (vehicle = {}) => {
+      const idPart = `${vehicle?.id ?? ''}`.trim();
+      if (idPart) return idPart;
+      const explicitKey = `${vehicle?.uiKey || ''}`.trim();
+      if (explicitKey) return explicitKey;
+      const vinPart = normalizeVin(vehicle?.vin);
+      const stockPart = normalizeStockNumber(vehicle?.stockNo);
+      return [idPart, vinPart, stockPart].join('::');
+    };
+
+    const findVehicleByKey = (vehicleKey = '') => {
+      const normalizedKey = `${vehicleKey || ''}`.trim();
+      if (!normalizedKey) return null;
+      return vehicles.find((vehicle) => getVehicleKey(vehicle) === normalizedKey) || null;
+    };
+
+    const getSelectedVehicleEntry = () => {
+      if (selectedVehicleKey) {
+        const byKey = findVehicleByKey(selectedVehicleKey);
+        if (byKey) return byKey;
+      }
+      if (selectedVehicleId === null) return null;
+      return vehicles.find((vehicle) => `${vehicle.id}` === `${selectedVehicleId}`) || null;
+    };
+
+>>>>>>> impte
     const getCurrentUserId = async () => {
       if (!supabaseClient?.auth?.getSession) return null;
       try {
@@ -211,11 +1259,38 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       } catch (_) {
         // keep fallback below; auth state can still resolve through an existing session
       }
+<<<<<<< HEAD
+=======
+
+>>>>>>> impte
       const { data, error } = await supabaseClient.auth.getSession();
       if (error) return null;
       return data?.session?.user?.id || null;
     };
 
+<<<<<<< HEAD
+=======
+    const hasAuthenticatedAccess = async () => {
+      return Boolean(await getCurrentUserId());
+    };
+
+    const isAuthenticatedCached = () => {
+      return Boolean(window.currentUserRole);
+    };
+
+    const notifyAuthRequired = () => {
+      if (typeof window.reportGlobalIssue === 'function') {
+        window.reportGlobalIssue(
+          'Authentication Required',
+          'Repair History is available only for logged users.',
+          'Sign in first to view or edit repair history.'
+        );
+        return;
+      }
+      window.alert('Repair History is available only for logged users.');
+    };
+
+>>>>>>> impte
     const hydrateVehicleClickHistory = async (vehicleRows = []) => {
       if (!supabaseClient?.from || !Array.isArray(vehicleRows) || !vehicleRows.length) return;
       const userId = await getCurrentUserId();
@@ -285,6 +1360,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (value === null || value === undefined || !Number.isFinite(value)) return '—';
       return value.toFixed(2);
     };
+<<<<<<< HEAD
+=======
+    const formatInvoiceDate = (value) => {
+      if (!value) return '—';
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return '—';
+      return parsed.toLocaleDateString('en-US', {
+        month: '2-digit',
+        day: '2-digit',
+        year: '2-digit'
+      });
+    };
+    let oldestOpenInvoiceLookupWarningShown = false;
+    const GPS_READ_BOUNDS_CACHE_TTL_MS = 10 * 60 * 1000;
+    let gpsReadBoundsByVinCache = new Map();
+    let gpsReadBoundsByVinCacheUpdatedAt = 0;
+    let gpsReadBoundsByVinPending = null;
+>>>>>>> impte
 
     const fetchDealsByStockNumbers = async (stockNumbers = []) => {
       if (!supabaseClient?.from || !stockNumbers.length) return new Map();
@@ -302,7 +1395,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             .select('"Current Stock No","Regular Amount","Open Balance","Vehicle Status"')
             .in(stockNoColumn, chunk),
           8000,
+<<<<<<< HEAD
           'Error de comunicación con la base de datos.'
+=======
+          'Database communication error.'
+>>>>>>> impte
         );
         if (error) throw error;
         (data || []).forEach((row) => {
@@ -317,6 +1414,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return results;
     };
 
+<<<<<<< HEAD
     const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
     const matchesVehicleSelection = (vehicle, selection) => {
       if (!vehicle || !selection) return false;
@@ -327,22 +1425,812 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const selectionCustomer = normalizeSelectionValue(selection.customerId);
       const vehicleCustomer = normalizeSelectionValue(vehicle.customerId);
       return !!(selectionCustomer && vehicleCustomer && selectionCustomer === vehicleCustomer);
+=======
+    const fetchOpenInvoiceSummaryByStockNumbers = async (stockNumbers = []) => {
+      if (!supabaseClient?.from || !stockNumbers.length) return new Map();
+      const unique = Array.from(new Set(stockNumbers.filter(Boolean)));
+      if (!unique.length) return new Map();
+      const tableCandidates = Array.from(new Set([
+        `${TABLES.invoices || ''}`.trim(),
+        'NS-Invoices&pays'
+      ].filter(Boolean)));
+      const stockKeyCandidates = ['Current Stock No', 'current_stock_no', 'Stock No', 'stock_no', 'stock'];
+      const remainingKeyCandidates = ['Amount Remaining', 'amount_remaining', 'Remaining Balance', 'remaining_balance', 'Open Balance', 'open_balance', 'remaining'];
+      const dateKeyCandidates = ['Date', 'date', 'Invoice Date', 'invoice_date', 'created_at', 'updated_at'];
+      const normalizeName = (value = '') => `${value}`.trim().toLowerCase();
+      const quoteColumn = (column = '') => {
+        const normalized = `${column || ''}`.trim();
+        if (!normalized) return '';
+        if (normalized.startsWith('"') && normalized.endsWith('"')) return normalized;
+        if (/^[a-z_][a-z0-9_]*$/i.test(normalized)) return normalized;
+        return `"${normalized.replace(/"/g, '""')}"`;
+      };
+      const resolveColumnKey = (availableKeys = [], candidates = []) => {
+        if (!Array.isArray(availableKeys) || !availableKeys.length) return '';
+        const lookup = new Map(availableKeys.map((key) => [normalizeName(key), key]));
+        for (const candidate of candidates) {
+          const hit = lookup.get(normalizeName(candidate));
+          if (hit) return hit;
+        }
+        return '';
+      };
+
+      const chunkSize = 500;
+      const pageSize = 1000;
+      for (const tableName of tableCandidates) {
+        try {
+          const probe = await runWithTimeout(
+            supabaseClient.from(tableName).select('*').limit(1),
+            8000,
+            'Invoice probe query timed out.'
+          );
+          if (probe.error) throw probe.error;
+          const probeRows = Array.isArray(probe.data) ? probe.data : [];
+          const availableKeys = probeRows.length ? Object.keys(probeRows[0] || {}) : [];
+          if (!availableKeys.length) return new Map();
+
+          const stockKey = resolveColumnKey(availableKeys, stockKeyCandidates);
+          const remainingKey = resolveColumnKey(availableKeys, remainingKeyCandidates);
+          const dateKey = resolveColumnKey(availableKeys, dateKeyCandidates);
+
+          if (!stockKey || !remainingKey || !dateKey) return new Map();
+
+          const stockColumn = quoteColumn(stockKey);
+          const remainingColumn = quoteColumn(remainingKey);
+          const dateColumn = quoteColumn(dateKey);
+          const selectColumns = [stockColumn, dateColumn, remainingColumn].filter(Boolean).join(',');
+          const results = new Map();
+
+          for (let i = 0; i < unique.length; i += chunkSize) {
+            const chunk = unique.slice(i, i + chunkSize);
+            let offset = 0;
+            let hasMore = true;
+
+            while (hasMore) {
+              let query = supabaseClient
+                .from(tableName)
+                .select(selectColumns)
+                .in(stockColumn, chunk)
+                .range(offset, offset + pageSize - 1);
+
+              if (remainingColumn) {
+                query = query.gt(remainingColumn, 0);
+              }
+
+              const { data, error } = await runWithTimeout(
+                query,
+                8000,
+                'Invoice query timed out.'
+              );
+              if (error) throw error;
+
+              const pageRows = Array.isArray(data) ? data : [];
+              pageRows.forEach((row) => {
+                const stockNo = normalizeStockNumber(row?.[stockKey]);
+                if (!stockNo) return;
+
+                const remaining = parseNumber(row?.[remainingKey]);
+                if (remainingColumn && (!Number.isFinite(remaining) || remaining <= 0)) return;
+
+                const dateRaw = row?.[dateKey];
+                if (!dateRaw) return;
+                const timestamp = Date.parse(dateRaw);
+                if (Number.isNaN(timestamp)) return;
+
+                const existing = results.get(stockNo) || {
+                  timestamp: null,
+                  value: '',
+                  openBalanceSum: 0
+                };
+                existing.openBalanceSum += remaining;
+                if (existing.timestamp === null || timestamp < existing.timestamp) {
+                  existing.timestamp = timestamp;
+                  existing.value = new Date(timestamp).toISOString();
+                }
+                results.set(stockNo, existing);
+              });
+
+              hasMore = pageRows.length === pageSize;
+              offset += pageSize;
+            }
+          }
+
+          return results;
+        } catch (lastError) {
+          const code = `${lastError?.code || ''}`.trim();
+          const message = `${lastError?.message || ''}`.toLowerCase();
+          const missingTable = code === 'PGRST205' || message.includes('could not find the table');
+          if (missingTable) {
+            continue;
+          }
+          if (!oldestOpenInvoiceLookupWarningShown) {
+            oldestOpenInvoiceLookupWarningShown = true;
+            console.warn('Oldest open invoice lookup warning: ' + (lastError?.message || lastError));
+          }
+          throw lastError;
+        }
+      }
+
+      if (!oldestOpenInvoiceLookupWarningShown) {
+        oldestOpenInvoiceLookupWarningShown = true;
+        console.warn('Oldest open invoice lookup warning: invoice table not found.');
+      }
+      throw new Error('Invoice table not found.');
+    };
+
+    const normalizeVehicleIdKey = (value) => `${value ?? ''}`.trim();
+    const normalizeVinKey = (value) => `${value ?? ''}`.trim().toUpperCase();
+    const normalizeVinComparableKey = (value) => normalizeVinKey(value).replace(/[^A-Z0-9]/g, '');
+    const getVinSuffixKey = (value) => {
+      const normalized = normalizeVinComparableKey(value);
+      if (!normalized) return '';
+      return normalized.slice(-6);
+    };
+    const getVehicleVinSuffixKey = (vehicle = {}) => {
+      const candidates = [
+        vehicle?.shortVin,
+        vehicle?.shortvin,
+        vehicle?.details?.shortvin,
+        vehicle?.details?.ShortVIN,
+        vehicle?.details?.['ShortVIN'],
+        vehicle?.details?.['Short Vin'],
+        getVehicleVin(vehicle),
+        vehicle?.vin,
+        vehicle?.details?.VIN
+      ];
+      for (const candidate of candidates) {
+        const suffix = getVinSuffixKey(candidate);
+        if (suffix) return suffix;
+      }
+      return '';
+    };
+    const parseGpsReadBoundsTimestamp = (record = {}) => {
+      const candidates = [
+        record?.Date,
+        record?.['Date'],
+        record?.gps_time,
+        record?.created_at,
+        record?.updated_at
+      ];
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return Number.NaN;
+    };
+
+    const updateGpsReadTimestampBounds = (targetMap, key, timestampMs) => {
+      if (!(targetMap instanceof Map) || !key || !Number.isFinite(timestampMs)) return;
+      const current = targetMap.get(key) || {
+        firstTimestamp: Number.POSITIVE_INFINITY,
+        lastTimestamp: Number.NEGATIVE_INFINITY
+      };
+      if (timestampMs < current.firstTimestamp) current.firstTimestamp = timestampMs;
+      if (timestampMs > current.lastTimestamp) current.lastTimestamp = timestampMs;
+      targetMap.set(key, current);
+    };
+
+    const normalizeGpsReadBoundsMap = (rawBounds = new Map()) => {
+      const normalized = new Map();
+      if (!(rawBounds instanceof Map)) return normalized;
+      rawBounds.forEach((value, key) => {
+        const firstRead = Number.isFinite(value?.firstTimestamp)
+          ? new Date(value.firstTimestamp).toISOString()
+          : '';
+        const lastRead = Number.isFinite(value?.lastTimestamp)
+          ? new Date(value.lastTimestamp).toISOString()
+          : '';
+        if (firstRead || lastRead) {
+          normalized.set(key, { firstRead, lastRead });
+        }
+      });
+      return normalized;
+    };
+
+    const fetchGpsReadBoundsByVehicleIds = async (vehicleIds = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vehicleIds) || !vehicleIds.length) return new Map();
+      await ensureSupabaseSession();
+      const uniqueVehicleIds = Array.from(new Set(
+        vehicleIds.map((value) => normalizeVehicleIdKey(value)).filter(Boolean)
+      ));
+      if (!uniqueVehicleIds.length) return new Map();
+
+      const pageSize = 1000;
+      const idChunkSize = 20;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsByVehicleId = new Map();
+
+      for (let index = 0; index < uniqueVehicleIds.length; index += idChunkSize) {
+        const idChunk = uniqueVehicleIds.slice(index, index + idChunkSize);
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const query = supabaseClient
+            .from(TABLES.gpsHistory)
+            .select('*')
+            .in('vehicle_id', idChunk)
+            .range(offset, offset + pageSize - 1);
+
+          const { data, error } = await runWithTimeout(
+            query,
+            gpsReadBoundsTimeoutMs,
+            'GPS read-bound lookup timed out.'
+          );
+          if (error) throw error;
+
+          const rows = Array.isArray(data) ? data : [];
+          rows.forEach((row) => {
+            const vehicleId = normalizeVehicleIdKey(row?.vehicle_id);
+            if (!vehicleId) return;
+            const timestamp = parseGpsReadBoundsTimestamp(row);
+            if (!Number.isFinite(timestamp)) return;
+            updateGpsReadTimestampBounds(boundsByVehicleId, vehicleId, timestamp);
+          });
+
+          hasMore = rows.length === pageSize;
+          offset += pageSize;
+        }
+      }
+
+      return normalizeGpsReadBoundsMap(boundsByVehicleId);
+    };
+
+    const fetchGpsReadBoundsByVins = async (vins = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vins) || !vins.length) return new Map();
+      await ensureSupabaseSession();
+      const uniqueVins = Array.from(new Set(vins.map((value) => normalizeVinKey(value)).filter(Boolean)));
+      if (!uniqueVins.length) return new Map();
+
+      const pageSize = 1000;
+      const vinChunkSize = 25;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsByVin = new Map();
+
+      for (let index = 0; index < uniqueVins.length; index += vinChunkSize) {
+        const vinChunk = uniqueVins.slice(index, index + vinChunkSize);
+        let offset = 0;
+        let hasMore = true;
+        while (hasMore) {
+          const query = supabaseClient
+            .from(TABLES.gpsHistory)
+            .select('*')
+            .in('VIN', vinChunk)
+            .range(offset, offset + pageSize - 1);
+
+          const { data, error } = await runWithTimeout(
+            query,
+            gpsReadBoundsTimeoutMs,
+            'GPS read-bound VIN lookup timed out.'
+          );
+          if (error) throw error;
+
+          const rows = Array.isArray(data) ? data : [];
+          rows.forEach((row) => {
+            const vin = normalizeVinKey(row?.VIN ?? row?.vin);
+            if (!vin) return;
+            const timestamp = parseGpsReadBoundsTimestamp(row);
+            if (!Number.isFinite(timestamp)) return;
+            updateGpsReadTimestampBounds(boundsByVin, vin, timestamp);
+          });
+
+          hasMore = rows.length === pageSize;
+          offset += pageSize;
+        }
+      }
+
+      return normalizeGpsReadBoundsMap(boundsByVin);
+    };
+
+    const fetchGpsReadBoundsByVinSuffixes = async (vinSuffixes = []) => {
+      if (!supabaseClient?.from || !Array.isArray(vinSuffixes) || !vinSuffixes.length) return new Map();
+      await ensureSupabaseSession();
+
+      const uniqueSuffixes = Array.from(new Set(
+        vinSuffixes
+          .map((value) => getVinSuffixKey(value))
+          .filter((value) => value.length === 6)
+      ));
+      if (!uniqueSuffixes.length) return new Map();
+
+      const targetSuffixes = new Set(uniqueSuffixes);
+      const pageSize = 1000;
+      const gpsReadBoundsTimeoutMs = 20000;
+      const boundsBySuffix = new Map();
+
+      let offset = 0;
+      let hasMore = true;
+      while (hasMore) {
+        const query = supabaseClient
+          .from(TABLES.gpsHistory)
+          .select('VIN,Date')
+          .not('VIN', 'is', null)
+          .range(offset, offset + pageSize - 1);
+
+        const { data, error } = await runWithTimeout(
+          query,
+          gpsReadBoundsTimeoutMs,
+          'GPS read-bound VIN suffix lookup timed out.'
+        );
+        if (error) throw error;
+
+        const rows = Array.isArray(data) ? data : [];
+        rows.forEach((row) => {
+          const suffix = getVinSuffixKey(row?.VIN ?? row?.vin);
+          if (!suffix || !targetSuffixes.has(suffix)) return;
+          const timestamp = parseGpsReadBoundsTimestamp(row);
+          if (!Number.isFinite(timestamp)) return;
+          updateGpsReadTimestampBounds(boundsBySuffix, suffix, timestamp);
+        });
+
+        hasMore = rows.length === pageSize;
+        offset += pageSize;
+      }
+
+      return normalizeGpsReadBoundsMap(boundsBySuffix);
+    };
+
+    const hasParsableTime = (value) => {
+      if (!value) return false;
+      return Number.isFinite(Date.parse(value));
+    };
+
+    const fetchGpsReadBoundsByHistoryManager = async (vehicleList = [], { concurrency = 3 } = {}) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+      if (!gpsHistoryManager || typeof gpsHistoryManager.fetchGpsHistory !== 'function') return new Map();
+
+      const results = new Map();
+      const pendingVehicles = vehicleList.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && (!hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead));
+      });
+      if (!pendingVehicles.length) return results;
+
+      const workerCount = Math.max(1, Math.min(Number(concurrency) || 3, pendingVehicles.length));
+      let cursor = 0;
+      const runWorker = async () => {
+        while (cursor < pendingVehicles.length) {
+          const index = cursor;
+          cursor += 1;
+          const vehicle = pendingVehicles[index];
+          const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+          if (!vehicleId) continue;
+          const vin = getVehicleVin(vehicle);
+          const historyVehicleId = normalizeVehicleIdKey(gpsHistoryManager.getVehicleId(vehicle) || vehicleId);
+          if (!vin && !historyVehicleId) continue;
+          try {
+            const { records, error } = await gpsHistoryManager.fetchGpsHistory({
+              vin,
+              vehicleId: historyVehicleId
+            });
+            if (error || !Array.isArray(records) || !records.length) continue;
+            const bounds = { firstTimestamp: Number.POSITIVE_INFINITY, lastTimestamp: Number.NEGATIVE_INFINITY };
+            records.forEach((record) => {
+              const timestamp = parseGpsReadBoundsTimestamp(record);
+              if (!Number.isFinite(timestamp)) return;
+              if (timestamp < bounds.firstTimestamp) bounds.firstTimestamp = timestamp;
+              if (timestamp > bounds.lastTimestamp) bounds.lastTimestamp = timestamp;
+            });
+            if (!Number.isFinite(bounds.firstTimestamp) && !Number.isFinite(bounds.lastTimestamp)) continue;
+            results.set(vehicleId, {
+              firstRead: Number.isFinite(bounds.firstTimestamp) ? new Date(bounds.firstTimestamp).toISOString() : '',
+              lastRead: Number.isFinite(bounds.lastTimestamp) ? new Date(bounds.lastTimestamp).toISOString() : ''
+            });
+          } catch (_error) {
+            // Best-effort fallback path.
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+      return results;
+    };
+
+    const fetchVehicleFirstReadsByTargetedQueries = async (vehicleList = [], { concurrency = 6 } = {}) => {
+      if (!supabaseClient?.from || !Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+      await ensureSupabaseSession();
+
+      const normalizeSerialKey = (value = '') => `${value ?? ''}`.trim().toUpperCase();
+      const resolveVehicleWinnerSerial = (vehicle = {}) => {
+        const managerSerial = typeof gpsHistoryManager?.getVehicleWinnerSerial === 'function'
+          ? normalizeSerialKey(gpsHistoryManager.getVehicleWinnerSerial(vehicle))
+          : '';
+        if (managerSerial) return managerSerial;
+        const details = vehicle?.details || {};
+        const candidates = [
+          vehicle?.winnerSerial,
+          vehicle?.winningSerial,
+          vehicle?.serialWinner,
+          details?.winner_serial,
+          details?.winning_serial,
+          details?.serial_winner,
+          details?.['Winner Serial'],
+          details?.['Winning Serial'],
+          vehicle?.ptSerial,
+          details?.['PT Serial'],
+          details?.['PT Serial '],
+          details?.pt_serial,
+          vehicle?.encoreSerial,
+          details?.['Encore Serial'],
+          details?.encore_serial,
+        ];
+        for (const candidate of candidates) {
+          const normalized = normalizeSerialKey(candidate);
+          if (normalized) return normalized;
+        }
+        return '';
+      };
+
+      const getFirstTimestampFromRows = (rows = []) => {
+        if (!Array.isArray(rows) || !rows.length) return Number.NaN;
+        let firstTimestamp = Number.POSITIVE_INFINITY;
+        rows.forEach((row) => {
+          const timestamp = parseGpsReadBoundsTimestamp(row);
+          if (!Number.isFinite(timestamp)) return;
+          if (timestamp < firstTimestamp) firstTimestamp = timestamp;
+        });
+        return Number.isFinite(firstTimestamp) ? firstTimestamp : Number.NaN;
+      };
+
+      const pendingVehicles = vehicleList.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId);
+      });
+      if (!pendingVehicles.length) return new Map();
+
+      const results = new Map();
+      const workerCount = Math.max(1, Math.min(Number(concurrency) || 6, pendingVehicles.length));
+      let cursor = 0;
+
+      const runWorker = async () => {
+        while (cursor < pendingVehicles.length) {
+          const index = cursor;
+          cursor += 1;
+          const vehicle = pendingVehicles[index];
+          const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+          if (!vehicleId) continue;
+
+          let firstTimestamp = Number.NaN;
+          try {
+            const firstByIdQuery = supabaseClient
+              .from(TABLES.gpsHistory)
+              .select('Date')
+              .eq('vehicle_id', vehicleId)
+              .not('Date', 'is', null)
+              .order('Date', { ascending: true })
+              .limit(1);
+            const { data: firstByIdData, error: firstByIdError } = await runWithTimeout(
+              firstByIdQuery,
+              12000,
+              'GPS first-read by vehicle_id lookup timed out.'
+            );
+            if (!firstByIdError) {
+              firstTimestamp = getFirstTimestampFromRows(firstByIdData);
+            }
+          } catch (_error) {
+            // fallback path below
+          }
+
+          const vinSuffix = getVehicleVinSuffixKey(vehicle);
+          const winnerSerial = resolveVehicleWinnerSerial(vehicle);
+          if (!Number.isFinite(firstTimestamp) && vinSuffix) {
+            if (winnerSerial) {
+              try {
+                const firstBySuffixWinnerQuery = supabaseClient
+                  .from(TABLES.gpsHistory)
+                  .select('Date,VIN,Serial')
+                  .ilike('VIN', `%${vinSuffix}`)
+                  .eq('Serial', winnerSerial)
+                  .not('Date', 'is', null)
+                  .order('Date', { ascending: true })
+                  .limit(1);
+                const { data: firstBySuffixWinnerData, error: firstBySuffixWinnerError } = await runWithTimeout(
+                  firstBySuffixWinnerQuery,
+                  12000,
+                  'GPS first-read by winner serial lookup timed out.'
+                );
+                if (!firstBySuffixWinnerError) {
+                  firstTimestamp = getFirstTimestampFromRows(firstBySuffixWinnerData);
+                }
+              } catch (_error) {
+                // fallback without winner serial
+              }
+            }
+
+            if (!Number.isFinite(firstTimestamp)) {
+              try {
+                const firstBySuffixQuery = supabaseClient
+                  .from(TABLES.gpsHistory)
+                  .select('Date,VIN')
+                  .ilike('VIN', `%${vinSuffix}`)
+                  .not('Date', 'is', null)
+                  .order('Date', { ascending: true })
+                  .limit(1);
+                const { data: firstBySuffixData, error: firstBySuffixError } = await runWithTimeout(
+                  firstBySuffixQuery,
+                  12000,
+                  'GPS first-read by VIN suffix lookup timed out.'
+                );
+                if (!firstBySuffixError) {
+                  firstTimestamp = getFirstTimestampFromRows(firstBySuffixData);
+                }
+              } catch (_error) {
+                // no-op
+              }
+            }
+          }
+
+          if (Number.isFinite(firstTimestamp)) {
+            results.set(vehicleId, new Date(firstTimestamp).toISOString());
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
+      return results;
+    };
+
+    const fetchGpsReadBoundsByVehicles = async (vehicleList = []) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return new Map();
+
+      const pendingVehicles = vehicleList.filter((vehicle) => (
+        !hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead)
+      ));
+      if (!pendingVehicles.length) return new Map();
+
+      const results = new Map();
+      const requestedVehicleIds = Array.from(new Set(
+        pendingVehicles.map((vehicle) => normalizeVehicleIdKey(vehicle?.id)).filter(Boolean)
+      ));
+      let boundsByVehicleId = new Map();
+      try {
+        boundsByVehicleId = await fetchGpsReadBoundsByVehicleIds(requestedVehicleIds);
+      } catch (error) {
+        console.warn('GPS read-bounds by vehicle_id warning: ' + (error?.message || error));
+      }
+      pendingVehicles.forEach((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return;
+        const byId = boundsByVehicleId.get(vehicleId);
+        if (byId) results.set(vehicleId, byId);
+      });
+
+      const unresolvedVehicles = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return false;
+        return !results.has(vehicleId);
+      });
+      if (!unresolvedVehicles.length) return results;
+
+      const unresolvedVinSuffixes = Array.from(new Set(
+        unresolvedVehicles.map((vehicle) => getVehicleVinSuffixKey(vehicle)).filter((value) => value.length === 6)
+      ));
+      if (unresolvedVinSuffixes.length) {
+        try {
+          const boundsBySuffix = await fetchGpsReadBoundsByVinSuffixes(unresolvedVinSuffixes);
+          unresolvedVehicles.forEach((vehicle) => {
+            const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+            const suffix = getVehicleVinSuffixKey(vehicle);
+            if (!vehicleId || !suffix) return;
+            const bySuffix = boundsBySuffix.get(suffix);
+            if (bySuffix) results.set(vehicleId, bySuffix);
+          });
+        } catch (error) {
+          console.warn('GPS read-bounds by VIN suffix warning: ' + (error?.message || error));
+        }
+      }
+
+      const stillUnresolvedAfterSuffix = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && !results.has(vehicleId);
+      });
+      if (!stillUnresolvedAfterSuffix.length) return results;
+
+      const unresolvedVins = Array.from(new Set(
+        stillUnresolvedAfterSuffix.map((vehicle) => getVehicleVin(vehicle)).filter(Boolean)
+      ));
+      if (unresolvedVins.length) {
+        try {
+          const boundsByVin = await fetchGpsReadBoundsByVins(unresolvedVins);
+          stillUnresolvedAfterSuffix.forEach((vehicle) => {
+            const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+            const vin = getVehicleVin(vehicle);
+            if (!vehicleId || !vin) return;
+            const byVin = boundsByVin.get(vin);
+            if (byVin) results.set(vehicleId, byVin);
+          });
+        } catch (error) {
+          console.warn('GPS read-bounds by VIN warning: ' + (error?.message || error));
+        }
+      }
+
+      const vehiclesMissingFirstRead = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        if (!vehicleId) return false;
+        const currentReadBounds = results.get(vehicleId);
+        return !hasParsableTime(currentReadBounds?.firstRead);
+      });
+      if (vehiclesMissingFirstRead.length) {
+        const targetedFirstReads = await fetchVehicleFirstReadsByTargetedQueries(vehiclesMissingFirstRead, {
+          concurrency: 6
+        });
+        targetedFirstReads.forEach((firstRead, vehicleId) => {
+          if (!hasParsableTime(firstRead)) return;
+          const existing = results.get(vehicleId) || { firstRead: '', lastRead: '' };
+          results.set(vehicleId, {
+            ...existing,
+            firstRead
+          });
+        });
+      }
+
+      const stillUnresolved = pendingVehicles.filter((vehicle) => {
+        const vehicleId = normalizeVehicleIdKey(vehicle?.id);
+        return Boolean(vehicleId) && !results.has(vehicleId);
+      });
+      if (stillUnresolved.length) {
+        const fallbackBounds = await fetchGpsReadBoundsByHistoryManager(stillUnresolved, { concurrency: 3 });
+        fallbackBounds.forEach((value, vehicleId) => results.set(vehicleId, value));
+      }
+
+      return results;
+    };
+
+    const applyGpsReadBoundsToVehicleList = (vehicleList = [], boundsByVin = new Map()) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length || !(boundsByVin instanceof Map)) return false;
+      let changed = false;
+
+      vehicleList.forEach((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (!vehicleId) return;
+        const readBounds = boundsByVin.get(vehicleId);
+        if (!readBounds) return;
+
+        if (readBounds.firstRead && !hasParsableTime(vehicle?.firstRead)) {
+          vehicle.firstRead = readBounds.firstRead;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.pt_first_read = readBounds.firstRead;
+            vehicle.details['PT First Read'] = readBounds.firstRead;
+          }
+          changed = true;
+        }
+
+        if (readBounds.lastRead && !hasParsableTime(vehicle?.lastRead)) {
+          vehicle.lastRead = readBounds.lastRead;
+          if (vehicle?.details && typeof vehicle.details === 'object') {
+            vehicle.details.pt_last_read = readBounds.lastRead;
+            vehicle.details['PT Last Read'] = readBounds.lastRead;
+          }
+          changed = true;
+        }
+      });
+
+      return changed;
+    };
+
+    const hydrateVehiclePtReadsInBackground = async (vehicleList = []) => {
+      if (!Array.isArray(vehicleList) || !vehicleList.length) return;
+
+      const vehicleIdsNeedingBounds = Array.from(new Set(
+        vehicleList
+          .filter((vehicle) => !hasParsableTime(vehicle?.firstRead) || !hasParsableTime(vehicle?.lastRead))
+          .map((vehicle) => `${vehicle?.id ?? ''}`.trim())
+          .filter(Boolean)
+      ));
+      if (!vehicleIdsNeedingBounds.length) return;
+
+      const cacheIsFresh = (Date.now() - gpsReadBoundsByVinCacheUpdatedAt) <= GPS_READ_BOUNDS_CACHE_TTL_MS;
+      const cacheHasAllNeeded = cacheIsFresh && vehicleList.every((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (!vehicleId || !vehicleIdsNeedingBounds.includes(vehicleId)) return true;
+        const cachedBounds = gpsReadBoundsByVinCache.get(vehicleId) || {};
+        const hasFirstRead = hasParsableTime(vehicle?.firstRead) || hasParsableTime(cachedBounds?.firstRead);
+        const hasLastRead = hasParsableTime(vehicle?.lastRead) || hasParsableTime(cachedBounds?.lastRead);
+        return hasFirstRead && hasLastRead;
+      });
+      if (cacheHasAllNeeded) {
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        return;
+      }
+
+      if (gpsReadBoundsByVinPending) {
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        await gpsReadBoundsByVinPending;
+        if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+          renderVehicles();
+        }
+        return;
+      }
+
+      gpsReadBoundsByVinPending = (async () => {
+        try {
+          const vehiclesNeedingBounds = vehicleList.filter((vehicle) => (
+            vehicleIdsNeedingBounds.includes(`${vehicle?.id ?? ''}`.trim())
+          ));
+          const fetchedBounds = await fetchGpsReadBoundsByVehicles(vehiclesNeedingBounds);
+          if (fetchedBounds instanceof Map && fetchedBounds.size) {
+            const merged = new Map(gpsReadBoundsByVinCache);
+            fetchedBounds.forEach((value, vehicleId) => merged.set(vehicleId, value));
+            gpsReadBoundsByVinCache = merged;
+            gpsReadBoundsByVinCacheUpdatedAt = Date.now();
+          }
+        } catch (error) {
+          console.warn('GPS read-bounds load warning: ' + (error?.message || error));
+        } finally {
+          gpsReadBoundsByVinPending = null;
+        }
+      })();
+
+      await gpsReadBoundsByVinPending;
+      if (applyGpsReadBoundsToVehicleList(vehicleList, gpsReadBoundsByVinCache)) {
+        renderVehicles();
+      }
+    };
+
+    const normalizeSelectionValue = (value) => `${value ?? ''}`.trim().toLowerCase();
+    const resolveSelectionVehicle = (selection) => {
+      if (!selection) return null;
+
+      const selectionId = `${selection.id ?? ''}`.trim();
+      if (selectionId) {
+        const byId = vehicles.find((vehicle) => `${vehicle?.id ?? ''}` === selectionId) || null;
+        if (byId) return byId;
+      }
+
+      const selectionKey = `${selection.key || ''}`.trim();
+      if (selectionKey) {
+        const byKey = findVehicleByKey(selectionKey);
+        if (byKey) return byKey;
+      }
+
+      const selectionVin = normalizeSelectionValue(selection.vin);
+      if (selectionVin) {
+        const vinMatches = vehicles.filter((vehicle) => normalizeSelectionValue(vehicle?.vin) === selectionVin);
+        if (vinMatches.length === 1) return vinMatches[0];
+      }
+
+      const selectionCustomer = normalizeSelectionValue(selection.customerId);
+      if (selectionCustomer) {
+        const customerMatches = vehicles.filter((vehicle) => normalizeSelectionValue(vehicle?.customerId) === selectionCustomer);
+        if (customerMatches.length === 1) return customerMatches[0];
+      }
+
+      return null;
+>>>>>>> impte
     };
 
     const syncVehicleSelectionFromStore = (selection, { shouldFocus = true } = {}) => {
       if (!selection) {
+<<<<<<< HEAD
         if (selectedVehicleId === null) return;
+=======
+        if (selectedVehicleId === null && selectedVehicleKey === null) return;
+>>>>>>> impte
         syncingVehicleSelection = true;
         applySelection(null, selectedTechId);
         syncingVehicleSelection = false;
         return;
       }
 
+<<<<<<< HEAD
       const match = vehicles.find((vehicle) => matchesVehicleSelection(vehicle, selection));
       if (!match || selectedVehicleId === match.id) return;
 
       syncingVehicleSelection = true;
       applySelection(match.id, null);
+=======
+      const match = resolveSelectionVehicle(selection);
+      if (!match) return;
+      const matchKey = getVehicleKey(match);
+      if (`${selectedVehicleId ?? ''}` === `${match.id ?? ''}` && `${selectedVehicleKey ?? ''}` === matchKey) return;
+
+      syncingVehicleSelection = true;
+      applySelection(match.id, null, matchKey);
+>>>>>>> impte
       syncingVehicleSelection = false;
       if (shouldFocus) focusVehicle(match);
     };
@@ -363,12 +2251,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return cache;
     };
 
+<<<<<<< HEAD
     const ensureServiceCache = async () => {
       if (!supabaseClient) return null;
       if (serviceCacheByCategory.size) return serviceCacheByCategory;
       if (serviceFetchPromise) return serviceFetchPromise;
 
       const stopLoading = startLoading('Loading Services…');
+=======
+    const ensureServiceCache = async ({ force = false, silent = false } = {}) => {
+      if (!supabaseClient) return null;
+      if (!force && serviceCacheByCategory.size) return serviceCacheByCategory;
+      if (serviceFetchPromise) return serviceFetchPromise;
+
+      if (force) {
+        serviceCacheByCategory = new Map();
+      }
+
+      const stopLoading = silent ? () => {} : startLoading('Loading Services…');
+>>>>>>> impte
       serviceFetchPromise = (async () => {
         const { data, error } = await supabaseClient.from(SERVICE_TABLE).select('*');
         if (error) throw error;
@@ -606,15 +2507,47 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isAdminUser = () => `${window.currentUserRole || ''}`.toLowerCase() === 'administrator';
 
+<<<<<<< HEAD
     const EDITABLE_VEHICLE_FIELDS = {
       'gps fix': { fieldKey: 'gpsFix', updateColumn: 'gps to fix', table: TABLES.vehiclesUpdates },
       'gps fix reason': { fieldKey: 'gpsReason', updateColumn: 'gps fix reason', table: TABLES.vehiclesUpdates }
+=======
+    const normalizeVehicleHeader = (value = '') => `${value}`.trim().toLowerCase().replace(/[_\s]+/g, ' ');
+
+    const EDITABLE_VEHICLE_FIELDS = {
+      'gps fix': { fieldKey: 'gpsFix', updateColumn: 'gps fix', table: TABLES.vehicles },
+      'gps fix reason': { fieldKey: 'gpsReason', updateColumn: 'gps fix reason', table: TABLES.vehicles }
+    };
+
+    const REQUIRED_VEHICLE_HEADERS = [
+      'gps fix',
+      'gps fix reason',
+      'moving',
+      'pt last read',
+      'lat',
+      'long',
+    ];
+
+    const ensureRequiredVehicleHeaders = (headers = []) => {
+      const normalizedHeaders = new Set(headers.map((header) => normalizeVehicleHeader(header)));
+      const nextHeaders = [...headers];
+      REQUIRED_VEHICLE_HEADERS.forEach((header) => {
+        const normalized = normalizeVehicleHeader(header);
+        if (normalizedHeaders.has(normalized)) return;
+        nextHeaders.push(header);
+        normalizedHeaders.add(normalized);
+      });
+      return nextHeaders;
+>>>>>>> impte
     };
 
     const repairHistoryManager = createRepairHistoryManager({
       supabaseClient,
       startLoading,
+<<<<<<< HEAD
       ensureSupabaseSession,
+=======
+>>>>>>> impte
       runWithTimeout,
       timeoutMs: SUPABASE_TIMEOUT_MS,
       tableName: TABLES.repairHistory,
@@ -628,6 +2561,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       runWithTimeout,
       timeoutMs: SUPABASE_TIMEOUT_MS,
       tableName: TABLES.gpsHistory,
+<<<<<<< HEAD
+=======
+      isSerialBlacklisted: (serial = '', timestampMs = Date.now()) => (
+        isGpsDeviceSerialBlacklistedAt(serial, timestampMs)
+      ),
+      getSerialBlacklistEffectiveFromMs: (serial = '') => (
+        getGpsDeviceSerialBlacklistEffectiveFromMs(serial)
+      ),
+>>>>>>> impte
       escapeHTML,
       formatDateTime
     });
@@ -656,7 +2598,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const normalizeBlacklistEntry = (row, idx = 0) => {
+<<<<<<< HEAD
       // Use explicit lat/long columns from Supabase (no geocoding fallbacks)
+=======
+      // Use explicit lat/long columns from the live dataset (no geocoding fallbacks)
+>>>>>>> impte
       const lat = parseFloat(getField(row, 'lat', 'Lat', 'latitude', 'Latitude'));
       const lng = parseFloat(getField(row, 'long', 'Long', 'lng', 'Lng', 'longitude', 'Longitude'));
 
@@ -670,8 +2616,32 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       };
     };
 
+<<<<<<< HEAD
     const hasValidCoords = (entry) => Number.isFinite(entry?.lat) && Number.isFinite(entry?.lng) && entry.lat !== 0 && entry.lng !== 0;
 
+=======
+    const MAP_DEFAULT_CENTER = { lat: 39.8, lng: -98.5 };
+    const MAP_DEFAULT_ZOOM = 5;
+    const MISSING_VEHICLE_GPS_NOTE = 'No GPS coordinates available (shown at map center).';
+
+    const hasValidCoords = (entry) => Number.isFinite(entry?.lat) && Number.isFinite(entry?.lng) && entry.lat !== 0 && entry.lng !== 0;
+
+    const getVehicleMapCoords = (vehicle = {}) => {
+      if (hasValidCoords(vehicle)) {
+        return {
+          lat: Number(vehicle.lat),
+          lng: Number(vehicle.lng),
+          isFallback: false
+        };
+      }
+      return {
+        lat: MAP_DEFAULT_CENTER.lat,
+        lng: MAP_DEFAULT_CENTER.lng,
+        isFallback: true
+      };
+    };
+
+>>>>>>> impte
     const getLocationNote = (accuracy = '') => {
       if (accuracy === 'zip') return 'Approximate location (based on ZIP code)';
       if (accuracy === 'city') return 'Approximate location (based on city)';
@@ -679,12 +2649,3664 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return '';
     };
 
+<<<<<<< HEAD
     const getAccuracyDot = (accuracy = '') => {
       return accuracy === 'exact' ? 'bg-emerald-300' : 'bg-amber-300';
+=======
+    const ADDRESS_COUNTRY_SUFFIXES = new Set([
+      'usa',
+      'us',
+      'u s a',
+      'united states',
+      'united states of america',
+      'estados unidos',
+      'eeuu'
+    ]);
+
+    const normalizeAddressCountryToken = (value = '') => `${value}`
+      .toLowerCase()
+      .replace(/\./g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const stripCountryMentionsFromFreeText = (value = '') => `${value}`
+      .replace(/\bUnited\s+States(?:\s+of\s+America)?\b/gi, '')
+      .replace(/\bU\s*\.?\s*S\s*\.?\s*A\b/gi, '')
+      .replace(/\bEstados\s+Unidos\b/gi, '')
+      .replace(/\bEEUU\b/gi, '')
+      .replace(/\s+,/g, ',')
+      .replace(/,\s*,+/g, ', ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    const looksLikeStreetSegment = (segment = '') => (
+      /^\d/.test(`${segment}`.trim())
+      || /\b(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|hwy|highway|ln|lane|ct|court|cir|circle)\b/i
+        .test(`${segment}`.trim())
+    );
+
+    const formatVehicleSidebarAddress = (rawAddress = '', zipCode = '') => {
+      const normalizedZip = `${zipCode || ''}`.trim();
+      let addressText = stripCountryMentionsFromFreeText(`${rawAddress || ''}`.trim());
+
+      if (addressText.includes('.')) {
+        const dotIndex = addressText.indexOf('.');
+        const trailing = addressText.slice(dotIndex + 1).trim();
+        if (trailing) addressText = trailing;
+      }
+
+      if (!addressText && normalizedZip) return normalizedZip;
+      if (!addressText) return 'No location provided';
+
+      let parts = addressText
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      while (parts.length > 1) {
+        const token = normalizeAddressCountryToken(parts[parts.length - 1]);
+        if (!ADDRESS_COUNTRY_SUFFIXES.has(token)) break;
+        parts.pop();
+      }
+
+      const zipRegex = /\b\d{5}(?:-\d{4})?\b/;
+      const zipIndex = parts.findIndex((part) => zipRegex.test(part));
+
+      if (zipIndex >= 0) {
+        const fromIndex = Math.max(0, zipIndex - 1);
+        parts = parts.slice(fromIndex, zipIndex + 1);
+      } else if (parts.length >= 3) {
+        parts = parts.slice(-2);
+      }
+
+      if (parts.length > 1 && looksLikeStreetSegment(parts[0])) {
+        parts = parts.slice(1);
+      }
+
+      let formatted = stripCountryMentionsFromFreeText(parts.join(', '));
+      const escapedZip = normalizedZip.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const zipAlreadyIncluded = normalizedZip && escapedZip
+        ? new RegExp(`\\b${escapedZip}\\b`).test(formatted)
+        : false;
+
+      if (normalizedZip && !zipAlreadyIncluded) {
+        formatted = formatted ? `${formatted}, ${normalizedZip}` : normalizedZip;
+      }
+
+      return formatted || normalizedZip || 'No location provided';
+    };
+
+    const getCurrentTrailPointLimit = () => {
+      const parsed = Number.parseInt(gpsTrailPointLimit, 10);
+      if (!Number.isFinite(parsed)) return DEFAULT_GPS_TRAIL_POINT_LIMIT;
+      return Math.max(MIN_GPS_TRAIL_POINT_LIMIT, Math.min(parsed, MAX_GPS_TRAIL_POINT_LIMIT));
+    };
+
+    const GPS_TRAIL_ALIGNMENT_MAX_DISTANCE_METERS = 120000;
+    const GPS_TRAIL_ALIGNMENT_MIN_IMPROVEMENT_METERS = 20000;
+    const GPS_TRAIL_ALIGNMENT_MIN_FRESHNESS_ADVANTAGE_MS = 90 * 60 * 1000;
+    const GPS_MOVING_ANALYSIS_MAX_POINTS = 8;
+    const GPS_MOVING_STOPPED_TOTAL_DISTANCE_METERS = 550;
+    const GPS_MOVING_STOPPED_NET_DISTANCE_METERS = 180;
+    const GPS_MOVING_STOPPED_MAX_RADIUS_METERS = 220;
+    const GPS_MOVING_STOPPED_MAX_SEGMENT_METERS = 220;
+    const GPS_MOVING_MOVING_TOTAL_DISTANCE_METERS = 1300;
+    const GPS_MOVING_MOVING_NET_DISTANCE_METERS = 420;
+    const GPS_MOVING_MOVING_MAX_SEGMENT_METERS = 320;
+    const GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 25000;
+    const GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 1000;
+    const GPS_HISTORY_HOTSPOT_MAX = 6;
+    const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
+    const GPS_HISTORY_HOTSPOT_CONCURRENT_PING_WINDOW_MS = 20 * 60 * 1000;
+    const GPS_HISTORY_HOTSPOT_CONCURRENT_PING_DISTANCE_METERS = 120;
+    const GPS_MOVING_MILES_SEGMENT_THRESHOLD_METERS = 120;
+    const GPS_MOVING_MILES_TRUCK_SEGMENT_THRESHOLD_METERS = 800;
+    const GPS_MOVING_MILES_DAY_THRESHOLD_METERS = 800;
+    const GPS_MOVING_MILES_TRUCK_DAY_THRESHOLD_METERS = 3200;
+    const GPS_DAILY_PARKED_MOVEMENT_THRESHOLD_METERS = 25 * 1609.344;
+    const GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS = 2;
+    const GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS = 1;
+    const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
+    const GPS_HISTORY_HOTSPOT_HIERARCHY_VISIT_WEIGHT = 10;
+    const GPS_HISTORY_HOTSPOT_HIERARCHY_TOTAL_DAYS_WEIGHT = 14;
+    const GPS_HISTORY_HOTSPOT_LEVEL_PRIMARY_THRESHOLD = 0.78;
+    const GPS_HISTORY_HOTSPOT_LEVEL_SECONDARY_THRESHOLD = 0.48;
+    const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
+    const GPS_MOVING_UNKNOWN_STALE_READ_MS = 3 * GPS_HISTORY_DAY_MS;
+    const VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS = 12 * 60 * 1000;
+    const GPS_DEVICE_BLACKLIST_CACHE_TTL_MS = 5 * 60 * 1000;
+    const HOTSPOT_SHARED_MATCH_RADIUS_METERS = 320;
+    const HOTSPOT_RELATED_VEHICLE_LIMIT = 8;
+    const HOTSPOT_RELATED_CANDIDATE_LIMIT = 120;
+    const HOTSPOT_RELATED_CONCURRENCY = 4;
+    const HOTSPOT_FAST_QUERY_MAX_ROWS = 3200;
+    const HOTSPOT_FAST_QUERY_PAGE_SIZE = 1000;
+    const HOTSPOT_FAST_QUERY_COORDINATE_COLUMNS = [
+      { lat: 'lat', lng: 'long' },
+      { lat: 'lat', lng: 'lng' },
+      { lat: 'Lat', lng: 'Long' },
+      { lat: 'Lat', lng: 'Lng' },
+      { lat: 'latitude', lng: 'longitude' },
+      { lat: 'Latitude', lng: 'Longitude' }
+    ];
+    let gpsTrailRequestCounter = 0;
+    const vehicleHistoryHotspotCache = new Map();
+    const vehicleHistoryHotspotPendingRequests = new Map();
+    const vehicleAvgMovingMilesPendingRequests = new Map();
+    let activeVehicleHistoryHotspots = [];
+    const activeVehicleHistoryHotspotLayersByKey = new Map();
+    const relatedHotspotVehiclesCache = new Map();
+    let hotspotFastCoordinatePairs = [];
+    let hotspotFastCoordinatePairLookupPromise = null;
+    let gpsDeviceBlacklistSerialsCache = new Map();
+    let gpsDeviceBlacklistSerialsCacheUpdatedAt = 0;
+    let gpsDeviceBlacklistSerialsPending = null;
+    const parseGpsNumericValue = (value) => {
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : null;
+      }
+      const normalized = `${value}`.replace(/,/g, '').trim();
+      if (!normalized) return null;
+      const match = normalized.match(/[+-]?(?:\d+\.?\d*|\.\d+)/);
+      if (!match) return null;
+      const parsed = Number.parseFloat(match[0]);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const parseGpsTrailCoordinate = (record = {}, key = 'lat') => {
+      const candidates = key === 'lat'
+        ? ['lat', 'Lat', 'latitude', 'Latitude']
+        : ['long', 'Long', 'lng', 'Lng', 'longitude', 'Longitude', 'lon', 'Lon'];
+
+      for (const candidate of candidates) {
+        const parsed = parseGpsNumericValue(record?.[candidate]);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+
+      return null;
+    };
+
+    const parseGpsTrailTimeMs = (record = {}) => {
+      const dateCandidates = [
+        record?.['PT-LastPing'],
+        record?.gps_time,
+        record?.Date,
+        record?.created_at,
+        record?.updated_at
+      ];
+
+      for (const candidate of dateCandidates) {
+        if (!candidate) continue;
+        const parsed = Date.parse(candidate);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+
+      return null;
+    };
+
+    const parseGpsTrailTimestamp = (record = {}) => {
+      const timeMs = parseGpsTrailTimeMs(record);
+      if (Number.isFinite(timeMs)) return timeMs;
+
+      const numericId = Number(record?.id);
+      if (Number.isFinite(numericId)) return numericId;
+      return 0;
+    };
+
+    const toGpsTrailPoint = (record = {}) => {
+      // Route visualization must be driven by lat/long from GPS history records.
+      const lat = parseGpsTrailCoordinate(record, 'lat');
+      const lng = parseGpsTrailCoordinate(record, 'long');
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+      const timeMs = parseGpsTrailTimeMs(record);
+      return {
+        lat,
+        lng,
+        timestamp: Number.isFinite(timeMs) ? timeMs : parseGpsTrailTimestamp(record),
+        timeMs
+      };
+    };
+
+    const getVehicleTrailAnchorPoint = (vehicle = {}) => {
+      const lat = parseGpsNumericValue(
+        vehicle?.lat
+        ?? vehicle?.Lat
+        ?? vehicle?.latitude
+        ?? vehicle?.Latitude
+      );
+      const lng = parseGpsNumericValue(
+        vehicle?.lng
+        ?? vehicle?.long
+        ?? vehicle?.Long
+        ?? vehicle?.longitude
+        ?? vehicle?.Longitude
+      );
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return null;
+      return { lat, lng };
+    };
+
+    const getLatestTrailPointFromRecords = (records = []) => {
+      if (!Array.isArray(records) || !records.length) return null;
+      let latestRecord = null;
+      let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+      records.forEach((record) => {
+        const timestamp = parseGpsTrailTimestamp(record);
+        if (timestamp >= latestTimestamp) {
+          latestTimestamp = timestamp;
+          latestRecord = record;
+        }
+      });
+
+      if (!latestRecord) return null;
+      const point = toGpsTrailPoint(latestRecord);
+      if (!point) return null;
+      return { ...point, record: latestRecord };
+    };
+
+    const getMostRecentRecordSerial = (records = [], getRecordSerial = () => '') => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return '';
+      let latestSerial = '';
+      let latestTimestamp = Number.NEGATIVE_INFINITY;
+
+      records.forEach((record) => {
+        const serial = getRecordSerial(record);
+        if (!serial) return;
+        const timestamp = parseGpsTrailTimestamp(record);
+        if (timestamp >= latestTimestamp) {
+          latestTimestamp = timestamp;
+          latestSerial = serial;
+        }
+      });
+
+      return latestSerial;
+    };
+
+    const getLocalDayBoundsMs = (referenceMs = Date.now()) => {
+      const referenceDate = new Date(referenceMs);
+      const dayStart = new Date(
+        referenceDate.getFullYear(),
+        referenceDate.getMonth(),
+        referenceDate.getDate()
+      ).getTime();
+      return {
+        start: dayStart,
+        end: dayStart + GPS_HISTORY_DAY_MS
+      };
+    };
+
+    const hasSerialReadingInRange = ({
+      records = [],
+      serial = '',
+      getRecordSerial = () => '',
+      startMs = Number.NEGATIVE_INFINITY,
+      endMs = Number.POSITIVE_INFINITY
+    } = {}) => {
+      const normalizedSerial = `${serial || ''}`.trim();
+      if (!normalizedSerial || !Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') {
+        return false;
+      }
+      return records.some((record) => {
+        const recordSerial = `${getRecordSerial(record) || ''}`.trim();
+        if (!recordSerial || recordSerial !== normalizedSerial) return false;
+        const timestamp = parseGpsTrailTimestamp(record);
+        return Number.isFinite(timestamp) && timestamp >= startMs && timestamp < endMs;
+      });
+    };
+
+    const countGpsHistoryRecordsBySerial = (records = [], getRecordSerial = () => '') => {
+      const counts = new Map();
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return counts;
+      records.forEach((record) => {
+        const serial = `${getRecordSerial(record) || ''}`.trim();
+        if (!serial) return;
+        counts.set(serial, (counts.get(serial) || 0) + 1);
+      });
+      return counts;
+    };
+
+    const resolveVehicleMovingHistoryOverride = ({
+      records = [],
+      vehicle = null,
+      winnerSerial = '',
+      latestSerial = '',
+      serialCountsBySerial = new Map(),
+      getRecordSerial = () => '',
+    } = {}) => {
+      const recordsForSerial = (serial = '') => {
+        const normalizedSerial = `${serial || ''}`.trim();
+        if (!normalizedSerial) return [];
+        if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
+        return records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === normalizedSerial);
+      };
+
+      const winnerScopedRecords = recordsForSerial(winnerSerial);
+      const latestScopedRecords = latestSerial && latestSerial !== winnerSerial
+        ? recordsForSerial(latestSerial)
+        : [];
+      const movementSourceRecords = winnerScopedRecords.length
+        ? winnerScopedRecords
+        : (latestScopedRecords.length ? latestScopedRecords : records);
+
+      const inferredStatus = inferMovingHistoryStatusFromRecords(movementSourceRecords, { vehicle });
+      if (inferredStatus === 'moving' || inferredStatus === 'stopped') return inferredStatus;
+
+      const readCount = (serial = '') => {
+        const normalizedSerial = `${serial || ''}`.trim();
+        if (!normalizedSerial) return 0;
+        return Number(serialCountsBySerial.get(normalizedSerial) || 0);
+      };
+
+      const winnerCount = readCount(winnerSerial);
+      if (winnerCount > 0) return winnerCount <= 1 ? 'unknown' : '';
+
+      const latestCount = readCount(latestSerial);
+      if (latestCount > 0) return latestCount <= 1 ? 'unknown' : '';
+
+      return Array.isArray(movementSourceRecords) && movementSourceRecords.length <= 1 ? 'unknown' : '';
+    };
+
+    const buildDailyMovementBucketsFromPoints = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+
+      const ordered = [...points]
+        .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng) && point.lat !== 0 && point.lng !== 0)
+        .sort((a, b) => {
+          const aTimestamp = Number(a?.timestamp ?? a?.timeMs);
+          const bTimestamp = Number(b?.timestamp ?? b?.timeMs);
+          return aTimestamp - bTimestamp;
+        });
+      if (!ordered.length) return [];
+
+      const dayBuckets = new Map();
+      const getDayBucket = (dayStartMs) => {
+        if (!Number.isFinite(dayStartMs)) return null;
+        const existing = dayBuckets.get(dayStartMs);
+        if (existing) return existing;
+        const next = {
+          dayStartMs,
+          distanceMeters: 0,
+          movingEvidence: false,
+          parkedDays: 0,
+          parkedStartTimeMs: null,
+          firstPointTimeMs: null
+        };
+        dayBuckets.set(dayStartMs, next);
+        return next;
+      };
+
+      let previousPoint = null;
+      ordered.forEach((point) => {
+        const pointTimeMs = Number(point?.timeMs ?? point?.timestamp);
+        const dayStartMs = toLocalDayStartMs(pointTimeMs);
+        const bucket = getDayBucket(dayStartMs);
+        if (bucket) {
+          if (!Number.isFinite(bucket.firstPointTimeMs) || (Number.isFinite(pointTimeMs) && pointTimeMs < bucket.firstPointTimeMs)) {
+            bucket.firstPointTimeMs = pointTimeMs;
+          }
+          const explicitMovement = `${point?.movingStatus || ''}`.trim().toLowerCase();
+          if (explicitMovement === 'moving') {
+            bucket.movingEvidence = true;
+          }
+        }
+
+        if (previousPoint) {
+          const distanceMeters = getGpsPointDistanceMeters(previousPoint, point);
+          if (Number.isFinite(distanceMeters)) {
+            const previousDayStartMs = toLocalDayStartMs(Number(previousPoint?.timeMs ?? previousPoint?.timestamp));
+            if (previousDayStartMs === dayStartMs) {
+              if (bucket) bucket.distanceMeters += distanceMeters;
+            } else {
+              const splitDistanceMeters = distanceMeters / 2;
+              if (bucket) bucket.distanceMeters += splitDistanceMeters;
+              const previousBucket = getDayBucket(previousDayStartMs);
+              if (previousBucket) previousBucket.distanceMeters += splitDistanceMeters;
+            }
+          }
+        }
+
+        previousPoint = point;
+      });
+
+      let stationaryStartDayMs = null;
+      let stationaryStartTimeMs = null;
+      return [...dayBuckets.values()]
+        .sort((a, b) => a.dayStartMs - b.dayStartMs)
+        .map((bucket) => {
+          const isMoving = bucket.movingEvidence || bucket.distanceMeters >= GPS_DAILY_PARKED_MOVEMENT_THRESHOLD_METERS;
+          if (isMoving) {
+            stationaryStartDayMs = null;
+            stationaryStartTimeMs = null;
+            bucket.parkedDays = 0;
+            bucket.parkedStartTimeMs = null;
+            bucket.status = 'moving';
+            return bucket;
+          }
+
+          if (!Number.isFinite(stationaryStartDayMs)) {
+            stationaryStartDayMs = bucket.dayStartMs;
+            stationaryStartTimeMs = bucket.firstPointTimeMs;
+          }
+          bucket.parkedDays = Math.max(
+            0,
+            Math.floor((bucket.dayStartMs - stationaryStartDayMs) / GPS_HISTORY_DAY_MS)
+          );
+          bucket.parkedStartTimeMs = stationaryStartTimeMs;
+          bucket.status = 'stopped';
+          return bucket;
+        });
+    };
+
+    const buildDailyMovementBucketsFromRecords = (records = []) => {
+      if (!Array.isArray(records) || !records.length) return [];
+      const points = records
+        .map((record) => {
+          const point = toGpsTrailPoint(record);
+          if (!point) return null;
+          return {
+            ...point,
+            record,
+            movingStatus: parseGpsRecordMovingStatus(record)
+          };
+        })
+        .filter(Boolean);
+      return buildDailyMovementBucketsFromPoints(points);
+    };
+
+    const inferStationaryDaysFromRecords = (records = [], { vehicle = null } = {}) => {
+      if (!Array.isArray(records) || !records.length) return null;
+      const dailyBuckets = buildDailyMovementBucketsFromRecords(records, { vehicle });
+      const latestBucket = dailyBuckets[dailyBuckets.length - 1] || null;
+      return Number.isFinite(latestBucket?.parkedDays) ? latestBucket.parkedDays : null;
+    };
+
+    const inferAverageMovingMilesPerDayFromRecords = (records = [], { vehicle = null } = {}) => {
+      if (!Array.isArray(records) || !records.length) return null;
+
+      const movementSegmentThresholdMeters = isTruckOrTrailerUnit(vehicle)
+        ? GPS_MOVING_MILES_TRUCK_SEGMENT_THRESHOLD_METERS
+        : GPS_MOVING_MILES_SEGMENT_THRESHOLD_METERS;
+      const movementDayThresholdMeters = isTruckOrTrailerUnit(vehicle)
+        ? GPS_MOVING_MILES_TRUCK_DAY_THRESHOLD_METERS
+        : GPS_MOVING_MILES_DAY_THRESHOLD_METERS;
+      const rawPoints = records
+        .map((record) => {
+          const point = toGpsTrailPoint(record);
+          if (!point) return null;
+          return {
+            ...point,
+            movingStatus: parseGpsRecordMovingStatus(record)
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      if (!rawPoints.length) return null;
+
+      const points = [];
+      rawPoints.forEach((point) => {
+        const lastPoint = points[points.length - 1] || null;
+        const pointTimeMs = Number(point?.timeMs ?? point?.timestamp);
+        const lastTimeMs = Number(lastPoint?.timeMs ?? lastPoint?.timestamp);
+        const shouldCollapse = lastPoint
+          && Number.isFinite(pointTimeMs)
+          && Number.isFinite(lastTimeMs)
+          && Math.abs(pointTimeMs - lastTimeMs) <= GPS_HISTORY_HOTSPOT_CONCURRENT_PING_WINDOW_MS
+          && Number.isFinite(point?.lat)
+          && Number.isFinite(point?.lng)
+          && Number.isFinite(lastPoint?.lat)
+          && Number.isFinite(lastPoint?.lng)
+          && getGpsPointDistanceMeters(point, lastPoint) <= GPS_HISTORY_HOTSPOT_CONCURRENT_PING_DISTANCE_METERS;
+
+        if (!shouldCollapse) {
+          points.push({ ...point });
+          return;
+        }
+
+        const previousRawPointCount = Number.isFinite(lastPoint.rawPointCount)
+          ? lastPoint.rawPointCount
+          : 1;
+        const nextRawPointCount = previousRawPointCount + 1;
+        lastPoint.lat = ((lastPoint.lat * previousRawPointCount) + point.lat) / nextRawPointCount;
+        lastPoint.lng = ((lastPoint.lng * previousRawPointCount) + point.lng) / nextRawPointCount;
+        lastPoint.rawPointCount = nextRawPointCount;
+        lastPoint.timeMs = Math.min(lastTimeMs, pointTimeMs);
+        lastPoint.timestamp = Math.min(lastPoint.timestamp, point.timestamp);
+        if (`${point.movingStatus || ''}`.trim().toLowerCase() === 'moving') {
+          lastPoint.movingStatus = 'moving';
+        } else if (!lastPoint.movingStatus) {
+          lastPoint.movingStatus = point.movingStatus;
+        }
+      });
+
+      if (points.length < 2) return null;
+
+      const getDayBucket = (dayStartMs) => {
+        if (!Number.isFinite(dayStartMs)) return null;
+        const existingBucket = dayBuckets.get(dayStartMs);
+        if (existingBucket) return existingBucket;
+        const nextBucket = {
+          dayStartMs,
+          points: 0,
+          distanceMeters: 0,
+          movingEvidence: false
+        };
+        dayBuckets.set(dayStartMs, nextBucket);
+        return nextBucket;
+      };
+
+      const dayBuckets = new Map();
+      let previousPoint = null;
+
+      points.forEach((point) => {
+        const dayStartMs = toLocalDayStartMs(point.timeMs ?? point.timestamp);
+        if (!Number.isFinite(dayStartMs)) {
+          previousPoint = point;
+          return;
+        }
+
+        const bucket = getDayBucket(dayStartMs);
+        if (!bucket) {
+          previousPoint = point;
+          return;
+        }
+        bucket.points += 1;
+
+        if (`${point.movingStatus || ''}`.trim().toLowerCase() === 'moving') {
+          bucket.movingEvidence = true;
+        }
+
+        if (previousPoint) {
+          const previousDayStartMs = toLocalDayStartMs(previousPoint.timeMs ?? previousPoint.timestamp);
+          const segmentDistanceMeters = getGpsPointDistanceMeters(previousPoint, point);
+          const previousMoving = `${previousPoint.movingStatus || ''}`.trim().toLowerCase() === 'moving';
+          const currentMoving = `${point.movingStatus || ''}`.trim().toLowerCase() === 'moving';
+          const segmentCountsAsMovement = (
+            Number.isFinite(segmentDistanceMeters)
+            && (
+              segmentDistanceMeters >= movementSegmentThresholdMeters
+              || previousMoving
+              || currentMoving
+            )
+          );
+          if (segmentCountsAsMovement) {
+            if (previousDayStartMs === dayStartMs) {
+              bucket.distanceMeters += segmentDistanceMeters;
+              bucket.movingEvidence = true;
+            } else {
+              const previousBucket = getDayBucket(previousDayStartMs);
+              const splitDistanceMeters = segmentDistanceMeters / 2;
+              bucket.distanceMeters += splitDistanceMeters;
+              bucket.movingEvidence = true;
+              if (previousBucket) {
+                previousBucket.distanceMeters += splitDistanceMeters;
+                previousBucket.movingEvidence = true;
+              }
+            }
+          }
+        }
+        previousPoint = point;
+      });
+
+      const observedDays = [...dayBuckets.values()]
+        .filter((bucket) => bucket.points > 0)
+        .sort((left, right) => left.dayStartMs - right.dayStartMs);
+      if (!observedDays.length) return null;
+
+      const movingDays = observedDays.filter((bucket) => (
+        bucket.movingEvidence
+        || (Number.isFinite(bucket.distanceMeters) && bucket.distanceMeters >= movementDayThresholdMeters)
+      ));
+      if (!movingDays.length) return null;
+
+      const totalDistanceMeters = movingDays.reduce((sum, bucket) => (
+        sum + (Number.isFinite(bucket.distanceMeters) ? bucket.distanceMeters : 0)
+      ), 0);
+
+      if (totalDistanceMeters < movementSegmentThresholdMeters) return null;
+
+      const totalMiles = totalDistanceMeters / 1609.344;
+      return totalMiles > 0 ? (totalMiles / movingDays.length) : null;
+    };
+
+    const applyVehicleAverageMovingMilesPerDayFromGpsHistory = (vehicle, records = []) => {
+      if (!vehicle) return false;
+      const nextValue = (Array.isArray(records) && records.length)
+        ? inferAverageMovingMilesPerDayFromRecords(records, { vehicle })
+        : null;
+      const currentValue = Number(vehicle?.avgMovingMilesPerDay);
+      const changed = (
+        (Number.isFinite(currentValue) && Number.isFinite(nextValue) && Math.abs(currentValue - nextValue) > 0.05)
+        || (Number.isFinite(currentValue) && !Number.isFinite(nextValue))
+        || (!Number.isFinite(currentValue) && Number.isFinite(nextValue))
+      );
+      if (!changed) return false;
+
+      if (Number.isFinite(nextValue)) {
+        vehicle.avgMovingMilesPerDay = nextValue;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          vehicle.details.avgMovingMilesPerDay = nextValue;
+        }
+      } else {
+        delete vehicle.avgMovingMilesPerDay;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          delete vehicle.details.avgMovingMilesPerDay;
+        }
+      }
+      return true;
+    };
+
+    const syncVehicleAverageMovingMilesDayField = (vehicle) => {
+      const vehicleKey = getVehicleKey(vehicle);
+      if (!vehicleKey) return;
+      const card = document.querySelector(
+        `#vehicle-list [data-type="vehicle"][data-vehicle-key="${CSS.escape(vehicleKey)}"]`
+      );
+      const avgMilesNodes = card?.querySelectorAll('[data-field="avg-moving-miles-day"]') || [];
+      avgMilesNodes.forEach((node) => {
+        node.textContent = getAvgMovingMilesPerDayDisplay(vehicle);
+      });
+    };
+
+    const hydrateVehicleAverageMovingMilesPerDay = async (
+      vehicle,
+      { force = false } = {}
+    ) => {
+      if (!vehicle || !gpsHistoryManager || typeof gpsHistoryManager.fetchGpsHistory !== 'function') return false;
+      if (!force && Number.isFinite(getAvgMovingMilesPerDayValue(vehicle))) {
+        syncVehicleAverageMovingMilesDayField(vehicle);
+        return false;
+      }
+
+      const vehicleKey = getVehicleKey(vehicle);
+      if (!vehicleKey) return false;
+      const pending = vehicleAvgMovingMilesPendingRequests.get(vehicleKey);
+      if (pending) return pending;
+
+      const request = (async () => {
+        const vin = gpsHistoryManager.getVehicleVin(vehicle);
+        const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+        if (!vin && !vehicleId) return false;
+
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+        if (error || !Array.isArray(records) || !records.length) {
+          syncVehicleAverageMovingMilesDayField(vehicle);
+          return false;
+        }
+
+        const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
+        const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
+          ? gpsHistoryManager.getRecordSerial
+          : () => '';
+        const configuredWinnerSerial = typeof gpsHistoryManager.getVehicleWinnerSerial === 'function'
+          ? gpsHistoryManager.getVehicleWinnerSerial(vehicle)
+          : '';
+        const resolvedWinnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
+          ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
+          : configuredWinnerSerial;
+        const metricSourceRecords = selectMovementMetricRecords(records, {
+          vehicle,
+          getRecordSerial,
+          winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
+          blacklistedWirelessSerials
+        });
+        const parkingSourceRecords = selectParkingSpotRecordsByDay(records, {
+          getRecordSerial,
+          winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
+          blacklistedWirelessSerials
+        });
+        const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records, {
+          movementSourceRecords: metricSourceRecords,
+          stationarySourceRecords: parkingSourceRecords,
+          winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
+          getRecordSerial
+        });
+        const changed = applyVehicleAverageMovingMilesPerDayFromGpsHistory(vehicle, metricSourceRecords);
+        if (movingOverrideChanged) {
+          renderVehicles({ preserveScrollTop: true });
+        }
+        syncVehicleAverageMovingMilesDayField(vehicle);
+        return changed;
+      })().finally(() => {
+        vehicleAvgMovingMilesPendingRequests.delete(vehicleKey);
+      });
+
+      vehicleAvgMovingMilesPendingRequests.set(vehicleKey, request);
+      return request;
+    };
+
+    const toComparableTimeMs = (value) => {
+      if (!value) return null;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const applyVehiclePtReadBoundsFromRecords = (
+      vehicle,
+      records = [],
+      {
+        winnerSerial = '',
+        getRecordSerial = () => ''
+      } = {}
+    ) => {
+      if (!vehicle || !Array.isArray(records) || !records.length) return false;
+
+      const scopedRecords = winnerSerial
+        ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === winnerSerial)
+        : records;
+      const sourceRecords = scopedRecords.length ? scopedRecords : records;
+
+      let earliestMs = Number.POSITIVE_INFINITY;
+      let latestMs = Number.NEGATIVE_INFINITY;
+      sourceRecords.forEach((record) => {
+        const timeMs = parseGpsTrailTimeMs(record);
+        if (!Number.isFinite(timeMs)) return;
+        if (timeMs < earliestMs) earliestMs = timeMs;
+        if (timeMs > latestMs) latestMs = timeMs;
+      });
+
+      const nextFirstRead = Number.isFinite(earliestMs) ? new Date(earliestMs).toISOString() : null;
+      const nextLastRead = Number.isFinite(latestMs) ? new Date(latestMs).toISOString() : null;
+
+      const currentFirstMs = toComparableTimeMs(vehicle?.firstRead ?? vehicle?.details?.pt_first_read ?? vehicle?.details?.['PT First Read']);
+      const currentLastMs = toComparableTimeMs(vehicle?.lastRead ?? vehicle?.details?.pt_last_read ?? vehicle?.details?.['PT Last Read']);
+      const nextFirstMs = Number.isFinite(earliestMs) ? earliestMs : null;
+      const nextLastMs = Number.isFinite(latestMs) ? latestMs : null;
+
+      const firstChanged = (currentFirstMs ?? null) !== (nextFirstMs ?? null);
+      const lastChanged = (currentLastMs ?? null) !== (nextLastMs ?? null);
+      if (!firstChanged && !lastChanged) return false;
+
+      if (nextFirstRead) {
+        vehicle.firstRead = nextFirstRead;
+      }
+      if (nextLastRead) {
+        vehicle.lastRead = nextLastRead;
+      }
+      if (vehicle?.details && typeof vehicle.details === 'object') {
+        if (nextFirstRead) {
+          vehicle.details.pt_first_read = nextFirstRead;
+          vehicle.details['PT First Read'] = nextFirstRead;
+        }
+        if (nextLastRead) {
+          vehicle.details.pt_last_read = nextLastRead;
+          vehicle.details['PT Last Read'] = nextLastRead;
+        }
+      }
+
+      return true;
+    };
+
+    const applyVehicleMovingOverrideFromGpsHistory = (
+      vehicle,
+      records = [],
+      {
+        movementSourceRecords = null,
+        stationarySourceRecords = null,
+        winnerSerial: providedWinnerSerial = '',
+        getRecordSerial: providedGetRecordSerial = null
+      } = {}
+    ) => {
+      if (!vehicle || !Array.isArray(records) || !records.length) return false;
+      const getRecordSerial = typeof providedGetRecordSerial === 'function'
+        ? providedGetRecordSerial
+        : (typeof gpsHistoryManager?.getRecordSerial === 'function'
+          ? gpsHistoryManager.getRecordSerial
+          : () => '');
+      const configuredWinnerSerial = typeof gpsHistoryManager?.getVehicleWinnerSerial === 'function'
+        ? gpsHistoryManager.getVehicleWinnerSerial(vehicle)
+        : '';
+      const resolvedWinnerSerial = `${providedWinnerSerial || ''}`.trim() || (
+        typeof gpsHistoryManager?.resolveVehicleWinnerSerialFromRecords === 'function'
+          ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
+          : configuredWinnerSerial
+      );
+      const winnerSerial = resolvedWinnerSerial || configuredWinnerSerial;
+      const resolvedMovementSourceRecords = Array.isArray(movementSourceRecords) && movementSourceRecords.length
+        ? movementSourceRecords
+        : (winnerSerial
+          ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === winnerSerial)
+          : records);
+      const resolvedStationarySourceRecords = Array.isArray(stationarySourceRecords) && stationarySourceRecords.length
+        ? stationarySourceRecords
+        : resolvedMovementSourceRecords;
+      const ptReadBoundsChanged = applyVehiclePtReadBoundsFromRecords(vehicle, records, {
+        winnerSerial,
+        getRecordSerial
+      });
+
+      const latestSerial = getMostRecentRecordSerial(resolvedMovementSourceRecords, getRecordSerial);
+      const serialCountsBySerial = countGpsHistoryRecordsBySerial(resolvedMovementSourceRecords, getRecordSerial);
+      const movingHistoryOverride = resolveVehicleMovingHistoryOverride({
+        records: resolvedMovementSourceRecords,
+        vehicle,
+        winnerSerial,
+        latestSerial,
+        serialCountsBySerial,
+        getRecordSerial
+      });
+      const latestMovementRecord = [...resolvedStationarySourceRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))[0] || null;
+      const latestOverallRecord = [...records]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))[0] || null;
+      const explicitLatestStationaryDays = parseGpsRecordDaysParked(latestMovementRecord || {});
+      const inferredStationaryDays = inferStationaryDaysFromRecords(resolvedStationarySourceRecords, { vehicle });
+      let stationaryDays = Number.isFinite(inferredStationaryDays)
+        ? inferredStationaryDays
+        : (Number.isFinite(explicitLatestStationaryDays) ? explicitLatestStationaryDays : null);
+
+      const latestMovementRecordTimeMs = parseGpsTrailTimeMs(latestMovementRecord || {});
+      const latestOverallRecordTimeMs = parseGpsTrailTimeMs(latestOverallRecord || {});
+      const latestMovementRecordSerial = normalizeGpsSerial(getRecordSerial(latestMovementRecord || {}));
+      const isLatestReadStale = Number.isFinite(latestMovementRecordTimeMs)
+        && (Date.now() - latestMovementRecordTimeMs) > GPS_MOVING_UNKNOWN_STALE_READ_MS;
+      const latestRecordMove = parseGpsRecordMovingStatus(latestMovementRecord || {});
+      const latestRecordLooksParked = (
+        latestRecordMove === 'stopped'
+        || (Number.isFinite(explicitLatestStationaryDays) && explicitLatestStationaryDays > 0)
+      );
+      const gpsFixStatus = normalizeFilterValue(vehicle?.gpsFix);
+      const shouldSuppressSilentCarryForward = gpsFixStatus === 'all';
+      const canCarryForwardSilentParking = (
+        !shouldSuppressSilentCarryForward
+        && latestRecordLooksParked
+        && isWiredGpsSerial(latestMovementRecordSerial)
+        && Number.isFinite(latestMovementRecordTimeMs)
+        && Number.isFinite(latestOverallRecordTimeMs)
+        && latestOverallRecordTimeMs <= latestMovementRecordTimeMs
+      );
+      if (canCarryForwardSilentParking && Number.isFinite(stationaryDays)) {
+        const todayStartMs = toLocalDayStartMs(Date.now());
+        const latestDayStartMs = toLocalDayStartMs(latestMovementRecordTimeMs);
+        if (Number.isFinite(todayStartMs) && Number.isFinite(latestDayStartMs) && todayStartMs >= latestDayStartMs) {
+          stationaryDays += Math.floor((todayStartMs - latestDayStartMs) / GPS_HISTORY_DAY_MS);
+        }
+      }
+      if (!Number.isFinite(stationaryDays) && latestRecordLooksParked) {
+        stationaryDays = 0;
+      }
+
+      const currentMovingOverride = `${vehicle?.historyMovingOverride || ''}`.trim().toLowerCase();
+      let normalizedOverride = `${movingHistoryOverride || ''}`.trim().toLowerCase();
+      if (isLatestReadStale && !canCarryForwardSilentParking) {
+        normalizedOverride = 'unknown';
+      }
+      if (normalizedOverride === 'moving') {
+        stationaryDays = 0;
+      }
+      const movingOverrideChanged = currentMovingOverride !== normalizedOverride;
+      const currentDaysRaw = vehicle?.historyDaysStationaryOverride ?? vehicle?.details?.historyDaysStationaryOverride;
+      const currentDays = Number.isFinite(Number(currentDaysRaw)) ? Number(currentDaysRaw) : null;
+      const nextDays = Number.isFinite(stationaryDays)
+        ? Math.max(0, Math.floor(stationaryDays))
+        : null;
+      const daysChanged = (currentDays === null && nextDays !== null)
+        || (currentDays !== null && nextDays === null)
+        || (currentDays !== null && nextDays !== null && currentDays !== nextDays);
+      if (!movingOverrideChanged && !daysChanged && !ptReadBoundsChanged) return false;
+
+      if (normalizedOverride) {
+        vehicle.historyMovingOverride = normalizedOverride;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          vehicle.details.historyMovingOverride = normalizedOverride;
+        }
+      } else {
+        delete vehicle.historyMovingOverride;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          delete vehicle.details.historyMovingOverride;
+        }
+      }
+
+      if (nextDays !== null) {
+        vehicle.historyDaysStationaryOverride = nextDays;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          // Keep the GPS-history derivation separate from raw vehicle snapshot fields.
+          vehicle.details.historyDaysStationaryOverride = nextDays;
+        }
+      } else {
+        delete vehicle.historyDaysStationaryOverride;
+        if (vehicle?.details && typeof vehicle.details === 'object') {
+          delete vehicle.details.historyDaysStationaryOverride;
+        }
+      }
+      return true;
+    };
+
+    const normalizeGpsSerial = (serial = '') => `${serial ?? ''}`.trim().toUpperCase();
+
+    const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(normalizeGpsSerial(serial));
+
+    const normalizeGpsBlacklistColumnName = (value = '') => `${value ?? ''}`
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    const GPS_BLACKLIST_EFFECTIVE_DATE_COLUMN_CANDIDATES = [
+      'effective_from',
+      'effective_date',
+      'effective_start_date',
+      'blacklist_from',
+      'blacklist_date',
+      'start_date',
+      'date_from',
+      'from_date',
+      'date'
+    ];
+
+    const parseGpsBlacklistEffectiveFromMs = (row = {}) => {
+      if (!row || typeof row !== 'object') return null;
+
+      const keyLookup = new Map();
+      Object.keys(row).forEach((key) => {
+        keyLookup.set(normalizeGpsBlacklistColumnName(key), key);
+      });
+
+      for (const candidate of GPS_BLACKLIST_EFFECTIVE_DATE_COLUMN_CANDIDATES) {
+        const actualKey = keyLookup.get(normalizeGpsBlacklistColumnName(candidate));
+        if (!actualKey) continue;
+        const rawValue = row?.[actualKey];
+        if (rawValue === null || rawValue === undefined || `${rawValue}`.trim() === '') {
+          return null;
+        }
+        const parsed = Date.parse(rawValue);
+        if (!Number.isNaN(parsed)) return parsed;
+        return null;
+      }
+
+      return null;
+    };
+
+    const isGpsDeviceSerialBlacklistedAt = (
+      serial = '',
+      timestampMs = Date.now(),
+      { blacklistBySerial = gpsDeviceBlacklistSerialsCache } = {}
+    ) => {
+      const normalized = normalizeGpsSerial(serial);
+      if (!normalized) return false;
+
+      if (blacklistBySerial instanceof Set) {
+        return blacklistBySerial.has(normalized);
+      }
+
+      if (!(blacklistBySerial instanceof Map)) return false;
+      if (!blacklistBySerial.has(normalized)) return false;
+
+      const effectiveFromMs = blacklistBySerial.get(normalized);
+      if (effectiveFromMs === null || effectiveFromMs === undefined) return true;
+
+      const evaluationTimestamp = Number.isFinite(timestampMs) ? timestampMs : Date.now();
+      return evaluationTimestamp >= effectiveFromMs;
+    };
+
+    const getGpsDeviceSerialBlacklistEffectiveFromMs = (
+      serial = '',
+      { blacklistBySerial = gpsDeviceBlacklistSerialsCache } = {}
+    ) => {
+      const normalized = normalizeGpsSerial(serial);
+      if (!normalized) return null;
+      if (!(blacklistBySerial instanceof Map)) return null;
+      const effectiveFromMs = blacklistBySerial.get(normalized);
+      return Number.isFinite(effectiveFromMs) ? effectiveFromMs : null;
+    };
+
+    const getGpsDeviceBlacklistSerials = async ({ force = false } = {}) => {
+      if (!supabaseClient?.from) return new Map();
+
+      const now = Date.now();
+      const cacheIsFresh = (now - gpsDeviceBlacklistSerialsCacheUpdatedAt) <= GPS_DEVICE_BLACKLIST_CACHE_TTL_MS;
+      if (!force && cacheIsFresh && gpsDeviceBlacklistSerialsCacheUpdatedAt > 0) {
+        return gpsDeviceBlacklistSerialsCache;
+      }
+
+      if (!force && gpsDeviceBlacklistSerialsPending) return gpsDeviceBlacklistSerialsPending;
+
+      gpsDeviceBlacklistSerialsPending = (async () => {
+        await ensureSupabaseSession();
+        const tableName = TABLES.gpsDeviceBlacklist || 'gps_blacklist';
+        const { data, error } = await runWithTimeout(
+          supabaseClient
+            .from(tableName)
+            .select('*'),
+          8000,
+          'GPS blacklist request timed out.'
+        );
+
+        if (error) throw error;
+
+        const serials = new Map();
+        (data || []).forEach((row) => {
+          if (row?.is_active === false) return;
+          const serial = normalizeGpsSerial(row?.serial);
+          if (!serial) return;
+          const effectiveFromMs = parseGpsBlacklistEffectiveFromMs(row);
+          const currentValue = serials.get(serial);
+          if (currentValue === undefined) {
+            serials.set(serial, effectiveFromMs);
+            return;
+          }
+          if (currentValue === null || effectiveFromMs === null) {
+            serials.set(serial, null);
+            return;
+          }
+          if (effectiveFromMs < currentValue) {
+            serials.set(serial, effectiveFromMs);
+          }
+        });
+
+        gpsDeviceBlacklistSerialsCache = serials;
+        gpsDeviceBlacklistSerialsCacheUpdatedAt = Date.now();
+        return serials;
+      })().catch((error) => {
+        console.warn('GPS device blacklist load warning: ' + (error?.message || error));
+        return gpsDeviceBlacklistSerialsCache;
+      }).finally(() => {
+        gpsDeviceBlacklistSerialsPending = null;
+      });
+
+      return gpsDeviceBlacklistSerialsPending;
+    };
+
+    const parseGpsRecordMovingStatus = (record = {}) => {
+      const movementCandidates = [
+        record?.moved,
+        record?.Moved,
+        record?.moving,
+        record?.Moving,
+        record?.moving_calc,
+        record?.['Moving (Calc)'],
+        record?.gps_moving,
+        record?.['GPS Moving']
+      ];
+
+      for (const candidate of movementCandidates) {
+        if (candidate === null || candidate === undefined) continue;
+        const raw = `${candidate}`.trim();
+        if (!raw) continue;
+        const numeric = Number.parseInt(raw, 10);
+        if (Number.isFinite(numeric)) {
+          if (numeric === 1) return 'moving';
+          if (numeric === -1 || numeric === 0) return 'stopped';
+        }
+        const normalized = raw.toLowerCase();
+        if (normalized === 'moving' || normalized === 'move' || normalized === 'true' || normalized === 'yes') {
+          return 'moving';
+        }
+        if (
+          normalized === 'stopped' ||
+          normalized === 'not moving' ||
+          normalized === 'stop' ||
+          normalized === 'false' ||
+          normalized === 'no' ||
+          normalized === 'parked'
+        ) {
+          return 'stopped';
+        }
+      }
+
+      const speedCandidates = [
+        record?.speed,
+        record?.Speed,
+        record?.gps_speed,
+        record?.['GPS Speed'],
+        record?.mph
+      ];
+
+      for (const speedCandidate of speedCandidates) {
+        const speed = parseGpsNumericValue(speedCandidate);
+        if (!Number.isFinite(speed)) continue;
+        return speed <= 1.5 ? 'stopped' : 'moving';
+      }
+
+      return null;
+    };
+
+    const inferMovingHistoryStatusFromRecords = (records = [], { vehicle = null } = {}) => {
+      if (!Array.isArray(records) || !records.length) return '';
+
+      const analysisRecords = [...records]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
+        .slice(0, GPS_MOVING_ANALYSIS_MAX_POINTS)
+        .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+
+      const movementVotes = analysisRecords
+        .map((record) => parseGpsRecordMovingStatus(record))
+        .filter((status) => status === 'moving' || status === 'stopped');
+      const movingVotes = movementVotes.filter((status) => status === 'moving').length;
+      const stoppedVotes = movementVotes.filter((status) => status === 'stopped').length;
+
+      const trailPoints = analysisRecords
+        .map((record) => toGpsTrailPoint(record))
+        .filter(Boolean);
+
+      if (trailPoints.length < 2) {
+        if (movementVotes.length) {
+          return stoppedVotes >= movingVotes ? 'stopped' : 'moving';
+        }
+        return '';
+      }
+
+      let totalDistanceMeters = 0;
+      let maxSegmentMeters = 0;
+      for (let index = 1; index < trailPoints.length; index += 1) {
+        const segmentDistance = getGpsPointDistanceMeters(trailPoints[index - 1], trailPoints[index]);
+        if (!Number.isFinite(segmentDistance)) continue;
+        totalDistanceMeters += segmentDistance;
+        if (segmentDistance > maxSegmentMeters) maxSegmentMeters = segmentDistance;
+      }
+
+      const firstPoint = trailPoints[0];
+      const lastPoint = trailPoints[trailPoints.length - 1];
+      const netDistanceMeters = getGpsPointDistanceMeters(firstPoint, lastPoint);
+      let maxRadiusMeters = 0;
+      trailPoints.forEach((point) => {
+        const pointDistance = getGpsPointDistanceMeters(lastPoint, point);
+        if (!Number.isFinite(pointDistance)) return;
+        if (pointDistance > maxRadiusMeters) maxRadiusMeters = pointDistance;
+      });
+
+      // Treat short-segment clusters as stopped even when cumulative jitter inflates total distance.
+      const tightClusterStopped = (
+        netDistanceMeters <= GPS_MOVING_STOPPED_NET_DISTANCE_METERS
+        && maxRadiusMeters <= GPS_MOVING_STOPPED_MAX_RADIUS_METERS
+        && maxSegmentMeters <= GPS_MOVING_STOPPED_MAX_SEGMENT_METERS
+      );
+      const lowTravelStopped = (
+        totalDistanceMeters <= GPS_MOVING_STOPPED_TOTAL_DISTANCE_METERS
+        && netDistanceMeters <= GPS_MOVING_STOPPED_NET_DISTANCE_METERS
+        && maxSegmentMeters <= GPS_MOVING_STOPPED_MAX_SEGMENT_METERS
+      );
+      if (tightClusterStopped || lowTravelStopped) return 'stopped';
+
+      const likelyMoving = (
+        totalDistanceMeters >= GPS_MOVING_MOVING_TOTAL_DISTANCE_METERS
+        || netDistanceMeters >= GPS_MOVING_MOVING_NET_DISTANCE_METERS
+        || maxSegmentMeters >= GPS_MOVING_MOVING_MAX_SEGMENT_METERS
+      );
+      if (likelyMoving && movingVotes >= stoppedVotes) return 'moving';
+
+      const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle);
+      const withinDistanceThreshold = (
+        totalDistanceMeters <= stoppedDistanceThreshold
+        && netDistanceMeters <= stoppedDistanceThreshold
+      );
+      if (withinDistanceThreshold) return 'stopped';
+
+      if (movementVotes.length) {
+        return stoppedVotes >= movingVotes ? 'stopped' : 'moving';
+      }
+
+      return '';
+    };
+
+    const isTruckOrTrailerUnit = (vehicle = {}) => {
+      const unitType = `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`
+        .trim()
+        .toLowerCase();
+      if (!unitType) return false;
+      return unitType.includes('truck') || unitType.includes('trailer');
+    };
+
+    const getStoppedDistanceThresholdForVehicle = (vehicle = {}) => (
+      isTruckOrTrailerUnit(vehicle)
+        ? GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
+        : GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
+    );
+
+    const getGpsPointDistanceMeters = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
+      const toRadians = (value) => value * (Math.PI / 180);
+      const earthRadiusMeters = 6371000;
+      const deltaLat = toRadians(toPoint.lat - fromPoint.lat);
+      const deltaLng = toRadians(toPoint.lng - fromPoint.lng);
+      const lat1 = toRadians(fromPoint.lat);
+      const lat2 = toRadians(toPoint.lat);
+
+      const a = (Math.sin(deltaLat / 2) ** 2)
+        + (Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2));
+      const boundedA = Math.min(1, Math.max(0, a));
+      const c = 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+      return earthRadiusMeters * c;
+    };
+
+    const toUtcDayStartMs = (timeMs) => {
+      if (!Number.isFinite(timeMs) || timeMs <= 0) return null;
+      const date = new Date(timeMs);
+      if (Number.isNaN(date.getTime())) return null;
+      return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    };
+
+    const toLocalDayStartMs = (timeMs) => {
+      if (!Number.isFinite(timeMs) || timeMs <= 0) return null;
+      const date = new Date(timeMs);
+      if (Number.isNaN(date.getTime())) return null;
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    };
+
+    const selectParkingSpotRecordsByDay = (
+      records = [],
+      {
+        getRecordSerial = () => '',
+        winnerSerial = '',
+        blacklistedWirelessSerials = new Map()
+      } = {}
+    ) => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
+
+      const normalizedWinnerSerial = normalizeGpsSerial(winnerSerial);
+      if (normalizedWinnerSerial) {
+        return records
+          .filter((record) => normalizeGpsSerial(getRecordSerial(record)) === normalizedWinnerSerial)
+          .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+      }
+
+      const dayBuckets = new Map();
+      const fallbackWiredRecords = [];
+      const fallbackWirelessRecords = [];
+      const blacklistedSerials = (
+        blacklistedWirelessSerials instanceof Set
+        || blacklistedWirelessSerials instanceof Map
+      )
+        ? blacklistedWirelessSerials
+        : new Map();
+
+      records.forEach((record) => {
+        const serial = normalizeGpsSerial(getRecordSerial(record));
+        if (!serial) return;
+        const timeMs = parseGpsTrailTimeMs(record);
+        const isWired = isWiredGpsSerial(serial);
+        const isWirelessAllowed = (
+          !isWired
+          && !isGpsDeviceSerialBlacklistedAt(serial, timeMs, {
+            blacklistBySerial: blacklistedSerials
+          })
+        );
+        if (!isWired && !isWirelessAllowed) return;
+
+        if (isWired) {
+          fallbackWiredRecords.push(record);
+        } else {
+          fallbackWirelessRecords.push(record);
+        }
+
+        const dayStartMs = toUtcDayStartMs(timeMs);
+        if (!Number.isFinite(dayStartMs)) return;
+
+        const bucket = dayBuckets.get(dayStartMs) || { wired: [], wireless: [] };
+        if (isWired) {
+          bucket.wired.push(record);
+        } else if (isWirelessAllowed) {
+          bucket.wireless.push(record);
+        }
+        dayBuckets.set(dayStartMs, bucket);
+      });
+
+      if (!dayBuckets.size) {
+        return fallbackWiredRecords.length ? fallbackWiredRecords : fallbackWirelessRecords;
+      }
+
+      const selectedRecords = [];
+      const seenRecords = new Set();
+      [...dayBuckets.keys()].sort((a, b) => a - b).forEach((dayStartMs) => {
+        const bucket = dayBuckets.get(dayStartMs);
+        if (!bucket) return;
+        const preferredRecords = bucket.wired.length ? bucket.wired : bucket.wireless;
+        preferredRecords.forEach((record) => {
+          if (!record || seenRecords.has(record)) return;
+          seenRecords.add(record);
+          selectedRecords.push(record);
+        });
+      });
+
+      return selectedRecords;
+    };
+
+    const selectMovementMetricRecords = (
+      records = [],
+      {
+        vehicle = null,
+        getRecordSerial = () => '',
+        winnerSerial = '',
+        blacklistedWirelessSerials = new Map()
+      } = {}
+    ) => {
+      if (!Array.isArray(records) || !records.length || typeof getRecordSerial !== 'function') return [];
+
+      const normalizedWinnerSerial = normalizeGpsSerial(winnerSerial);
+      if (normalizedWinnerSerial) {
+        return records
+          .filter((record) => normalizeGpsSerial(getRecordSerial(record)) === normalizedWinnerSerial)
+          .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+      }
+
+      const configuredSerials = typeof getVehicleConfiguredSerials === 'function'
+        ? getVehicleConfiguredSerials(vehicle)
+        : [];
+      const blacklistedSerials = (
+        blacklistedWirelessSerials instanceof Set
+        || blacklistedWirelessSerials instanceof Map
+      )
+        ? blacklistedWirelessSerials
+        : new Map();
+      const wiredRecordsBySerial = new Map();
+      const wirelessRecordsBySerial = new Map();
+      const unknownRecords = [];
+
+      records.forEach((record) => {
+        const serial = normalizeGpsSerial(getRecordSerial(record));
+        const timeMs = parseGpsTrailTimeMs(record);
+        if (serial && isGpsDeviceSerialBlacklistedAt(serial, timeMs, { blacklistBySerial: blacklistedSerials })) {
+          return;
+        }
+        if (!serial) {
+          unknownRecords.push(record);
+          return;
+        }
+
+        if (isWiredGpsSerial(serial)) {
+          const bucket = wiredRecordsBySerial.get(serial) || [];
+          bucket.push(record);
+          wiredRecordsBySerial.set(serial, bucket);
+          return;
+        }
+
+        if (/^8/.test(serial)) {
+          const bucket = wirelessRecordsBySerial.get(serial) || [];
+          bucket.push(record);
+          wirelessRecordsBySerial.set(serial, bucket);
+          return;
+        }
+
+        unknownRecords.push(record);
+      });
+
+      const flattenRecordMap = (recordMap) => (
+        [...recordMap.values()]
+          .flat()
+          .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b))
+      );
+
+      const sortRecords = (items = []) => (
+        [...items].sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b))
+      );
+
+      const collectRecordsForSerials = (serials = [], recordMap = new Map()) => {
+        if (!Array.isArray(serials) || !serials.length || !(recordMap instanceof Map)) return [];
+        const collected = [];
+        const seen = new Set();
+        serials.forEach((serial) => {
+          const normalizedSerial = normalizeGpsSerial(serial);
+          if (!normalizedSerial || seen.has(normalizedSerial) || !recordMap.has(normalizedSerial)) return;
+          seen.add(normalizedSerial);
+          collected.push(...(recordMap.get(normalizedSerial) || []));
+        });
+        return sortRecords(collected);
+      };
+
+      const configuredWiredRecords = collectRecordsForSerials(
+        configuredSerials.filter((serial) => isWiredGpsSerial(serial)),
+        wiredRecordsBySerial
+      );
+      if (configuredWiredRecords.length >= 2) {
+        return configuredWiredRecords;
+      }
+
+      const winnerWiredRecords = (
+        normalizedWinnerSerial
+        && isWiredGpsSerial(normalizedWinnerSerial)
+        && wiredRecordsBySerial.has(normalizedWinnerSerial)
+      )
+        ? (wiredRecordsBySerial.get(normalizedWinnerSerial) || [])
+        : [];
+      if (winnerWiredRecords.length >= 2) {
+        return sortRecords(winnerWiredRecords);
+      }
+
+      const allWiredRecords = flattenRecordMap(wiredRecordsBySerial);
+      if (allWiredRecords.length >= 2) {
+        return allWiredRecords;
+      }
+
+      const configuredWirelessRecords = collectRecordsForSerials(
+        configuredSerials.filter((serial) => /^8/.test(normalizeGpsSerial(serial))),
+        wirelessRecordsBySerial
+      );
+      if (configuredWirelessRecords.length >= 2) {
+        return configuredWirelessRecords;
+      }
+
+      const winnerWirelessRecords = (
+        normalizedWinnerSerial
+        && /^8/.test(normalizedWinnerSerial)
+        && wirelessRecordsBySerial.has(normalizedWinnerSerial)
+      )
+        ? (wirelessRecordsBySerial.get(normalizedWinnerSerial) || [])
+        : [];
+      if (winnerWirelessRecords.length >= 2) {
+        return sortRecords(winnerWirelessRecords);
+      }
+
+      const allWirelessRecords = flattenRecordMap(wirelessRecordsBySerial);
+      if (allWirelessRecords.length >= 2) {
+        return allWirelessRecords;
+      }
+
+      const fallbackRecords = [...allWiredRecords, ...allWirelessRecords, ...unknownRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+      return fallbackRecords.length ? fallbackRecords : records;
+    };
+
+    const buildHotspotSessions = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
+      const dayBuckets = new Map();
+
+      sortedPoints.forEach((point) => {
+        const firstPointTimeMs = Number.isFinite(point?.firstTimeMs)
+          ? point.firstTimeMs
+          : (Number.isFinite(point?.timeMs) ? point.timeMs : null);
+        const lastPointTimeMs = Number.isFinite(point?.lastTimeMs)
+          ? point.lastTimeMs
+          : firstPointTimeMs;
+        const dayStartMs = toUtcDayStartMs(firstPointTimeMs);
+        if (!Number.isFinite(dayStartMs)) return;
+        const existing = dayBuckets.get(dayStartMs) || {
+          dayStartMs,
+          points: 0,
+          firstMs: firstPointTimeMs,
+          lastMs: lastPointTimeMs,
+          hasStoppedPoint: false,
+          maxExplicitParkedDays: 0
+        };
+        existing.points += 1;
+        if (!Number.isFinite(existing.firstMs) || firstPointTimeMs < existing.firstMs) existing.firstMs = firstPointTimeMs;
+        if (!Number.isFinite(existing.lastMs) || lastPointTimeMs > existing.lastMs) existing.lastMs = lastPointTimeMs;
+        if (`${point?.movingStatus || ''}`.trim().toLowerCase() === 'stopped') {
+          existing.hasStoppedPoint = true;
+        }
+        const explicitParkedDays = Number(point?.explicitParkedDays);
+        if (Number.isFinite(explicitParkedDays)) {
+          existing.maxExplicitParkedDays = Math.max(existing.maxExplicitParkedDays, explicitParkedDays);
+        }
+        dayBuckets.set(dayStartMs, existing);
+      });
+
+      // If timestamps are missing, keep a conservative fallback: one 1-day visit per point.
+      if (!dayBuckets.size) {
+        return sortedPoints.map((point) => {
+          const pointTimeMs = Number.isFinite(point?.firstTimeMs)
+            ? point.firstTimeMs
+            : (Number.isFinite(point?.timeMs) ? point.timeMs : null);
+          return {
+            points: 1,
+            activeDays: 1,
+            startMs: pointTimeMs,
+            endMs: pointTimeMs,
+            durationMs: GPS_HISTORY_DAY_MS,
+            qualifiesAsVisit: Number(point?.explicitParkedDays) > 0 || `${point?.movingStatus || ''}`.trim().toLowerCase() === 'stopped'
+          };
+        });
+      }
+
+      const sortedDays = [...dayBuckets.values()].sort((a, b) => a.dayStartMs - b.dayStartMs);
+      const sessions = [];
+      let activeSession = null;
+
+      const pushSession = () => {
+        if (!activeSession) return;
+        const startMs = Number.isFinite(activeSession.startMs) ? activeSession.startMs : null;
+        const endMs = Number.isFinite(activeSession.endMs) ? activeSession.endMs : null;
+        const observedDurationMs = startMs !== null && endMs !== null && endMs >= startMs
+          ? endMs - startMs
+          : 0;
+        const activeDays = Math.max(1, activeSession.activeDays);
+        const inferredDurationMs = activeDays * GPS_HISTORY_DAY_MS;
+        sessions.push({
+          points: activeSession.points,
+          activeDays,
+          startMs,
+          endMs,
+          durationMs: Math.max(observedDurationMs, inferredDurationMs),
+          qualifiesAsVisit: (
+            activeSession.activeDays > 1
+            || activeSession.stoppedDays > 0
+            || activeSession.maxExplicitParkedDays > 0
+          )
+        });
+        activeSession = null;
+      };
+
+      sortedDays.forEach((dayBucket) => {
+        if (!activeSession) {
+          activeSession = {
+            points: dayBucket.points,
+            activeDays: 1,
+            startMs: dayBucket.firstMs,
+            endMs: dayBucket.lastMs,
+            lastDayStartMs: dayBucket.dayStartMs,
+            stoppedDays: dayBucket.hasStoppedPoint ? 1 : 0,
+            maxExplicitParkedDays: dayBucket.maxExplicitParkedDays
+          };
+          return;
+        }
+
+        const dayGap = Math.round((dayBucket.dayStartMs - activeSession.lastDayStartMs) / GPS_HISTORY_DAY_MS);
+        const isConsecutiveDay = dayGap <= 1;
+        if (!isConsecutiveDay) {
+          pushSession();
+          activeSession = {
+            points: dayBucket.points,
+            activeDays: 1,
+            startMs: dayBucket.firstMs,
+            endMs: dayBucket.lastMs,
+            lastDayStartMs: dayBucket.dayStartMs,
+            stoppedDays: dayBucket.hasStoppedPoint ? 1 : 0,
+            maxExplicitParkedDays: dayBucket.maxExplicitParkedDays
+          };
+          return;
+        }
+
+        activeSession.points += dayBucket.points;
+        activeSession.activeDays += 1;
+        activeSession.stoppedDays += dayBucket.hasStoppedPoint ? 1 : 0;
+        activeSession.maxExplicitParkedDays = Math.max(
+          activeSession.maxExplicitParkedDays,
+          dayBucket.maxExplicitParkedDays
+        );
+        activeSession.startMs = Number.isFinite(activeSession.startMs)
+          ? Math.min(activeSession.startMs, dayBucket.firstMs)
+          : dayBucket.firstMs;
+        activeSession.endMs = Number.isFinite(activeSession.endMs)
+          ? Math.max(activeSession.endMs, dayBucket.lastMs)
+          : dayBucket.lastMs;
+        activeSession.lastDayStartMs = dayBucket.dayStartMs;
+      });
+
+      pushSession();
+      return sessions;
+    };
+
+    const mergeParkingSpotMovingStatus = (leftStatus = '', rightStatus = '') => {
+      const left = `${leftStatus || ''}`.trim().toLowerCase();
+      const right = `${rightStatus || ''}`.trim().toLowerCase();
+      if (left === 'stopped' || right === 'stopped') return 'stopped';
+      if (left === 'moving' || right === 'moving') return 'moving';
+      return 'unknown';
+    };
+
+    const collapseConcurrentParkingSpotPoints = (points = []) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const sortedPoints = [...points].sort((a, b) => a.timestamp - b.timestamp);
+      const collapsed = [];
+
+      sortedPoints.forEach((point) => {
+        const pointTimeMs = Number.isFinite(point?.timeMs) ? point.timeMs : point.timestamp;
+        const lastObservation = collapsed[collapsed.length - 1] || null;
+        const lastTimeMs = Number.isFinite(lastObservation?.timeMs)
+          ? lastObservation.timeMs
+          : lastObservation?.timestamp;
+        const sameMoment = (
+          lastObservation
+          && Number.isFinite(pointTimeMs)
+          && Number.isFinite(lastTimeMs)
+          && Math.abs(pointTimeMs - lastTimeMs) <= GPS_HISTORY_HOTSPOT_CONCURRENT_PING_WINDOW_MS
+        );
+        const samePlace = lastObservation
+          && getGpsPointDistanceMeters(point, lastObservation) <= GPS_HISTORY_HOTSPOT_CONCURRENT_PING_DISTANCE_METERS;
+
+        if (!sameMoment || !samePlace) {
+          collapsed.push({
+            ...point,
+            firstTimeMs: pointTimeMs,
+            lastTimeMs: pointTimeMs,
+            timeMs: pointTimeMs,
+            timestamp: Number.isFinite(pointTimeMs) ? pointTimeMs : point.timestamp,
+            rawPointCount: 1,
+            serials: point.serial ? [point.serial] : []
+          });
+          return;
+        }
+
+        const previousRawPointCount = Number.isFinite(lastObservation.rawPointCount)
+          ? lastObservation.rawPointCount
+          : 1;
+        const nextRawPointCount = previousRawPointCount + 1;
+        lastObservation.lat = ((lastObservation.lat * previousRawPointCount) + point.lat) / nextRawPointCount;
+        lastObservation.lng = ((lastObservation.lng * previousRawPointCount) + point.lng) / nextRawPointCount;
+        lastObservation.rawPointCount = nextRawPointCount;
+        lastObservation.firstTimeMs = Number.isFinite(lastObservation.firstTimeMs)
+          ? Math.min(lastObservation.firstTimeMs, pointTimeMs)
+          : pointTimeMs;
+        lastObservation.lastTimeMs = Number.isFinite(lastObservation.lastTimeMs)
+          ? Math.max(lastObservation.lastTimeMs, pointTimeMs)
+          : pointTimeMs;
+        lastObservation.timeMs = lastObservation.firstTimeMs;
+        lastObservation.timestamp = Number.isFinite(lastObservation.firstTimeMs)
+          ? lastObservation.firstTimeMs
+          : lastObservation.timestamp;
+        lastObservation.movingStatus = mergeParkingSpotMovingStatus(
+          lastObservation.movingStatus,
+          point.movingStatus
+        );
+        const explicitParkedDays = Number(point?.explicitParkedDays);
+        if (Number.isFinite(explicitParkedDays)) {
+          const currentExplicitParkedDays = Number(lastObservation?.explicitParkedDays);
+          lastObservation.explicitParkedDays = Number.isFinite(currentExplicitParkedDays)
+            ? Math.max(currentExplicitParkedDays, explicitParkedDays)
+            : explicitParkedDays;
+        }
+        if (point.serial) {
+          const serialSet = new Set([
+            ...(Array.isArray(lastObservation.serials) ? lastObservation.serials : []),
+            point.serial
+          ]);
+          lastObservation.serials = [...serialSet];
+        }
+      });
+
+      return collapsed;
+    };
+
+    const buildVehicleHistoryHotspots = (
+      records = [],
+      {
+        getRecordSerial = () => '',
+        serialCountsBySerial = null
+      } = {}
+    ) => {
+      if (!Array.isArray(records) || !records.length) return [];
+
+      // Hotspot analysis consumes the scoped record set chosen by the caller.
+      const sortedRecords = [...records]
+        .sort((a, b) => parseGpsTrailTimestamp(a) - parseGpsTrailTimestamp(b));
+      const resolvedSerialCounts = serialCountsBySerial instanceof Map
+        ? serialCountsBySerial
+        : countGpsHistoryRecordsBySerial(sortedRecords, getRecordSerial);
+
+      const points = sortedRecords
+        .map((record) => {
+          const trailPoint = toGpsTrailPoint(record);
+          if (!trailPoint) return null;
+          const rawRecordSerial = `${getRecordSerial(record) || ''}`.trim();
+          const recordSerial = normalizeGpsSerial(rawRecordSerial);
+          const readingCountForSerial = recordSerial
+            ? Number(resolvedSerialCounts.get(recordSerial) || resolvedSerialCounts.get(rawRecordSerial) || 0)
+            : 0;
+          return {
+            ...trailPoint,
+            serial: recordSerial,
+            explicitParkedDays: parseGpsRecordDaysParked(record),
+            movingStatus: readingCountForSerial <= 1
+              ? 'unknown'
+              : parseGpsRecordMovingStatus(record)
+          };
+        })
+        .filter(Boolean);
+
+      if (!points.length) return [];
+
+      const normalizedPoints = collapseConcurrentParkingSpotPoints(points);
+
+      // Parking spots require multi-day stays (readings on different days in the same location cluster).
+      const sourcePoints = normalizedPoints;
+
+      if (!sourcePoints.length) return [];
+
+      const clusters = [];
+
+      sourcePoints.forEach((point) => {
+        let selectedCluster = null;
+        let selectedDistance = Number.POSITIVE_INFINITY;
+
+        clusters.forEach((cluster) => {
+          const distance = getGpsPointDistanceMeters(point, cluster.center);
+          if (distance < selectedDistance) {
+            selectedDistance = distance;
+            selectedCluster = cluster;
+          }
+        });
+
+        if (!selectedCluster || selectedDistance > GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS) {
+          clusters.push({
+            center: { lat: point.lat, lng: point.lng },
+            points: [point],
+            firstSeen: point.timestamp,
+            lastSeen: point.timestamp
+          });
+          return;
+        }
+
+        const previousCount = selectedCluster.points.length;
+        selectedCluster.points.push(point);
+        const nextCount = previousCount + 1;
+        selectedCluster.center.lat = ((selectedCluster.center.lat * previousCount) + point.lat) / nextCount;
+        selectedCluster.center.lng = ((selectedCluster.center.lng * previousCount) + point.lng) / nextCount;
+        selectedCluster.firstSeen = Math.min(selectedCluster.firstSeen, point.timestamp);
+        selectedCluster.lastSeen = Math.max(selectedCluster.lastSeen, point.timestamp);
+      });
+
+      const computeHotspotScore = ({
+        uniqueDays = 0,
+        visits = 0,
+        pingCount = 0,
+        stoppedCount = 0,
+        totalDurationMs = 0,
+        longestDurationDays = 0
+      } = {}) => {
+        const safeUniqueDays = Number.isFinite(uniqueDays) ? uniqueDays : 0;
+        const safeVisits = Number.isFinite(visits) ? visits : 0;
+        const safePingCount = Number.isFinite(pingCount) ? pingCount : 0;
+        const safeStoppedCount = Number.isFinite(stoppedCount) ? stoppedCount : 0;
+        const safeTotalDurationHours = Number.isFinite(totalDurationMs) ? (totalDurationMs / (1000 * 60 * 60)) : 0;
+        const safeLongestDurationDays = Number.isFinite(longestDurationDays) ? longestDurationDays : 0;
+        return (safeUniqueDays * 7)
+          + (safeVisits * 4)
+          + (Math.min(safePingCount, 250) * 1.35)
+          + (safeStoppedCount * 1.5)
+          + (Math.min(safeTotalDurationHours, 240) * 1.2)
+          + (Math.min(safeLongestDurationDays, 60) * 8.5);
+      };
+
+      const computeParkingHierarchyScore = ({
+        visits = 0,
+        totalParkedDays = 0
+      } = {}) => {
+        const safeVisits = Number.isFinite(visits) ? Math.max(0, visits) : 0;
+        const safeTotalParkedDays = Number.isFinite(totalParkedDays) ? Math.max(0, totalParkedDays) : 0;
+        return (safeVisits * GPS_HISTORY_HOTSPOT_HIERARCHY_VISIT_WEIGHT)
+          + (safeTotalParkedDays * GPS_HISTORY_HOTSPOT_HIERARCHY_TOTAL_DAYS_WEIGHT);
+      };
+
+      const resolveParkingHierarchyLevel = (ratio = 0) => {
+        if (Number.isFinite(ratio) && ratio >= GPS_HISTORY_HOTSPOT_LEVEL_PRIMARY_THRESHOLD) {
+          return { code: 'L1', label: 'Primary parking' };
+        }
+        if (Number.isFinite(ratio) && ratio >= GPS_HISTORY_HOTSPOT_LEVEL_SECONDARY_THRESHOLD) {
+          return { code: 'L2', label: 'Frequent parking' };
+        }
+        return { code: 'L3', label: 'Occasional parking' };
+      };
+
+      const normalizedHotspots = clusters
+        .map((cluster, index) => {
+          const sessions = buildHotspotSessions(cluster.points);
+          const qualifyingSessions = sessions.filter((session) => session?.qualifiesAsVisit);
+          const metricSessions = qualifyingSessions.length ? qualifyingSessions : sessions;
+          const sessionDurations = metricSessions
+            .map((session) => session.durationMs)
+            .filter((value) => Number.isFinite(value) && value >= 0);
+          const totalDurationMs = sessionDurations.reduce((sum, durationMs) => sum + durationMs, 0);
+          const avgDurationMs = sessionDurations.length ? totalDurationMs / sessionDurations.length : 0;
+          const avgParkedDays = avgDurationMs / GPS_HISTORY_DAY_MS;
+          const longestDurationMs = sessionDurations.length ? Math.max(...sessionDurations) : 0;
+          const shortestDurationMs = sessionDurations.length ? Math.min(...sessionDurations) : 0;
+          const latestSession = metricSessions[metricSessions.length - 1] || null;
+          const firstSeenTimeMs = Number.isFinite(metricSessions[0]?.startMs) ? metricSessions[0].startMs : cluster.firstSeen;
+          const lastSeenTimeMs = Number.isFinite(latestSession?.endMs) ? latestSession.endMs : cluster.lastSeen;
+          const lastStayDurationMs = Number.isFinite(latestSession?.durationMs) ? latestSession.durationMs : 0;
+          const spreadMeters = cluster.points.reduce((maxDistance, point) => {
+            const pointDistance = getGpsPointDistanceMeters(point, cluster.center);
+            return Math.max(maxDistance, pointDistance);
+          }, 0);
+          const radiusMeters = Math.max(80, Math.min(280, Math.round((spreadMeters * 2.2) + 70)));
+          const stoppedCount = cluster.points.filter((point) => point.movingStatus === 'stopped').length;
+          const visits = qualifyingSessions.length;
+          const uniqueDays = metricSessions.reduce((sum, session) => {
+            const activeDays = Number.isFinite(session?.activeDays) ? session.activeDays : 0;
+            return sum + Math.max(0, activeDays);
+          }, 0);
+          const momentCount = cluster.points.length;
+          const rawPingCount = cluster.points.reduce((count, point) => (
+            count + (Number.isFinite(point?.rawPointCount) ? point.rawPointCount : 1)
+          ), 0);
+          const serialCounts = new Map();
+          cluster.points.forEach((point) => {
+            const pointSerials = Array.isArray(point?.serials) ? point.serials : [point?.serial];
+            const normalizedSerials = Array.from(new Set(
+              pointSerials
+                .map((serial) => normalizeGpsSerial(serial))
+                .filter(Boolean)
+            ));
+            normalizedSerials.forEach((serial) => {
+              serialCounts.set(serial, (serialCounts.get(serial) || 0) + 1);
+            });
+          });
+          const serials = [...serialCounts.entries()]
+            .sort((a, b) => {
+              if (b[1] !== a[1]) return b[1] - a[1];
+              return a[0].localeCompare(b[0]);
+            })
+            .map(([serial, pings]) => ({
+              serial,
+              pings,
+              type: isWiredGpsSerial(serial) ? 'wired' : 'wireless'
+            }));
+          const longestDurationDays = longestDurationMs / GPS_HISTORY_DAY_MS;
+          const totalParkedDays = totalDurationMs / GPS_HISTORY_DAY_MS;
+          const longestStayActiveDays = metricSessions.reduce((maxDays, session) => {
+            const activeDays = Number.isFinite(session?.activeDays) ? session.activeDays : 0;
+            return Math.max(maxDays, activeDays);
+          }, 0);
+          const multiDayStayCount = metricSessions.filter((session) => (
+            Number.isFinite(session?.activeDays)
+            && session.activeDays >= GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS
+          )).length;
+          const score = computeHotspotScore({
+            uniqueDays,
+            visits,
+            pingCount: momentCount,
+            stoppedCount,
+            totalDurationMs,
+            longestDurationDays
+          });
+          const hierarchyScore = computeParkingHierarchyScore({
+            visits,
+            totalParkedDays
+          });
+
+          return {
+            id: `vehicle-history-hotspot-${index + 1}`,
+            lat: cluster.center.lat,
+            lng: cluster.center.lng,
+            points: momentCount,
+            pingCount: momentCount,
+            rawPingCount,
+            serials,
+            uniqueDays,
+            visits,
+            stoppedCount,
+            firstSeen: firstSeenTimeMs,
+            lastSeen: lastSeenTimeMs,
+            radiusMeters,
+            totalDurationMs,
+            totalParkedDays,
+            avgDurationMs,
+            avgParkedDays,
+            longestDurationMs,
+            shortestDurationMs,
+            longestDurationDays,
+            lastStayDurationMs,
+            longestStayActiveDays,
+            multiDayStayCount,
+            score,
+            hierarchyScore
+          };
+        });
+
+      const strictHotspots = normalizedHotspots.filter((hotspot) => {
+        const hasEnoughPoints = hotspot.points >= 2;
+        const hasMinConsecutiveDays = hotspot.longestStayActiveDays >= GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS;
+        const hasMinMultiDayStays = hotspot.multiDayStayCount >= GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS;
+        return hasEnoughPoints && hasMinConsecutiveDays && hasMinMultiDayStays;
+      });
+
+      let candidates = strictHotspots;
+      candidates = candidates
+        .sort((a, b) => {
+          if (b.hierarchyScore !== a.hierarchyScore) return b.hierarchyScore - a.hierarchyScore;
+          if (b.visits !== a.visits) return b.visits - a.visits;
+          if (b.totalParkedDays !== a.totalParkedDays) return b.totalParkedDays - a.totalParkedDays;
+          if (b.score !== a.score) return b.score - a.score;
+          if (b.lastSeen !== a.lastSeen) return b.lastSeen - a.lastSeen;
+          return b.points - a.points;
+        })
+        .slice(0, GPS_HISTORY_HOTSPOT_MAX);
+
+      const topHierarchyScore = candidates.reduce((bestScore, hotspot) => {
+        const value = Number.isFinite(hotspot?.hierarchyScore) ? hotspot.hierarchyScore : 0;
+        return Math.max(bestScore, value);
+      }, 0);
+
+      return candidates.map((hotspot, index) => {
+        const hierarchyRatio = topHierarchyScore > 0
+          ? hotspot.hierarchyScore / topHierarchyScore
+          : 0;
+        const hierarchyLevel = resolveParkingHierarchyLevel(hierarchyRatio);
+        return {
+          ...hotspot,
+          hierarchyRank: index + 1,
+          hierarchyRatio,
+          hierarchyLevel: hierarchyLevel.code,
+          hierarchyLevelLabel: hierarchyLevel.label
+        };
+      });
+    };
+
+    const buildVehicleHistoryHotspotPopupKey = (vehicleId, hotspot, index = 0) => {
+      const keyVehicleId = `${vehicleId ?? 'vehicle'}`.trim() || 'vehicle';
+      const latBucket = Number.isFinite(Number(hotspot?.lat)) ? Math.round(Number(hotspot.lat) * 10000) : 0;
+      const lngBucket = Number.isFinite(Number(hotspot?.lng)) ? Math.round(Number(hotspot.lng) * 10000) : 0;
+      return `vehicle-hotspot-${keyVehicleId}-${index + 1}-${latBucket}-${lngBucket}`;
+    };
+
+    const buildVehicleHistoryHotspotSummary = async (vehicle = {}) => {
+      const vehicleId = `${vehicle?.id ?? ''}`.trim();
+      if (!vehicleId) return [];
+
+      const now = Date.now();
+      const cached = vehicleHistoryHotspotCache.get(vehicleId);
+      if (cached && (now - cached.updatedAt) <= VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS) {
+        return cached.hotspots;
+      }
+
+      const pending = vehicleHistoryHotspotPendingRequests.get(vehicleId);
+      if (pending) return pending;
+
+      const request = (async () => {
+        const vin = gpsHistoryManager.getVehicleVin(vehicle);
+        const sourceVehicleId = gpsHistoryManager.getVehicleId(vehicle);
+        if (!vin && !sourceVehicleId) return [];
+
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId: sourceVehicleId });
+        if (error || !Array.isArray(records) || !records.length) {
+          vehicleHistoryHotspotCache.set(vehicleId, { updatedAt: Date.now(), hotspots: [] });
+          return [];
+        }
+
+        const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
+        const winnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
+          ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
+          : gpsHistoryManager.getVehicleWinnerSerial(vehicle);
+        const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
+          ? gpsHistoryManager.getRecordSerial
+          : () => '';
+        const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
+        const winnerScopedRecords = winnerSerial
+          ? records.filter((record) => getRecordSerial(record) === winnerSerial)
+          : records;
+
+        let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
+          getRecordSerial,
+          winnerSerial,
+          blacklistedWirelessSerials
+        });
+        if (!hotspotSourceRecords.length && !winnerSerial) {
+          hotspotSourceRecords = winnerScopedRecords.length ? winnerScopedRecords : records;
+        }
+
+        const hotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
+          getRecordSerial,
+          serialCountsBySerial
+        }).map((hotspot, index) => ({
+          ...hotspot,
+          sourceVehicleId: vehicle.id,
+          popupKey: buildVehicleHistoryHotspotPopupKey(vehicle.id, hotspot, index)
+        }));
+
+        vehicleHistoryHotspotCache.set(vehicleId, {
+          updatedAt: Date.now(),
+          hotspots
+        });
+        return hotspots;
+      })().catch((error) => {
+        console.warn('Vehicle hotspot summary warning: ' + (error?.message || error));
+        return [];
+      }).finally(() => {
+        vehicleHistoryHotspotPendingRequests.delete(vehicleId);
+      });
+
+      vehicleHistoryHotspotPendingRequests.set(vehicleId, request);
+      return request;
+    };
+
+    const mapWithConcurrency = async (items = [], worker, concurrency = 4) => {
+      if (!Array.isArray(items) || !items.length || typeof worker !== 'function') return [];
+      const boundedConcurrency = Math.max(1, Math.min(concurrency, items.length));
+      const results = new Array(items.length);
+      let cursor = 0;
+
+      const runWorker = async () => {
+        while (cursor < items.length) {
+          const currentIndex = cursor;
+          cursor += 1;
+          try {
+            results[currentIndex] = await worker(items[currentIndex], currentIndex);
+          } catch (error) {
+            results[currentIndex] = null;
+            console.warn('Hotspot relation scan warning: ' + (error?.message || error));
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: boundedConcurrency }, () => runWorker()));
+      return results;
+    };
+
+    const toMiles = (meters) => {
+      if (!Number.isFinite(meters) || meters < 0) return null;
+      return meters / 1609.344;
+    };
+
+    const buildGoogleMapsSearchUrl = (lat, lng) => {
+      const latValue = Number(lat);
+      const lngValue = Number(lng);
+      if (!Number.isFinite(latValue) || !Number.isFinite(lngValue)) return '';
+      const query = `${latValue.toFixed(6)},${lngValue.toFixed(6)}`;
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+    };
+
+    const buildGoogleMapsLinkHtml = (
+      lat,
+      lng,
+      {
+        label = 'Google Maps',
+        tight = false,
+      } = {}
+    ) => {
+      const href = buildGoogleMapsSearchUrl(lat, lng);
+      if (!href) return '';
+      const className = tight ? 'map-coord-link-btn is-tight' : 'map-coord-link-btn';
+      return `<a class="${className}" href="${escapeHTML(href)}" target="_blank" rel="noopener noreferrer">${escapeHTML(label)}</a>`;
+    };
+
+    const buildRelatedHotspotCacheKey = (sourceVehicleId, hotspot) => {
+      const source = `${sourceVehicleId ?? ''}`.trim() || 'none';
+      const latBucket = Number.isFinite(Number(hotspot?.lat)) ? Number(hotspot.lat).toFixed(4) : '0';
+      const lngBucket = Number.isFinite(Number(hotspot?.lng)) ? Number(hotspot.lng).toFixed(4) : '0';
+      const radiusBucket = Number.isFinite(Number(hotspot?.radiusMeters)) ? Math.round(Number(hotspot.radiusMeters)) : 0;
+      return `${source}:${latBucket}:${lngBucket}:${radiusBucket}`;
+    };
+
+    const detectCoordinatePairsFromKeys = (keys = []) => {
+      const keySet = new Set(keys);
+      return HOTSPOT_FAST_QUERY_COORDINATE_COLUMNS.filter((pair) => keySet.has(pair.lat) && keySet.has(pair.lng));
+    };
+
+    const setHotspotFastCoordinatePairsFromRecords = (records = []) => {
+      if (!Array.isArray(records) || !records.length) return;
+      const rowWithKeys = records.find((row) => row && typeof row === 'object' && Object.keys(row).length);
+      if (!rowWithKeys) return;
+      const detectedPairs = detectCoordinatePairsFromKeys(Object.keys(rowWithKeys));
+      if (detectedPairs.length) {
+        hotspotFastCoordinatePairs = detectedPairs;
+      }
+    };
+
+    const resolveHotspotFastCoordinatePairs = async () => {
+      if (hotspotFastCoordinatePairs.length) return hotspotFastCoordinatePairs;
+      if (hotspotFastCoordinatePairLookupPromise) return hotspotFastCoordinatePairLookupPromise;
+      if (!supabaseClient?.from) return [];
+
+      hotspotFastCoordinatePairLookupPromise = (async () => {
+        try {
+          const { data, error } = await runWithTimeout(
+            supabaseClient
+              .from(TABLES.gpsHistory)
+              .select('*')
+              .limit(1),
+            SUPABASE_TIMEOUT_MS,
+            'GPS hotspot metadata lookup timed out.'
+          );
+          if (error) return [];
+          const firstRow = Array.isArray(data) ? data[0] : null;
+          if (!firstRow || typeof firstRow !== 'object') return [];
+          const detectedPairs = detectCoordinatePairsFromKeys(Object.keys(firstRow));
+          if (detectedPairs.length) {
+            hotspotFastCoordinatePairs = detectedPairs;
+          }
+          return hotspotFastCoordinatePairs;
+        } catch (_) {
+          return [];
+        } finally {
+          hotspotFastCoordinatePairLookupPromise = null;
+        }
+      })();
+
+      return hotspotFastCoordinatePairLookupPromise;
+    };
+
+    const metersToLatitudeDegrees = (meters) => {
+      if (!Number.isFinite(meters) || meters <= 0) return 0;
+      return meters / 111320;
+    };
+
+    const metersToLongitudeDegrees = (meters, latitude) => {
+      if (!Number.isFinite(meters) || meters <= 0) return 0;
+      const latRad = (Number(latitude) || 0) * (Math.PI / 180);
+      const cosLat = Math.max(0.2, Math.abs(Math.cos(latRad)));
+      return meters / (111320 * cosLat);
+    };
+
+    const buildHotspotBounds = (hotspot, radiusMeters) => {
+      if (!hotspot || !Number.isFinite(Number(hotspot.lat)) || !Number.isFinite(Number(hotspot.lng))) return null;
+      const lat = Number(hotspot.lat);
+      const lng = Number(hotspot.lng);
+      const latDelta = metersToLatitudeDegrees(radiusMeters);
+      const lngDelta = metersToLongitudeDegrees(radiusMeters, lat);
+      return {
+        minLat: lat - latDelta,
+        maxLat: lat + latDelta,
+        minLng: lng - lngDelta,
+        maxLng: lng + lngDelta,
+      };
+    };
+
+    const queryGpsHistoryByBounds = async ({ bounds, latColumn, lngColumn } = {}) => {
+      if (!supabaseClient?.from || !bounds || !latColumn || !lngColumn) return [];
+
+      const records = [];
+      const maxRows = HOTSPOT_FAST_QUERY_MAX_ROWS;
+      let offset = 0;
+      while (offset < maxRows) {
+        const upper = Math.min(offset + HOTSPOT_FAST_QUERY_PAGE_SIZE - 1, maxRows - 1);
+        const query = supabaseClient
+          .from(TABLES.gpsHistory)
+          .select('*')
+          .gte(latColumn, bounds.minLat)
+          .lte(latColumn, bounds.maxLat)
+          .gte(lngColumn, bounds.minLng)
+          .lte(lngColumn, bounds.maxLng)
+          .range(offset, upper);
+
+        const { data, error } = await runWithTimeout(
+          query,
+          SUPABASE_TIMEOUT_MS,
+          'GPS hotspot lookup timed out.'
+        );
+        if (error) throw error;
+
+        const pageRows = Array.isArray(data) ? data : [];
+        if (!pageRows.length) break;
+        records.push(...pageRows);
+        if (pageRows.length < HOTSPOT_FAST_QUERY_PAGE_SIZE) break;
+        offset += HOTSPOT_FAST_QUERY_PAGE_SIZE;
+      }
+
+      return records;
+    };
+
+    const buildVehicleIdentityIndexes = (vehicleList = []) => {
+      const vehiclesById = new Map();
+      const vehiclesByUniqueVin = new Map();
+      const ambiguousVins = new Set();
+
+      vehicleList.forEach((vehicle) => {
+        const vehicleId = `${vehicle?.id ?? ''}`.trim();
+        if (vehicleId) vehiclesById.set(vehicleId, vehicle);
+
+        const vin = getVehicleVin(vehicle);
+        if (!vin) return;
+        if (ambiguousVins.has(vin)) return;
+        if (vehiclesByUniqueVin.has(vin)) {
+          vehiclesByUniqueVin.delete(vin);
+          ambiguousVins.add(vin);
+          return;
+        }
+        vehiclesByUniqueVin.set(vin, vehicle);
+      });
+
+      return { vehiclesById, vehiclesByUniqueVin, ambiguousVins };
+    };
+
+    const isVehicleVinAmbiguous = (vehicle = {}, ambiguousVins = new Set()) => {
+      const vin = getVehicleVin(vehicle);
+      return Boolean(vin && ambiguousVins.has(vin));
+    };
+
+    const resolveVehicleFromGpsRecord = (record = {}, vehiclesById = new Map(), vehiclesByUniqueVin = new Map()) => {
+      const recordVehicleId = `${record?.vehicle_id ?? record?.vehicleId ?? ''}`.trim();
+      if (recordVehicleId && vehiclesById.has(recordVehicleId)) {
+        return vehiclesById.get(recordVehicleId) || null;
+      }
+
+      const recordVin = normalizeVin(record?.VIN ?? record?.vin ?? '');
+      if (recordVin && vehiclesByUniqueVin.has(recordVin)) {
+        return vehiclesByUniqueVin.get(recordVin) || null;
+      }
+
+      return null;
+    };
+
+    const findVehiclesSharingHistoryHotspotFast = async ({ hotspot, sourceVehicleId } = {}) => {
+      if (!hotspot || !supabaseClient?.from) return null;
+
+      const sourceId = `${sourceVehicleId ?? ''}`.trim();
+      const matchRadiusMeters = Math.max(
+        HOTSPOT_SHARED_MATCH_RADIUS_METERS,
+        Number(hotspot?.radiusMeters) || 0,
+        GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS
+      );
+      const bounds = buildHotspotBounds(hotspot, matchRadiusMeters);
+      if (!bounds) return null;
+
+      const coordinatePairs = hotspotFastCoordinatePairs.length
+        ? hotspotFastCoordinatePairs
+        : await resolveHotspotFastCoordinatePairs();
+      if (!Array.isArray(coordinatePairs) || !coordinatePairs.length) return null;
+
+      let nearbyRecords = [];
+      let hadQueryError = false;
+      for (const columnPair of coordinatePairs) {
+        try {
+          nearbyRecords = await queryGpsHistoryByBounds({
+            bounds,
+            latColumn: columnPair.lat,
+            lngColumn: columnPair.lng
+          });
+          hotspotFastCoordinatePairs = [columnPair, ...coordinatePairs.filter((pair) => pair !== columnPair)];
+          break;
+        } catch (_) {
+          hadQueryError = true;
+          continue;
+        }
+      }
+
+      if (!nearbyRecords.length) {
+        return hadQueryError ? null : [];
+      }
+
+      const { vehiclesById, vehiclesByUniqueVin } = buildVehicleIdentityIndexes(vehicles);
+
+      const grouped = new Map();
+      nearbyRecords.forEach((record) => {
+        const point = toGpsTrailPoint(record);
+        if (!point) return;
+        const distanceMeters = getGpsPointDistanceMeters(
+          { lat: hotspot.lat, lng: hotspot.lng },
+          { lat: point.lat, lng: point.lng }
+        );
+        if (!Number.isFinite(distanceMeters) || distanceMeters > matchRadiusMeters) return;
+
+        const vehicle = resolveVehicleFromGpsRecord(record, vehiclesById, vehiclesByUniqueVin);
+        if (!vehicle) return;
+        if (`${vehicle?.id ?? ''}` === sourceId) return;
+
+        const vehicleKey = `${vehicle.id}`;
+        if (!vehicleKey) return;
+
+        const existing = grouped.get(vehicleKey) || {
+          vehicle,
+          vehicleId: vehicle.id,
+          pingCount: 0,
+          sumDistanceMeters: 0,
+          uniqueDayKeys: new Set(),
+          lastSeen: Number.NEGATIVE_INFINITY
+        };
+
+        existing.pingCount += 1;
+        existing.sumDistanceMeters += distanceMeters;
+        if (Number.isFinite(point.timeMs) && point.timeMs > 0) {
+          existing.uniqueDayKeys.add(new Date(point.timeMs).toISOString().slice(0, 10));
+        }
+        existing.lastSeen = Math.max(existing.lastSeen, point.timestamp);
+        grouped.set(vehicleKey, existing);
+      });
+
+      const matches = [...grouped.values()]
+        .map((entry) => {
+          const uniqueDays = entry.uniqueDayKeys.size;
+          const estimatedVisits = Math.max(1, uniqueDays || Math.round(entry.pingCount / 3) || 1);
+          return {
+            vehicle: entry.vehicle,
+            vehicleId: entry.vehicleId,
+            distanceMeters: entry.pingCount ? (entry.sumDistanceMeters / entry.pingCount) : Number.POSITIVE_INFINITY,
+            visits: estimatedVisits,
+            uniqueDays,
+            pingCount: entry.pingCount,
+            lastSeen: entry.lastSeen
+          };
+        })
+        .sort((a, b) => {
+          if (b.pingCount !== a.pingCount) return b.pingCount - a.pingCount;
+          if (b.uniqueDays !== a.uniqueDays) return b.uniqueDays - a.uniqueDays;
+          if (a.distanceMeters !== b.distanceMeters) return a.distanceMeters - b.distanceMeters;
+          return b.lastSeen - a.lastSeen;
+        })
+        .slice(0, HOTSPOT_RELATED_VEHICLE_LIMIT)
+        .map(({ vehicle, vehicleId, distanceMeters, visits, uniqueDays }) => ({
+          vehicle,
+          vehicleId,
+          distanceMeters,
+          visits,
+          uniqueDays
+        }));
+
+      return matches;
+    };
+
+    const findVehiclesSharingHistoryHotspot = async ({ hotspot, sourceVehicleId } = {}) => {
+      if (!hotspot) return [];
+      const sourceId = `${sourceVehicleId ?? ''}`.trim();
+      const cacheKey = buildRelatedHotspotCacheKey(sourceId, hotspot);
+      const now = Date.now();
+      const { ambiguousVins } = buildVehicleIdentityIndexes(vehicles);
+      const cached = relatedHotspotVehiclesCache.get(cacheKey);
+      if (cached && (now - cached.updatedAt) <= VEHICLE_HISTORY_HOTSPOT_CACHE_TTL_MS) {
+        return cached.matches
+          .map((entry) => {
+            const vehicle = vehicles.find((item) => `${item?.id ?? ''}` === `${entry.vehicleId}`);
+            if (!vehicle) return null;
+            if (isVehicleVinAmbiguous(vehicle, ambiguousVins)) return null;
+            return { ...entry, vehicle };
+          })
+          .filter(Boolean);
+      }
+
+      const fastMatches = await findVehiclesSharingHistoryHotspotFast({
+        hotspot,
+        sourceVehicleId: sourceId
+      });
+      if (Array.isArray(fastMatches)) {
+        relatedHotspotVehiclesCache.set(cacheKey, {
+          updatedAt: now,
+          matches: fastMatches.map((match) => ({
+            vehicleId: match.vehicleId,
+            distanceMeters: match.distanceMeters,
+            visits: match.visits,
+            uniqueDays: match.uniqueDays
+          }))
+        });
+        return fastMatches;
+      }
+
+      const candidates = vehicles
+        .filter((vehicle) =>
+          `${vehicle?.id ?? ''}`.trim() !== ''
+          && `${vehicle?.id ?? ''}` !== sourceId
+          && !isVehicleVinAmbiguous(vehicle, ambiguousVins)
+        )
+        .map((vehicle) => {
+          if (!hasValidCoords(vehicle)) {
+            return { vehicle, proximity: Number.POSITIVE_INFINITY };
+          }
+          return {
+            vehicle,
+            proximity: getGpsPointDistanceMeters(
+              { lat: vehicle.lat, lng: vehicle.lng },
+              { lat: hotspot.lat, lng: hotspot.lng }
+            )
+          };
+        })
+        .sort((a, b) => a.proximity - b.proximity)
+        .slice(0, HOTSPOT_RELATED_CANDIDATE_LIMIT)
+        .map((entry) => entry.vehicle);
+
+      if (!candidates.length) return [];
+
+      const scanned = await mapWithConcurrency(
+        candidates,
+        async (candidateVehicle) => {
+          const candidateHotspots = await buildVehicleHistoryHotspotSummary(candidateVehicle);
+          if (!candidateHotspots.length) return null;
+
+          let bestMatch = null;
+          let bestDistanceMeters = Number.POSITIVE_INFINITY;
+          candidateHotspots.forEach((candidateHotspot) => {
+            const distanceMeters = getGpsPointDistanceMeters(
+              { lat: hotspot.lat, lng: hotspot.lng },
+              { lat: candidateHotspot.lat, lng: candidateHotspot.lng }
+            );
+            const matchRadiusMeters = Math.max(
+              HOTSPOT_SHARED_MATCH_RADIUS_METERS,
+              Number(hotspot.radiusMeters) || 0,
+              Number(candidateHotspot.radiusMeters) || 0,
+              GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS
+            );
+            if (!Number.isFinite(distanceMeters) || distanceMeters > matchRadiusMeters) return;
+            if (distanceMeters < bestDistanceMeters) {
+              bestDistanceMeters = distanceMeters;
+              bestMatch = candidateHotspot;
+            }
+          });
+
+          if (!bestMatch) return null;
+          return {
+            vehicle: candidateVehicle,
+            vehicleId: candidateVehicle.id,
+            distanceMeters: bestDistanceMeters,
+            visits: bestMatch.visits,
+            uniqueDays: bestMatch.uniqueDays
+          };
+        },
+        HOTSPOT_RELATED_CONCURRENCY
+      );
+
+      const matches = scanned
+        .filter(Boolean)
+        .sort((a, b) => a.distanceMeters - b.distanceMeters)
+        .slice(0, HOTSPOT_RELATED_VEHICLE_LIMIT);
+
+      relatedHotspotVehiclesCache.set(cacheKey, {
+        updatedAt: Date.now(),
+        matches: matches.map((match) => ({
+          vehicleId: match.vehicleId,
+          distanceMeters: match.distanceMeters,
+          visits: match.visits,
+          uniqueDays: match.uniqueDays
+        }))
+      });
+
+      return matches;
+    };
+
+    const prefetchRelatedVehiclesForHotspots = (hotspots = [], sourceVehicleId = '') => {
+      if (!Array.isArray(hotspots) || !hotspots.length) return;
+      const sourceId = `${sourceVehicleId ?? ''}`.trim();
+
+      hotspots.slice(0, Math.min(3, hotspots.length)).forEach((hotspot, index) => {
+        setTimeout(() => {
+          void findVehiclesSharingHistoryHotspotFast({
+            hotspot,
+            sourceVehicleId: sourceId
+          }).then((matches) => {
+            if (!Array.isArray(matches)) return;
+            const cacheKey = buildRelatedHotspotCacheKey(sourceId, hotspot);
+            relatedHotspotVehiclesCache.set(cacheKey, {
+              updatedAt: Date.now(),
+              matches: matches.map((match) => ({
+                vehicleId: match.vehicleId,
+                distanceMeters: match.distanceMeters,
+                visits: match.visits,
+                uniqueDays: match.uniqueDays
+              }))
+            });
+          }).catch(() => {
+            // Silent by design: prefetch is best-effort only.
+          });
+        }, 110 * (index + 1));
+      });
+    };
+
+    const getGpsTrailBearingDegrees = (fromPoint, toPoint) => {
+      const toRadians = (value) => value * (Math.PI / 180);
+      const lat1 = toRadians(fromPoint.lat);
+      const lat2 = toRadians(toPoint.lat);
+      const deltaLng = toRadians(toPoint.lng - fromPoint.lng);
+      const y = Math.sin(deltaLng) * Math.cos(lat2);
+      const x = (Math.cos(lat1) * Math.sin(lat2))
+        - (Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng));
+      let bearing = Math.atan2(y, x) * (180 / Math.PI);
+      if (!Number.isFinite(bearing)) return 0;
+      if (bearing < 0) bearing += 360;
+      return bearing;
+    };
+
+    const normalizeHeadingDegrees = (value) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return null;
+      const normalized = ((parsed % 360) + 360) % 360;
+      return Number.isFinite(normalized) ? normalized : null;
+    };
+
+    const parseGpsHeadingDegrees = (record = {}) => {
+      const headingCandidates = [
+        record?.heading,
+        record?.Heading,
+        record?.course,
+        record?.Course,
+        record?.bearing,
+        record?.Bearing,
+        record?.direction,
+        record?.Direction
+      ];
+
+      for (const candidate of headingCandidates) {
+        const parsed = parseGpsNumericValue(candidate);
+        const normalized = normalizeHeadingDegrees(parsed);
+        if (normalized !== null) return normalized;
+      }
+
+      return null;
+    };
+
+    const getVehicleMarkerHeading = (vehicle = {}) => {
+      const directCandidates = [
+        vehicle?.markerHeadingDegrees,
+        vehicle?.heading,
+        vehicle?.Heading,
+        vehicle?.course,
+        vehicle?.Course,
+        vehicle?.bearing,
+        vehicle?.Bearing,
+        vehicle?.details?.heading,
+        vehicle?.details?.Heading,
+        vehicle?.details?.course,
+        vehicle?.details?.Course,
+        vehicle?.details?.bearing,
+        vehicle?.details?.Bearing
+      ];
+
+      for (const candidate of directCandidates) {
+        const parsed = parseGpsNumericValue(candidate);
+        const normalized = normalizeHeadingDegrees(parsed);
+        if (normalized !== null) return normalized;
+      }
+
+      return null;
+    };
+
+    const resolveVehicleMarkerHeadingFromTrail = (trailPoints = [], latestRecords = []) => {
+      if (Array.isArray(trailPoints) && trailPoints.length >= 2) {
+        for (let index = trailPoints.length - 1; index > 0; index -= 1) {
+          const currentPoint = trailPoints[index];
+          const previousPoint = trailPoints[index - 1];
+          if (!previousPoint || !currentPoint) continue;
+          const distanceMeters = getGpsPointDistanceMeters(previousPoint, currentPoint);
+          if (!Number.isFinite(distanceMeters) || distanceMeters < 1) continue;
+          return getGpsTrailBearingDegrees(previousPoint, currentPoint);
+        }
+      }
+
+      const latestHeading = [...latestRecords]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
+        .map((record) => parseGpsHeadingDegrees(record))
+        .find((value) => value !== null);
+      return latestHeading !== undefined ? latestHeading : null;
+    };
+
+    const applyVehicleMarkerHeading = (vehicle = {}, headingDegrees = null) => {
+      const normalizedHeading = normalizeHeadingDegrees(headingDegrees);
+      const previousHeading = normalizeHeadingDegrees(vehicle?.markerHeadingDegrees);
+      if (normalizedHeading === null) return false;
+      if (previousHeading !== null && Math.abs(previousHeading - normalizedHeading) < 0.1) return false;
+      vehicle.markerHeadingDegrees = normalizedHeading;
+      return true;
+    };
+
+    const getVehicleMarkerHeadingRequestKey = (vehicle = {}) => {
+      const vehicleId = `${gpsHistoryManager?.getVehicleId?.(vehicle) || vehicle?.id || ''}`.trim();
+      const vehicleVin = `${gpsHistoryManager?.getVehicleVin?.(vehicle) || vehicle?.vin || ''}`.trim().toUpperCase();
+      if (!vehicleId && !vehicleVin) return '';
+      return `${vehicleId}::${vehicleVin}`;
+    };
+
+    const preloadVehicleMarkerHeading = async (vehicle = {}) => {
+      if (!vehicle || Number.isFinite(normalizeHeadingDegrees(vehicle?.markerHeadingDegrees))) return false;
+
+      const requestKey = getVehicleMarkerHeadingRequestKey(vehicle);
+      if (!requestKey) return false;
+      if (vehicleMarkerHeadingPendingRequests.has(requestKey)) {
+        return vehicleMarkerHeadingPendingRequests.get(requestKey);
+      }
+
+      const requestPromise = (async () => {
+        const vin = gpsHistoryManager.getVehicleVin(vehicle);
+        const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+        if (!vin && !vehicleId) return false;
+
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+        if (error || !Array.isArray(records) || !records.length) return false;
+
+        const latestRecords = [...records]
+          .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
+          .slice(0, getCurrentTrailPointLimit());
+        const trailPoints = latestRecords
+          .map((record) => {
+            const point = toGpsTrailPoint(record);
+            if (!point) return null;
+            return { ...point, record };
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        return applyVehicleMarkerHeading(
+          vehicle,
+          resolveVehicleMarkerHeadingFromTrail(trailPoints, latestRecords)
+        );
+      })()
+        .catch(() => false)
+        .finally(() => {
+          vehicleMarkerHeadingPendingRequests.delete(requestKey);
+        });
+
+      vehicleMarkerHeadingPendingRequests.set(requestKey, requestPromise);
+      return requestPromise;
+    };
+
+    const preloadVisibleVehicleMarkerHeadings = async (
+      visibleVehicles = [],
+      { rerenderOnChange = true } = {}
+    ) => {
+      if (!Array.isArray(visibleVehicles) || !visibleVehicles.length) return;
+
+      const candidates = visibleVehicles
+        .filter((vehicle) => hasValidCoords(vehicle))
+        .filter((vehicle) => !Number.isFinite(normalizeHeadingDegrees(vehicle?.markerHeadingDegrees)))
+        .slice(0, VEHICLE_MARKER_HEADING_PREFETCH_LIMIT);
+      if (!candidates.length) return;
+
+      const results = await mapWithConcurrency(
+        candidates,
+        (vehicle) => preloadVehicleMarkerHeading(vehicle),
+        VEHICLE_MARKER_HEADING_PREFETCH_CONCURRENCY
+      );
+
+      if (rerenderOnChange && results.some(Boolean)) {
+        renderVehicles({ preserveScrollTop: true });
+      }
+    };
+
+    const isGpsRecordDateField = (key = '') => {
+      const normalized = `${key}`.toLowerCase();
+      return (
+        normalized.includes('date')
+        || normalized.includes('time')
+        || normalized.includes('ping')
+        || normalized.endsWith('_at')
+      );
+    };
+
+    const formatGpsRecordFieldValue = (key, value) => {
+      if (value === null || value === undefined || value === '') return '—';
+      if (typeof value === 'object') return escapeHTML(JSON.stringify(value));
+
+      if (isGpsRecordDateField(key)) {
+        const parsed = Date.parse(value);
+        if (!Number.isNaN(parsed)) return escapeHTML(formatDateTime(value));
+      }
+
+      return escapeHTML(`${value}`);
+    };
+
+    const buildGpsTrailRecordPopup = (point, index, total) => {
+      const record = point?.record && typeof point.record === 'object' ? point.record : {};
+      const entries = Object.entries(record);
+      const coordText = `${Number(point?.lat || 0).toFixed(5)}, ${Number(point?.lng || 0).toFixed(5)}`;
+      const timestampText = Number.isFinite(point?.timeMs) ? formatDateTime(point.timeMs) : 'Insufficient data';
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(point?.lat, point?.lng, { tight: true });
+
+      if (!entries.length) {
+        return `
+          <div class="gps-record-card">
+            <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
+            <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
+            <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+            ${mapsLinkHtml}
+            <p class="gps-record-empty">No columns available for this point.</p>
+          </div>
+        `;
+      }
+
+      const rows = entries.map(([key, value]) => `
+        <tr>
+          <th>${escapeHTML(key)}</th>
+          <td>${formatGpsRecordFieldValue(key, value)}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <div class="gps-record-card">
+          <p class="gps-record-title">GPS Record ${index + 1}/${total}</p>
+          <p class="gps-record-meta">Time: ${escapeHTML(timestampText)}</p>
+          <p class="gps-record-meta">Coords: ${escapeHTML(coordText)}</p>
+          ${mapsLinkHtml}
+          <div class="gps-record-table-wrap">
+            <table class="gps-record-table">
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    };
+
+    const clampUnitInterval = (value) => {
+      if (!Number.isFinite(value)) return 0;
+      if (value < 0) return 0;
+      if (value > 1) return 1;
+      return value;
+    };
+
+    const parseTrailColorToRgb = (value, fallback = { r: 20, g: 83, b: 45 }) => {
+      if (typeof value !== 'string') return fallback;
+      const normalized = value.trim();
+      if (!normalized) return fallback;
+
+      if (normalized.startsWith('#')) {
+        const hex = normalized.slice(1);
+        if (hex.length === 3) {
+          const r = Number.parseInt(hex[0] + hex[0], 16);
+          const g = Number.parseInt(hex[1] + hex[1], 16);
+          const b = Number.parseInt(hex[2] + hex[2], 16);
+          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return { r, g, b };
+        }
+        if (hex.length === 6) {
+          const r = Number.parseInt(hex.slice(0, 2), 16);
+          const g = Number.parseInt(hex.slice(2, 4), 16);
+          const b = Number.parseInt(hex.slice(4, 6), 16);
+          if (Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b)) return { r, g, b };
+        }
+      }
+
+      const rgbMatch = normalized.match(/^rgba?\((\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\)$/i);
+      if (!rgbMatch) return fallback;
+      const r = Number.parseInt(rgbMatch[1], 10);
+      const g = Number.parseInt(rgbMatch[2], 10);
+      const b = Number.parseInt(rgbMatch[3], 10);
+      if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return fallback;
+      return {
+        r: Math.max(0, Math.min(255, r)),
+        g: Math.max(0, Math.min(255, g)),
+        b: Math.max(0, Math.min(255, b))
+      };
+    };
+
+    const interpolateNumber = (fromValue, toValue, progress) => {
+      const boundedProgress = clampUnitInterval(progress);
+      return fromValue + ((toValue - fromValue) * boundedProgress);
+    };
+
+    const interpolateTrailRgb = (fromColor, toColor, progress) => {
+      return {
+        r: Math.round(interpolateNumber(fromColor.r, toColor.r, progress)),
+        g: Math.round(interpolateNumber(fromColor.g, toColor.g, progress)),
+        b: Math.round(interpolateNumber(fromColor.b, toColor.b, progress))
+      };
+    };
+
+    const rgbToHex = ({ r, g, b }) => {
+      const toHex = (value) => Math.max(0, Math.min(255, Number(value) || 0)).toString(16).padStart(2, '0');
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    };
+
+    const rgbToRgba = ({ r, g, b }, alpha) => `rgba(${Math.max(0, Math.min(255, Math.round(r)))},${Math.max(0, Math.min(255, Math.round(g)))},${Math.max(0, Math.min(255, Math.round(b)))},${clampUnitInterval(alpha).toFixed(3)})`;
+    const MILES_TO_KILOMETERS = MILES_TO_METERS / 1000;
+    const formatTrailSegmentDistanceKm = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return '';
+      const miles = getDistance(fromPoint.lat, fromPoint.lng, toPoint.lat, toPoint.lng);
+      if (!Number.isFinite(miles) || miles < 0) return '';
+      const kilometers = miles * MILES_TO_KILOMETERS;
+      if (kilometers >= 100) return `${Math.round(kilometers)} km`;
+      if (kilometers >= 1) return `${kilometers.toFixed(1)} km`;
+      return `${kilometers.toFixed(2)} km`;
+    };
+
+    const formatTrailElapsedMs = (elapsedMs) => {
+      if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return '0s';
+
+      const totalSeconds = Math.round(elapsedMs / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      const parts = [];
+      if (days > 0) parts.push(`${days}d`);
+      if (hours > 0) parts.push(`${hours}h`);
+      if (minutes > 0 && parts.length < 2) parts.push(`${minutes}m`);
+      if (!parts.length) parts.push(`${seconds}s`);
+      return parts.slice(0, 2).join(' ');
+    };
+
+    const formatTrailSegmentElapsedTime = (fromPoint, toPoint) => {
+      const fromTime = Number(fromPoint?.timeMs);
+      const toTime = Number(toPoint?.timeMs);
+      if (!Number.isFinite(fromTime) || !Number.isFinite(toTime)) return '';
+      return formatTrailElapsedMs(Math.abs(toTime - fromTime));
+    };
+
+    const parseGpsRecordDaysParked = (record = {}) => {
+      if (!record || typeof record !== 'object') return null;
+      const candidates = [
+        record?.days_stationary,
+        record?.days_parked,
+        record?.days_stationary_calc,
+        record?.DaysParked,
+        record?.['Days Parked'],
+        record?.['Days Stationary']
+      ];
+      for (const candidate of candidates) {
+        const parsed = parseGpsNumericValue(candidate);
+        if (Number.isFinite(parsed)) return Math.max(0, Math.floor(parsed));
+      }
+      return null;
+    };
+
+    const getTrailPointDayStartMs = (point = {}) => {
+      const timeMs = Number.isFinite(point?.timeMs) ? point.timeMs : point?.timestamp;
+      return toLocalDayStartMs(timeMs);
+    };
+
+    const getTrailPointMovementStatus = (
+      point = {},
+      previousPoint = null,
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS,
+        movementStatusByDay = null
+      } = {}
+    ) => {
+      const pointDayStartMs = getTrailPointDayStartMs(point);
+      if (movementStatusByDay instanceof Map && movementStatusByDay.has(pointDayStartMs)) {
+        return movementStatusByDay.get(pointDayStartMs);
+      }
+
+      const explicit = parseGpsRecordMovingStatus(point?.record || {});
+      if (explicit === 'moving' || explicit === 'stopped') return explicit;
+
+      const explicitDaysParked = parseGpsRecordDaysParked(point?.record || {});
+      if (Number.isFinite(explicitDaysParked)) {
+        return explicitDaysParked <= 0 ? 'moving' : 'stopped';
+      }
+
+      if (previousPoint) {
+        const segmentDistance = getGpsPointDistanceMeters(previousPoint, point);
+        if (Number.isFinite(segmentDistance)) {
+          return segmentDistance <= stoppedDistanceThreshold ? 'stopped' : 'moving';
+        }
+      }
+
+      return 'unknown';
+    };
+
+    const buildTrailDerivedParkedDays = (
+      points = [],
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS,
+        dailyBuckets = []
+      } = {}
+    ) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const result = new Array(points.length).fill(null);
+      const parkedDaysByDay = new Map(
+        (Array.isArray(dailyBuckets) ? dailyBuckets : []).map((bucket) => [bucket.dayStartMs, bucket.parkedDays])
+      );
+      points.forEach((point, index) => {
+        const dayStartMs = getTrailPointDayStartMs(point);
+        if (!parkedDaysByDay.has(dayStartMs)) return;
+        result[index] = parkedDaysByDay.get(dayStartMs);
+      });
+      return result;
+    };
+
+    const buildTrailParkedStartTimeByPoint = (
+      points = [],
+      {
+        stoppedDistanceThreshold = GPS_MOVING_STOPPED_MAX_SEGMENT_METERS,
+        dailyBuckets = []
+      } = {}
+    ) => {
+      if (!Array.isArray(points) || !points.length) return [];
+      const parkedStartByIndex = new Array(points.length).fill(null);
+      const parkedStartByDay = new Map(
+        (Array.isArray(dailyBuckets) ? dailyBuckets : []).map((bucket) => [bucket.dayStartMs, bucket.parkedStartTimeMs])
+      );
+      points.forEach((point, index) => {
+        parkedStartByIndex[index] = parkedStartByDay.get(getTrailPointDayStartMs(point)) ?? null;
+      });
+
+      return parkedStartByIndex;
+    };
+
+    const drawVehicleGpsTrail = (points = [], vehicleColor = '', vehicle = null) => {
+      if (!gpsTrailLayer || !Array.isArray(points) || !points.length) return;
+      resetRouteSegmentState({ clearEntries: true });
+      const stoppedDistanceThreshold = getStoppedDistanceThresholdForVehicle(vehicle || {});
+      const oldestLineRgb = parseTrailColorToRgb('#14532d');
+      const oldestFillRgb = parseTrailColorToRgb('#166534', oldestLineRgb);
+      const newestVehicleRgb = parseTrailColorToRgb(vehicleColor, oldestLineRgb);
+      const oldestLabelRgb = parseTrailColorToRgb('#334155');
+      const newestLabelRgb = parseTrailColorToRgb('#14532d');
+      const oldestLabelTextRgb = parseTrailColorToRgb('#cbd5e1');
+      const newestLabelTextRgb = parseTrailColorToRgb('#dcfce7');
+      const pointStepDenominator = Math.max(1, points.length - 1);
+      const segmentStepDenominator = Math.max(1, points.length - 1);
+      const dailyMovementBuckets = buildDailyMovementBucketsFromPoints(points);
+      const movementStatusByDay = new Map(
+        dailyMovementBuckets.map((bucket) => [bucket.dayStartMs, bucket.status])
+      );
+      const derivedParkedDaysByPoint = buildTrailDerivedParkedDays(points, {
+        stoppedDistanceThreshold,
+        dailyBuckets: dailyMovementBuckets
+      });
+      const parkedStartTimeByPoint = buildTrailParkedStartTimeByPoint(points, {
+        stoppedDistanceThreshold,
+        dailyBuckets: dailyMovementBuckets
+      });
+      const trailSegmentsByIndex = new Map();
+
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const fromPoint = points[index];
+        const toPoint = points[index + 1];
+        const segmentProgress = clampUnitInterval((index + 0.5) / segmentStepDenominator);
+        const segmentRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
+        const segmentStyle = {
+          color: rgbToHex(segmentRgb),
+          weight: interpolateNumber(2.25, 2.85, segmentProgress),
+          opacity: interpolateNumber(0.56, 0.8, segmentProgress),
+          dashArray: '4 6',
+          lineCap: 'round',
+          lineJoin: 'round'
+        };
+        const segmentKey = `route-segment-${index}`;
+        const segmentLine = L.polyline([
+          [fromPoint.lat, fromPoint.lng],
+          [toPoint.lat, toPoint.lng]
+        ], {
+          ...segmentStyle,
+          interactive: true,
+          cycleRole: 'route-segment',
+          cycleKey: segmentKey
+        }).addTo(gpsTrailLayer);
+        segmentLine.bringToBack();
+
+        const midpoint = {
+          lat: (fromPoint.lat + toPoint.lat) / 2,
+          lng: (fromPoint.lng + toPoint.lng) / 2
+        };
+
+        segmentLine.on('click', (event) => {
+          const originalEvent = event?.originalEvent;
+          if (originalEvent) {
+            originalEvent.handledByMarker = true;
+            originalEvent.cycleRole = 'route-segment';
+            originalEvent.cycleKey = segmentKey;
+          }
+          const clickedLatLng = event?.latlng || L.latLng(midpoint.lat, midpoint.lng);
+          cycleRouteSegmentSelectionAt(clickedLatLng, segmentKey);
+        });
+
+        trailSegmentsByIndex.set(index, {
+          key: segmentKey,
+          index,
+          line: segmentLine,
+          labelMarker: null,
+          baseLineStyle: { ...segmentStyle },
+          baseLabelZIndexOffset: 0,
+          fromLatLng: L.latLng(fromPoint.lat, fromPoint.lng),
+          toLatLng: L.latLng(toPoint.lat, toPoint.lng),
+          midpointLatLng: L.latLng(midpoint.lat, midpoint.lng)
+        });
+      }
+
+      points.forEach((point, index) => {
+        const pointProgress = clampUnitInterval(index / pointStepDenominator);
+        const pointStrokeRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, pointProgress);
+        const pointFillRgb = interpolateTrailRgb(oldestFillRgb, newestVehicleRgb, pointProgress);
+        const pointMarker = L.circleMarker([point.lat, point.lng], {
+          radius: interpolateNumber(3.9, 5.6, pointProgress),
+          color: rgbToHex(pointStrokeRgb),
+          weight: interpolateNumber(1.2, 1.45, pointProgress),
+          fillColor: rgbToHex(pointFillRgb),
+          fillOpacity: interpolateNumber(0.28, 0.45, pointProgress),
+          opacity: interpolateNumber(0.54, 0.76, pointProgress),
+          interactive: true,
+          className: 'gps-trail-point',
+          cycleRole: 'route-point',
+          cycleKey: `route-point-${index}`
+        }).addTo(gpsTrailLayer);
+
+        pointMarker.on('click', (event) => {
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = pointMarker.options?.cycleRole || 'route-point';
+            event.originalEvent.cycleKey = pointMarker.options?.cycleKey || `route-point-${index}`;
+          }
+        });
+        pointMarker.bindPopup(buildGpsTrailRecordPopup(point, index, points.length), {
+          className: 'gps-record-popup',
+          autoPan: true,
+          maxWidth: 430
+        });
+      });
+
+      for (let index = 0; index < points.length - 1; index += 1) {
+        const fromPoint = points[index];
+        const toPoint = points[index + 1];
+        const midpoint = {
+          lat: (fromPoint.lat + toPoint.lat) / 2,
+          lng: (fromPoint.lng + toPoint.lng) / 2
+        };
+        const segmentProgress = clampUnitInterval((index + 0.5) / segmentStepDenominator);
+        const arrowRgb = interpolateTrailRgb(oldestLineRgb, newestVehicleRgb, segmentProgress);
+        const arrowColor = rgbToRgba(arrowRgb, interpolateNumber(0.5, 0.82, segmentProgress));
+        const bearing = getGpsTrailBearingDegrees(fromPoint, toPoint);
+        const segmentVisualPriority = 520 + index;
+        L.marker([midpoint.lat, midpoint.lng], {
+          icon: L.divIcon({
+            className: 'gps-trail-arrow',
+            html: `<span style="display:block;transform:rotate(${bearing}deg);transform-origin:center;color:${arrowColor};font-size:12px;line-height:12px;text-shadow:0 0 2px rgba(2,6,23,0.72)">▲</span>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+          }),
+          interactive: false,
+          zIndexOffset: segmentVisualPriority
+        }).addTo(gpsTrailLayer);
+
+        const segmentDistanceKm = formatTrailSegmentDistanceKm(fromPoint, toPoint);
+        if (!segmentDistanceKm) continue;
+        const toPointIndex = index + 1;
+        const toPointMovement = getTrailPointMovementStatus(toPoint, fromPoint, {
+          stoppedDistanceThreshold,
+          movementStatusByDay
+        });
+        const explicitDaysParked = parseGpsRecordDaysParked(toPoint?.record || {});
+        const derivedDaysParked = Number.isFinite(derivedParkedDaysByPoint[toPointIndex])
+          ? derivedParkedDaysByPoint[toPointIndex]
+          : null;
+        const resolvedDaysParked = derivedDaysParked ?? explicitDaysParked;
+        const parkedStartMs = parkedStartTimeByPoint[toPointIndex];
+        const toPointTimeMs = Number(toPoint?.timeMs);
+        const parkedElapsedMs = (
+          toPointMovement === 'stopped'
+          && Number.isFinite(parkedStartMs)
+          && Number.isFinite(toPointTimeMs)
+        )
+          ? Math.max(0, toPointTimeMs - parkedStartMs)
+          : null;
+        const parkedElapsedWithDaysMs = Number.isFinite(resolvedDaysParked)
+          ? Math.max(parkedElapsedMs || 0, resolvedDaysParked * GPS_HISTORY_DAY_MS)
+          : parkedElapsedMs;
+        const segmentElapsedTime = toPointMovement === 'stopped'
+          ? formatTrailElapsedMs(parkedElapsedWithDaysMs)
+          : formatTrailSegmentElapsedTime(fromPoint, toPoint);
+        const parkedSuffix = toPointMovement === 'stopped'
+          ? ` · Parked${Number.isFinite(resolvedDaysParked) ? ` ${resolvedDaysParked}d` : ''}`
+          : '';
+        const segmentLabel = segmentElapsedTime
+          ? `${segmentDistanceKm} · ${segmentElapsedTime}`
+          : segmentDistanceKm;
+        const segmentLabelWithParked = `${segmentLabel}${parkedSuffix}`;
+        const labelToneRgb = interpolateTrailRgb(oldestLabelRgb, newestLabelRgb, segmentProgress);
+        const labelTextRgb = interpolateTrailRgb(oldestLabelTextRgb, newestLabelTextRgb, segmentProgress);
+        const labelBorder = rgbToRgba(labelToneRgb, interpolateNumber(0.46, 0.9, segmentProgress));
+        const labelBackground = rgbToRgba(labelToneRgb, interpolateNumber(0.24, 0.58, segmentProgress));
+        const labelTextColor = rgbToHex(labelTextRgb);
+        const labelShadow = rgbToRgba(labelToneRgb, interpolateNumber(0.2, 0.48, segmentProgress));
+        const labelFontWeight = Math.round(interpolateNumber(690, 820, segmentProgress));
+        const labelAnchor = {
+          lat: toPoint.lat,
+          lng: toPoint.lng
+        };
+        const labelMarker = L.marker([labelAnchor.lat, labelAnchor.lng], {
+          icon: L.divIcon({
+            className: 'gps-trail-distance',
+            html: `<span class="gps-trail-distance-wrap"><span class="gps-trail-distance-badge" style="border-color:${labelBorder};background:${labelBackground};color:${labelTextColor};font-weight:${labelFontWeight};box-shadow:0 0 0 1px ${labelShadow};">${segmentLabelWithParked}</span></span>`,
+            iconSize: [1, 1],
+            iconAnchor: [0, 0]
+          }),
+          interactive: true,
+          cycleRole: 'route-segment',
+          cycleKey: `route-segment-${index}`,
+          zIndexOffset: segmentVisualPriority + 1
+        }).addTo(gpsTrailLayer);
+
+        const segmentKey = `route-segment-${index}`;
+        labelMarker.on('click', (event) => {
+          const originalEvent = event?.originalEvent;
+          if (originalEvent) {
+            originalEvent.handledByMarker = true;
+            originalEvent.cycleRole = 'route-segment';
+            originalEvent.cycleKey = segmentKey;
+          }
+          const clickedLatLng = event?.latlng || L.latLng(labelAnchor.lat, labelAnchor.lng);
+          cycleRouteSegmentSelectionAt(clickedLatLng, segmentKey);
+        });
+
+        const segmentEntry = trailSegmentsByIndex.get(index);
+        if (segmentEntry) {
+          segmentEntry.labelMarker = labelMarker;
+          segmentEntry.baseLabelZIndexOffset = segmentVisualPriority + 1;
+        }
+      }
+
+      routeSegmentEntries = Array.from(trailSegmentsByIndex.values()).sort((a, b) => a.index - b.index);
+    };
+
+    const formatHotspotDuration = (durationMs) => {
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return 'Insufficient data';
+      const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      const parts = [];
+      if (days) parts.push(`${days}d`);
+      if (hours) parts.push(`${hours}h`);
+      if (minutes || !parts.length) parts.push(`${minutes}m`);
+      return parts.join(' ');
+    };
+
+    const formatHotspotDateTime = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return 'Insufficient data';
+      return formatDateTime(value);
+    };
+
+    const formatHotspotTotalParkedDays = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return '0.0d';
+      return `${Math.max(0, value).toFixed(1)}d`;
+    };
+
+    const formatHotspotAverageParkedDays = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return '0.0 days';
+      const rounded = Math.max(0, value).toFixed(1);
+      return `${rounded} days`;
+    };
+
+    const formatHotspotHierarchyScore = (value) => {
+      if (!Number.isFinite(value) || value <= 0) return '0';
+      return `${Math.round(value)}`;
+    };
+
+    const buildVehicleHistoryHotspotPopup = (hotspot, index = 0, totalHotspots = 0) => {
+      const rank = Number.isFinite(Number(hotspot?.hierarchyRank))
+        ? Math.max(1, Number(hotspot.hierarchyRank))
+        : (index + 1);
+      const coords = `${Number(hotspot.lat).toFixed(5)}, ${Number(hotspot.lng).toFixed(5)}`;
+      const serialsLabel = (Array.isArray(hotspot?.serials) ? hotspot.serials : [])
+        .map((entry) => {
+          const serial = normalizeGpsSerial(entry?.serial);
+          if (!serial) return '';
+          const serialType = `${entry?.type || ''}`.trim().toLowerCase() === 'wired' ? 'Wired' : 'Wireless';
+          return `${serial} (${serialType})`;
+        })
+        .filter(Boolean)
+        .join(', ');
+      const popupKey = hotspot.popupKey || buildVehicleHistoryHotspotPopupKey(hotspot.sourceVehicleId, hotspot, index);
+      const showNavigation = totalHotspots > 1;
+      const previousIndex = showNavigation
+        ? ((index - 1 + totalHotspots) % totalHotspots)
+        : index;
+      const nextIndex = showNavigation
+        ? ((index + 1) % totalHotspots)
+        : index;
+      const navigationHtml = showNavigation ? `
+        <div class="vehicle-history-hotspot-nav">
+          <button type="button" class="vehicle-history-hotspot-nav-btn" data-action="hotspot-nav-prev" data-hotspot-index="${previousIndex}">Previous</button>
+          <span class="vehicle-history-hotspot-nav-label">${rank}/${totalHotspots}</span>
+          <button type="button" class="vehicle-history-hotspot-nav-btn" data-action="hotspot-nav-next" data-hotspot-index="${nextIndex}">Next</button>
+        </div>
+      ` : '';
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(hotspot.lat, hotspot.lng, { tight: true });
+      return `
+        <div class="vehicle-history-hotspot-card">
+          <p class="vehicle-history-hotspot-card-title">
+            <span>Parking Spot #${rank}</span>
+          </p>
+          ${navigationHtml}
+          <div class="vehicle-history-hotspot-metrics">
+            <p><span class="vehicle-history-hotspot-k">Visits</span><span class="vehicle-history-hotspot-v">${hotspot.visits}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Avg Parked Days</span><span class="vehicle-history-hotspot-v">${formatHotspotAverageParkedDays(hotspot.avgParkedDays)}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Pins</span><span class="vehicle-history-hotspot-v">${Number.isFinite(Number(hotspot.rawPingCount)) ? Number(hotspot.rawPingCount) : 0}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Longest stay</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.longestDurationMs)}</span></p>
+            <p><span class="vehicle-history-hotspot-k">Shortest stay</span><span class="vehicle-history-hotspot-v">${formatHotspotDuration(hotspot.shortestDurationMs)}</span></p>
+          </div>
+          <div class="vehicle-history-hotspot-meta">
+            <p><span>First</span><span>${formatHotspotDateTime(hotspot.firstSeen)}</span></p>
+            <p><span>Last</span><span>${formatHotspotDateTime(hotspot.lastSeen)}</span></p>
+            <p><span>Serial(s)</span><span class="vehicle-history-hotspot-serial-text">${escapeHTML(serialsLabel || 'Insufficient data')}</span></p>
+            <p><span>Coords</span><span>${coords}</span></p>
+            ${mapsLinkHtml}
+          </div>
+          <div class="vehicle-history-hotspot-related-wrap">
+            <p class="vehicle-history-hotspot-related-title">Other vehicles using this parking spot</p>
+            <div class="vehicle-history-hotspot-related-body" data-hotspot-related-container data-hotspot-key="${escapeHTML(popupKey)}">
+              <p class="vehicle-history-hotspot-related-loading">Searching related vehicles...</p>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const buildHotspotRelatedVehicleMarkup = (matches = []) => {
+      if (!Array.isArray(matches) || !matches.length) {
+        return '<p class="vehicle-history-hotspot-related-empty">No other vehicles found for this parking spot.</p>';
+      }
+
+      return `
+        <div class="vehicle-history-hotspot-related-list">
+          ${matches.map((entry) => {
+            const vehicle = entry?.vehicle || {};
+            const vehicleLabel = [vehicle.model || 'Vehicle', vehicle.year || ''].filter(Boolean).join(' ').trim() || 'Vehicle';
+            const vehicleVin = vehicle.vin || vehicle.VIN || 'VIN N/A';
+            const vehicleCustomer = vehicle.customerId
+              || vehicle.customer
+              || vehicle.customer_id
+              || vehicle.details?.customer_id
+              || vehicle.details?.Customer
+              || '—';
+            const distanceMiles = toMiles(entry?.distanceMeters);
+            const distanceLabel = distanceMiles === null ? '—' : `${distanceMiles.toFixed(2)} mi`;
+            const visits = Number.isFinite(Number(entry?.visits)) ? Number(entry.visits) : 0;
+            const uniqueDays = Number.isFinite(Number(entry?.uniqueDays)) ? Number(entry.uniqueDays) : 0;
+            return `
+              <button
+                type="button"
+                class="vehicle-history-hotspot-related-btn"
+                data-action="hotspot-related-vehicle"
+                data-vehicle-key="${escapeHTML(getVehicleKey(vehicle))}"
+                data-vehicle-id="${escapeHTML(`${vehicle.id}`)}"
+              >
+                <span class="vehicle-history-hotspot-related-btn-title">${escapeHTML(vehicleLabel)}</span>
+                <span class="vehicle-history-hotspot-related-btn-vin">${escapeHTML(vehicleVin)}</span>
+                <span class="vehicle-history-hotspot-related-btn-customer">Customer: ${escapeHTML(`${vehicleCustomer}`)}</span>
+                <span class="vehicle-history-hotspot-related-btn-meta">${escapeHTML(distanceLabel)} · ${visits} visits · ${uniqueDays} parked days</span>
+              </button>
+            `;
+          }).join('')}
+        </div>
+      `;
+    };
+
+    const revealVehicleCardByKey = (vehicleKey) => {
+      const list = document.getElementById('vehicle-list');
+      if (!list) return;
+      const card = [...list.querySelectorAll('[data-type="vehicle"]')]
+        .find((node) => (
+          `${node?.dataset?.vehicleKey ?? ''}` === `${vehicleKey}`
+          || `${node?.dataset?.id ?? ''}` === `${vehicleKey}`
+        ));
+      if (!card) return;
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('vehicle-hotspot-related-target');
+      window.setTimeout(() => {
+        card.classList.remove('vehicle-hotspot-related-target');
+      }, 1300);
+    };
+
+    const focusMapOnVehicleQuick = (vehicle, { targetZoom = 14, preserveZoom = false } = {}) => {
+      if (!map || !vehicle) return;
+      const vehicleCoords = getVehicleMapCoords(vehicle);
+
+      const destination = L.latLng(vehicleCoords.lat, vehicleCoords.lng);
+      const currentCenter = typeof map.getCenter === 'function' ? map.getCenter() : null;
+      const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : targetZoom;
+      const distanceMeters = currentCenter ? map.distance(currentCenter, destination) : 0;
+      const zoomDelta = Math.abs((Number.isFinite(currentZoom) ? currentZoom : targetZoom) - targetZoom);
+      const preferDirectSetView = distanceMeters > 90000 || zoomDelta >= 2;
+
+      if (typeof map.stop === 'function') {
+        map.stop();
+      }
+
+      if (preserveZoom) {
+        map.panTo(destination, {
+          animate: true,
+          duration: 0.38,
+          easeLinearity: 0.35,
+          noMoveStart: true
+        });
+        return;
+      }
+
+      if (preferDirectSetView) {
+        map.setView(destination, targetZoom, {
+          animate: true,
+          duration: 0.42,
+          easeLinearity: 0.35,
+          noMoveStart: true
+        });
+        return;
+      }
+
+      map.flyTo(destination, targetZoom, {
+        duration: 0.52,
+        easeLinearity: 0.35,
+        noMoveStart: true
+      });
+    };
+
+    const jumpToVehicleFromHotspotRelation = (vehicleKey = '', vehicleId = '') => {
+      const vehicle = findVehicleByKey(vehicleKey)
+        || vehicles.find((item) => `${item?.id ?? ''}` === `${vehicleId ?? ''}`);
+      if (!vehicle) return false;
+
+      clearParkingSpotCascade();
+      if (map) {
+        const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : 14;
+        focusMapOnVehicleQuick(vehicle, {
+          targetZoom: currentZoom,
+          preserveZoom: true
+        });
+      }
+      if (vehicleMarkersVisible) {
+        focusVehicle(vehicle, { autoExpandSidebarCard: true });
+      } else {
+        applySelection(vehicle.id, null, getVehicleKey(vehicle));
+      }
+      requestAnimationFrame(() => revealVehicleCardByKey(getVehicleKey(vehicle)));
+      return true;
+    };
+
+    const openVehicleHistoryHotspotPopupByIndex = (index) => {
+      const targetIndex = Number(index);
+      if (!Number.isFinite(targetIndex)) return false;
+      if (!Array.isArray(activeVehicleHistoryHotspots) || !activeVehicleHistoryHotspots.length) return false;
+      const totalHotspots = activeVehicleHistoryHotspots.length;
+      const boundedIndex = ((Math.trunc(targetIndex) % totalHotspots) + totalHotspots) % totalHotspots;
+      const hotspot = activeVehicleHistoryHotspots[boundedIndex];
+      const popupKey = `${hotspot?.popupKey || ''}`.trim();
+      if (!popupKey) return false;
+      const entry = activeVehicleHistoryHotspotLayersByKey.get(popupKey);
+      const layer = entry?.layer || null;
+      if (!layer) return false;
+      const latlng = typeof layer.getLatLng === 'function'
+        ? layer.getLatLng()
+        : (Number.isFinite(hotspot?.lat) && Number.isFinite(hotspot?.lng) ? L.latLng(hotspot.lat, hotspot.lng) : null);
+      if (map && latlng) {
+        if (typeof map.stop === 'function') {
+          map.stop();
+        }
+        const currentZoom = typeof map.getZoom === 'function' ? map.getZoom() : 14;
+        const targetZoom = Number.isFinite(currentZoom) ? currentZoom : 14;
+        const mapSize = typeof map.getSize === 'function' ? map.getSize() : null;
+        const verticalFocusOffsetPx = mapSize
+          ? Math.max(110, Math.min(185, Math.round(mapSize.y * 0.18)))
+          : 140;
+        const projectedTarget = typeof map.project === 'function'
+          ? map.project(latlng, targetZoom)
+          : null;
+        const focusLatLng = projectedTarget && typeof map.unproject === 'function'
+          ? map.unproject(L.point(projectedTarget.x, projectedTarget.y - verticalFocusOffsetPx), targetZoom)
+          : latlng;
+        map.flyTo(focusLatLng, targetZoom, {
+          animate: true,
+          duration: 0.65,
+          easeLinearity: 0.32,
+          noMoveStart: true
+        });
+      }
+      if (typeof layer.openPopup === 'function') {
+        if (map && latlng && typeof map.once === 'function') {
+          map.once('moveend', () => {
+            layer.openPopup();
+          });
+        } else {
+          layer.openPopup();
+        }
+        return true;
+      }
+      return false;
+    };
+
+    const bindVehicleHistoryHotspotPopupControls = (popup, hotspot) => {
+      const popupElement = popup?.getElement?.();
+      if (!popupElement || !hotspot) return;
+      popupElement
+        .querySelectorAll('[data-action="hotspot-nav-prev"], [data-action="hotspot-nav-next"]')
+        .forEach((button) => {
+          if (button.dataset.boundHotspotNav === '1') return;
+          button.dataset.boundHotspotNav = '1';
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const nextIndex = Number(button.dataset.hotspotIndex);
+            if (!Number.isFinite(nextIndex)) return;
+            void openVehicleHistoryHotspotPopupByIndex(nextIndex);
+          });
+        });
+    };
+
+    const renderHotspotRelatedVehicles = async (popup, hotspot) => {
+      const popupElement = popup?.getElement?.();
+      if (!popupElement || !hotspot) return;
+      const container = popupElement.querySelector('[data-hotspot-related-container]');
+      if (!container) return;
+
+      if (container.dataset.relationBound !== '1') {
+        container.dataset.relationBound = '1';
+        container.addEventListener('click', (event) => {
+          const target = event.target instanceof Element
+            ? event.target.closest('[data-action="hotspot-related-vehicle"]')
+            : null;
+          if (!target) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const targetVehicleKey = `${target.dataset.vehicleKey || ''}`.trim();
+          const targetVehicleId = `${target.dataset.vehicleId || ''}`.trim();
+          if (!targetVehicleKey && !targetVehicleId) return;
+          jumpToVehicleFromHotspotRelation(targetVehicleKey, targetVehicleId);
+        });
+      }
+
+      const requestToken = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      container.dataset.requestToken = requestToken;
+      container.innerHTML = '<p class="vehicle-history-hotspot-related-loading">Searching related vehicles...</p>';
+
+      try {
+        const sourceVehicleId = hotspot.sourceVehicleId ?? selectedVehicleId;
+        const matches = await findVehiclesSharingHistoryHotspot({
+          hotspot,
+          sourceVehicleId
+        });
+        if (container.dataset.requestToken !== requestToken || !container.isConnected) return;
+        container.innerHTML = buildHotspotRelatedVehicleMarkup(matches);
+      } catch (error) {
+        console.warn('Related hotspot vehicle lookup warning: ' + (error?.message || error));
+        if (container.dataset.requestToken !== requestToken || !container.isConnected) return;
+        container.innerHTML = '<p class="vehicle-history-hotspot-related-error">Unable to load related vehicles for this spot.</p>';
+      }
+    };
+
+    const drawVehicleHistoryHotspots = (hotspots = []) => {
+      activeVehicleHistoryHotspots = Array.isArray(hotspots) ? [...hotspots] : [];
+      activeVehicleHistoryHotspotLayersByKey.clear();
+      if (!highlightLayer || !Array.isArray(hotspots) || !hotspots.length) return;
+
+      hotspots.forEach((hotspot, index) => {
+        const hotspotStrength = Math.min(1, hotspot.points / 12);
+        const hierarchyRatioRaw = Number(hotspot?.hierarchyRatio);
+        const hierarchyRatio = Number.isFinite(hierarchyRatioRaw)
+          ? Math.max(0, Math.min(1, hierarchyRatioRaw))
+          : 0;
+        const visualStrength = Math.max(hotspotStrength, hierarchyRatio * 0.82);
+        const hotspotLevel = `${hotspot?.hierarchyLevel || ''}`.trim().toUpperCase();
+        const hotspotColor = hotspotLevel === 'L1'
+          ? '#22d3ee'
+          : (hotspotLevel === 'L2' ? GPS_HISTORY_HOTSPOT_COLOR : '#475569');
+        const visualRadiusMeters = Math.max(300, Math.round(hotspot.radiusMeters * (1.55 + (visualStrength * 0.55))));
+        const popupHtml = buildVehicleHistoryHotspotPopup(hotspot, index, hotspots.length);
+
+        const halo = L.circle([hotspot.lat, hotspot.lng], {
+          radius: Math.round(visualRadiusMeters * 1.35),
+          color: hotspotColor,
+          weight: 0.9,
+          fillColor: hotspotColor,
+          fillOpacity: 0.02 + (visualStrength * 0.03),
+          opacity: 0.18 + (visualStrength * 0.08),
+          interactive: false,
+          className: 'vehicle-history-hotspot-glass-halo'
+        }).addTo(highlightLayer);
+        halo.bringToBack();
+
+        const ring = L.circle([hotspot.lat, hotspot.lng], {
+          radius: visualRadiusMeters,
+          color: hotspotColor,
+          weight: 1.2 + (visualStrength * 0.6),
+          fillColor: hotspotColor,
+          fillOpacity: 0.05 + (visualStrength * 0.06),
+          opacity: 0.42 + (visualStrength * 0.14),
+          interactive: true,
+          className: 'vehicle-history-hotspot-ring',
+          cycleRole: 'parking-spot',
+          cycleKey: `parking-spot-${hotspot.id || index + 1}`
+        }).addTo(highlightLayer);
+
+        ring.on('click', (event) => {
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = ring.options?.cycleRole || 'parking-spot';
+            event.originalEvent.cycleKey = ring.options?.cycleKey || `parking-spot-${hotspot.id || index + 1}`;
+          }
+        });
+
+        ring.bindPopup(popupHtml, {
+          className: 'vehicle-history-hotspot-popup',
+          autoPan: true
+        });
+        ring.on('popupopen', (event) => {
+          armParkingSpotCascade();
+          bindVehicleHistoryHotspotPopupControls(event?.popup, hotspot);
+          void renderHotspotRelatedVehicles(event?.popup, hotspot);
+        });
+
+        const coreHalo = L.circleMarker([hotspot.lat, hotspot.lng], {
+          radius: 11 + (visualStrength * 2),
+          color: hotspotColor,
+          weight: 1.2,
+          fillColor: hotspotColor,
+          fillOpacity: 0.14,
+          opacity: 0.45,
+          interactive: false,
+          className: 'vehicle-history-hotspot-core-halo'
+        }).addTo(highlightLayer);
+
+        const core = L.circleMarker([hotspot.lat, hotspot.lng], {
+          radius: 7.8 + (visualStrength * 1.8),
+          color: '#cbd5e1',
+          weight: 1.8,
+          fillColor: hotspotColor,
+          fillOpacity: 0.45,
+          opacity: 0.72,
+          interactive: true,
+          className: 'vehicle-history-hotspot-core',
+          cycleRole: 'parking-spot',
+          cycleKey: `parking-spot-${hotspot.id || index + 1}`
+        }).addTo(highlightLayer);
+
+        core.on('click', (event) => {
+          if (event?.originalEvent) {
+            event.originalEvent.handledByMarker = true;
+            event.originalEvent.cycleRole = core.options?.cycleRole || 'parking-spot';
+            event.originalEvent.cycleKey = core.options?.cycleKey || `parking-spot-${hotspot.id || index + 1}`;
+          }
+        });
+
+        core.bindPopup(popupHtml, {
+          className: 'vehicle-history-hotspot-popup',
+          autoPan: true
+        });
+        core.on('popupopen', (event) => {
+          armParkingSpotCascade();
+          bindVehicleHistoryHotspotPopupControls(event?.popup, hotspot);
+          void renderHotspotRelatedVehicles(event?.popup, hotspot);
+        });
+
+        const hotspotPopupKey = `${hotspot?.popupKey || ''}`.trim();
+        if (hotspotPopupKey && !activeVehicleHistoryHotspotLayersByKey.has(hotspotPopupKey)) {
+          activeVehicleHistoryHotspotLayersByKey.set(hotspotPopupKey, {
+            layer: core,
+            hotspot,
+            index
+          });
+        }
+
+        coreHalo.bringToFront();
+        core.bringToFront();
+      });
+    };
+
+    const syncFocusedVehicleNotMovingBadge = (vehicle) => {
+      if (!highlightLayer) return;
+
+      const staleBadgeLayers = [];
+      highlightLayer.eachLayer((layer) => {
+        const layerIconClass = `${layer?.options?.icon?.options?.className || ''}`.trim();
+        if (layerIconClass === 'vehicle-cross') staleBadgeLayers.push(layer);
+      });
+      staleBadgeLayers.forEach((layer) => highlightLayer.removeLayer(layer));
+
+      if (!vehicle || !hasValidCoords(vehicle) || !isVehicleNotMoving(vehicle)) return;
+      L.marker([vehicle.lat, vehicle.lng], {
+        icon: L.divIcon({ className: 'vehicle-cross', html: '<div class="vehicle-cross-badge">✕</div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+        interactive: false,
+        zIndexOffset: 500
+      }).addTo(highlightLayer);
+    };
+
+    const renderVehicleGpsTrail = async (vehicle, requestId) => {
+      if (!vehicle || !gpsTrailLayer || requestId !== gpsTrailRequestCounter) return;
+
+      const vin = gpsHistoryManager.getVehicleVin(vehicle);
+      const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+      if (!vin && !vehicleId) return;
+
+      const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+      if (requestId !== gpsTrailRequestCounter) return;
+      if (error || !Array.isArray(records) || !records.length) return;
+      setHotspotFastCoordinatePairsFromRecords(records);
+
+      const blacklistedWirelessSerials = await getGpsDeviceBlacklistSerials();
+      const configuredWinnerSerial = gpsHistoryManager.getVehicleWinnerSerial(vehicle);
+      const winnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
+        ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
+        : configuredWinnerSerial;
+      const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
+        ? gpsHistoryManager.getRecordSerial
+        : () => '';
+      const normalizedWinnerSerial = `${winnerSerial || ''}`.trim();
+      const winnerScopedRecords = normalizedWinnerSerial
+        ? records.filter((record) => `${getRecordSerial(record) || ''}`.trim() === normalizedWinnerSerial)
+        : [];
+      const metricSourceRecords = selectMovementMetricRecords(records, {
+        vehicle,
+        getRecordSerial,
+        winnerSerial: normalizedWinnerSerial,
+        blacklistedWirelessSerials
+      });
+      const parkingSourceRecords = selectParkingSpotRecordsByDay(records, {
+        getRecordSerial,
+        winnerSerial: normalizedWinnerSerial,
+        blacklistedWirelessSerials
+      });
+      const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records, {
+        movementSourceRecords: metricSourceRecords,
+        stationarySourceRecords: parkingSourceRecords,
+        winnerSerial: normalizedWinnerSerial,
+        getRecordSerial
+      });
+      const avgMovingMilesChanged = applyVehicleAverageMovingMilesPerDayFromGpsHistory(vehicle, metricSourceRecords);
+
+      const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
+      const latestRecords = [...records]
+        .sort((a, b) => parseGpsTrailTimestamp(b) - parseGpsTrailTimestamp(a))
+        .slice(0, getCurrentTrailPointLimit());
+
+      const trailPoints = latestRecords
+        .map((record) => {
+          const point = toGpsTrailPoint(record);
+          if (!point) return null;
+          return { ...point, record };
+        })
+        .filter((point) => point !== null)
+        .sort((a, b) => a.timestamp - b.timestamp);
+      const headingChanged = applyVehicleMarkerHeading(
+        vehicle,
+        resolveVehicleMarkerHeadingFromTrail(trailPoints, latestRecords)
+      );
+
+      if (movingOverrideChanged || headingChanged) {
+        renderVehicles({ preserveScrollTop: true });
+      }
+      if (avgMovingMilesChanged) {
+        syncVehicleAverageMovingMilesDayField(vehicle);
+      }
+
+      let hotspotSourceRecords = selectParkingSpotRecordsByDay(records, {
+        getRecordSerial,
+        winnerSerial: normalizedWinnerSerial,
+        blacklistedWirelessSerials
+      });
+      if (!hotspotSourceRecords.length && !normalizedWinnerSerial) {
+        hotspotSourceRecords = winnerScopedRecords.length ? winnerScopedRecords : records;
+      }
+      const historyHotspots = buildVehicleHistoryHotspots(hotspotSourceRecords, {
+        getRecordSerial,
+        serialCountsBySerial
+      }).map((hotspot, index) => ({
+        ...hotspot,
+        sourceVehicleId: vehicle.id,
+        popupKey: buildVehicleHistoryHotspotPopupKey(vehicle.id, hotspot, index)
+      }));
+      prefetchRelatedVehiclesForHotspots(historyHotspots, vehicle.id);
+
+      if (requestId !== gpsTrailRequestCounter) return;
+      if (!trailPoints.length && !historyHotspots.length) {
+        activeVehicleHistoryHotspots = [];
+        activeVehicleHistoryHotspotLayersByKey.clear();
+        applyRouteLayerVisibilityMode();
+        return;
+      }
+      drawVehicleHistoryHotspots(historyHotspots);
+      if (trailPoints.length) {
+        drawVehicleGpsTrail(trailPoints, getVehicleMarkerColor(vehicle), vehicle);
+      }
+      applyRouteLayerVisibilityMode();
+>>>>>>> impte
     };
 
     const ICON_PATHS = {
       mapPin: '<path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle>',
+<<<<<<< HEAD
+=======
+      layers: '<path d="M12 2 2 7l10 5 10-5-10-5Z"></path><path d="m2 17 10 5 10-5"></path><path d="m2 12 10 5 10-5"></path>',
+>>>>>>> impte
       navigation: '<polygon points="3 11 12 2 21 11 12 20 3 11"></polygon><line x1="12" y1="22" x2="12" y2="13"></line>',
       mail: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><polyline points="3 7 12 13 21 7"></polyline>',
       wifiOff: '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M16.72 11.06A10.94 10.94 0 0 0 12 9.5 10.94 10.94 0 0 0 4.08 12.74"></path><path d="M5.1 16.5A6.95 6.95 0 0 1 12 14.5a6.95 6.95 0 0 1 3.53.96"></path><line x1="12" y1="20" x2="12.01" y2="20"></line>',
@@ -704,7 +6326,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return `<svg class="${className}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
     };
 
+<<<<<<< HEAD
     const VEHICLE_RENDER_LIMIT = 35;
+=======
+    const VEHICLE_RENDER_LIMIT = 500;
+>>>>>>> impte
     const PARTNER_CARD_LIMIT = 35;
 
     const SERVICE_TYPES = ['tech', 'reseller', 'repair', 'custom'];
@@ -732,15 +6358,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     };
 
     const PARTNER_SIDEBAR_CONFIGS = [
+<<<<<<< HEAD
       { type: 'reseller', eyebrow: 'Reseller network', title: 'Nearby resellers', accentClass: 'text-emerald-300', filterPlaceholder: 'Filter resellers by name, city, or state', emptyText: 'Resellers will appear here.' },
       { type: 'repair', eyebrow: 'Repair network', title: 'Repair shops nearby', accentClass: 'text-orange-200', filterPlaceholder: 'Filter repair shops by name, city, or state', emptyText: 'Repair shops will appear here.' },
+=======
+      { type: 'reseller', eyebrow: 'Reseller network', title: 'Nearby resellers', accentClass: 'text-emerald-300', filterPlaceholder: 'Search by name, city, state, ZIP, or note', emptyText: 'Resellers will appear here.' },
+      { type: 'repair', eyebrow: 'Repair network', title: 'Repair shops nearby', accentClass: 'text-orange-200', filterPlaceholder: 'Search by name, city, state, ZIP, or note', emptyText: 'Repair shops will appear here.' },
+>>>>>>> impte
     ];
 
     const CUSTOM_SIDEBAR_CONFIG = {
       eyebrow: 'Dynamic services',
       title: 'New categories',
       accentClass: 'text-indigo-200',
+<<<<<<< HEAD
       description: 'Showing every new category detected in Supabase.'
+=======
+      description: 'Showing every new category detected in the live dataset.'
+>>>>>>> impte
     };
 
     const partnerSidebarTemplate = ({ type, eyebrow, title, accentClass, filterPlaceholder, emptyText }) => `
@@ -777,9 +6412,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div id="${type}-search-status" class="hidden text-xs text-blue-400 animate-pulse font-medium">Locating address...</div>
             </div>
             <input
+<<<<<<< HEAD
               id="${type}-filter"
               type="text"
               class="mt-2 block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+=======
+              id="${type}-service-filter"
+              type="text"
+              class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+>>>>>>> impte
               placeholder="${filterPlaceholder}"
               autocomplete="off"
             >
@@ -813,7 +6454,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               id="dynamic-service-filter"
               type="text"
               class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+<<<<<<< HEAD
               placeholder="Filter services by name, city, or state"
+=======
+              placeholder="Search by name, city, state, ZIP, or note"
+>>>>>>> impte
               autocomplete="off"
             >
           </div>
@@ -838,6 +6483,33 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     buildPartnerSidebars();
 
+<<<<<<< HEAD
+=======
+    function ensureTechSearchControl() {
+      if (document.getElementById('tech-service-filter')) return;
+      const sidebar = document.getElementById('left-sidebar');
+      if (!sidebar) return;
+      const header = sidebar.querySelector('.p-5.border-b.border-slate-800.bg-slate-900');
+      if (!header) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'space-y-2';
+      wrapper.innerHTML = `
+        <input
+          id="tech-service-filter"
+          type="text"
+          class="block w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+          placeholder="Search by company, city, state, ZIP, or note"
+          autocomplete="off"
+        >
+      `;
+
+      header.appendChild(wrapper);
+    }
+
+    ensureTechSearchControl();
+
+>>>>>>> impte
     const isServiceSidebarVisible = (type) => {
       if (!isServiceTypeEnabled(type)) return false;
       const config = SERVICE_UI_CONFIG[type];
@@ -861,8 +6533,33 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const isRepoAgentPartner = (partner = {}) => `${partner.categoryLabel || partner.category || ''}`.trim().toLowerCase() === 'repo agent';
     const isParkingStoragePartner = (partner = {}) => `${partner.categoryLabel || partner.category || ''}`.trim().toLowerCase() === 'parking/storage';
 
+<<<<<<< HEAD
     const hasSpAgentNote = (partner = {}) => `${partner.notes || ''}`.trim().toLowerCase() === 'sp agent';
     const hasSpStorageNote = (partner = {}) => `${partner.notes || ''}`.trim().toLowerCase() === 'sp storage';
+=======
+    const getPartnerNoteText = (partner = {}) => String(
+      partner.notes
+      || partner.note
+      || partner.details?.Note
+      || partner.details?.note
+      || partner.details?.notes
+      || ''
+    ).trim();
+    const getTechNoteText = (tech = {}) => String(
+      tech.notes
+      || tech.note
+      || tech.details?.Note
+      || tech.details?.note
+      || tech.details?.notes
+      || ''
+    ).trim();
+    const getServiceNoteDisplay = (entry = {}, type = 'partner') => {
+      const note = type === 'tech' ? getTechNoteText(entry) : getPartnerNoteText(entry);
+      return note || '—';
+    };
+    const hasSpAgentNote = (partner = {}) => getPartnerNoteText(partner).toLowerCase() === 'sp agent';
+    const hasSpStorageNote = (partner = {}) => getPartnerNoteText(partner).toLowerCase() === 'sp storage';
+>>>>>>> impte
 
     const getPartnerColor = (partner, defaultColor) => isUnauthorizedPartner(partner) ? '#94a3b8' : defaultColor;
 
@@ -876,8 +6573,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const showServicePreviewCard = (partner) => {
       if (!map || !partner) return;
       const locationText = formatPartnerLocation(partner) || 'Location unavailable';
+<<<<<<< HEAD
       const zipText = partner.zip || 'N/A';
       const noteText = partner.notes || partner.note || partner.details?.note || '';
+=======
+      const noteText = getPartnerNoteText(partner);
+      const noteDisplay = noteText || '—';
+      const mapsLinkHtml = buildGoogleMapsLinkHtml(partner.lat, partner.lng, { tight: true });
+>>>>>>> impte
       const popup = L.popup({
         className: 'service-mini-popup',
         closeButton: true,
@@ -891,8 +6594,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="service-mini-card">
             <p class="service-mini-title">${escapeHTML(partner.company || partner.name || 'Service')}</p>
             <p class="service-mini-location">${escapeHTML(locationText)}</p>
+<<<<<<< HEAD
             <p class="service-mini-meta"><span class="service-mini-label">ZIP</span><span>${escapeHTML(zipText)}</span></p>
             ${noteText ? `<p class="service-mini-note"><span class="service-mini-label">Note</span> ${escapeHTML(noteText)}</p>` : ''}
+=======
+            <p class="service-mini-meta"><span class="service-mini-label">Note</span><span>${escapeHTML(noteDisplay)}</span></p>
+            ${mapsLinkHtml}
+>>>>>>> impte
           </div>
         `);
 
@@ -925,7 +6633,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         minZoom: 3,
         zoomSnap: 0.25,
         zoomDelta: 0.5
+<<<<<<< HEAD
       }).setView([39.8, -98.5], 5);
+=======
+      }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
+>>>>>>> impte
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, minZoom: 3 }).addTo(map);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', { maxZoom: 19, minZoom: 3, opacity: 0.95 }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -937,6 +6649,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       vehicleLayer = L.markerClusterGroup({
         maxClusterRadius: 35,
         disableClusteringAtZoom: 17,
+<<<<<<< HEAD
+=======
+        animate: false,
+        animateAddingMarkers: false,
+>>>>>>> impte
         spiderfyOnMaxZoom: true,
         showCoverageOnHover: false,
         iconCreateFunction(cluster) {
@@ -1006,6 +6723,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       serviceLayer = L.layerGroup().addTo(map);
       serviceConnectionLayer = L.layerGroup().addTo(map);
       highlightLayer = L.layerGroup().addTo(map);
+<<<<<<< HEAD
+=======
+      gpsTrailLayer = L.layerGroup();
+      if (routeLinesVisible) gpsTrailLayer.addTo(map);
+>>>>>>> impte
       resellerLayer = createPartnerClusterGroup(SERVICE_COLORS.reseller);
       repairLayer = createPartnerClusterGroup(SERVICE_COLORS.repair);
       customServiceLayer = createPartnerClusterGroup(SERVICE_COLORS.custom);
@@ -1031,11 +6753,37 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       map.on('click', (e) => {
+<<<<<<< HEAD
         if (e.originalEvent?.handledByMarker) return;
+=======
+        if (e.originalEvent?.handledByMarker) {
+          return;
+        }
+        const eventTarget = e.originalEvent?.target;
+        if (eventTarget instanceof Element && eventTarget.closest('.leaflet-interactive')) {
+          return;
+        }
+>>>>>>> impte
 
         const lat = parseFloat(e.latlng.lat.toFixed(6));
         const lng = parseFloat(e.latlng.lng.toFixed(6));
 
+<<<<<<< HEAD
+=======
+        const shouldCascadeToVehicleOnly = selectedVehicleId !== null && parkingSpotCascadeArmed;
+        if (shouldCascadeToVehicleOnly) {
+          clearParkingSpotCascade();
+          map.closePopup();
+          const selectedVehicle = getSelectedVehicleEntry();
+          if (selectedVehicle && vehicleMarkersVisible) {
+            focusVehicle(selectedVehicle);
+          } else {
+            applySelection(selectedVehicleId, null, selectedVehicleKey);
+          }
+          return;
+        }
+
+>>>>>>> impte
         const hasActiveMapSelection = selectedVehicleId !== null || lastClientLocation !== null || lastOriginPoint !== null;
         if (hasActiveMapSelection) {
           resetSelection();
@@ -1064,6 +6812,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
+<<<<<<< HEAD
     // --- 2. Load data from Supabase ---
     async function loadTechnicians() {
       if (!isServiceTypeEnabled('tech')) return;
@@ -1073,13 +6822,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="text-center mt-10 px-6">
             ${svgIcon('alertCircle', 'mx-auto h-8 w-8 text-slate-600 mb-2')}
             <p class="text-slate-500 text-xs">Supabase is offline. Unable to load installers.</p>
+=======
+    // --- 2. Load data from the live dataset ---
+    async function loadTechnicians({ force = false, silent = false } = {}) {
+      if (!isServiceTypeEnabled('tech')) return;
+      if (!supabaseClient) {
+        console.warn('Database unavailable: showing local installer placeholders.');
+        document.getElementById('tech-list').innerHTML = `
+          <div class="text-center mt-10 px-6">
+            ${svgIcon('alertCircle', 'mx-auto h-8 w-8 text-slate-600 mb-2')}
+            <p class="text-slate-500 text-xs">Database connection unavailable. Unable to load installers.</p>
+>>>>>>> impte
           </div>
         `;
         return;
       }
+<<<<<<< HEAD
       const stopLoading = startLoading('Loading Installers…');
       try {
         await ensureServiceCache();
+=======
+      const stopLoading = silent ? () => {} : startLoading('Loading Installers…');
+      try {
+        await ensureServiceCache({ force, silent });
+>>>>>>> impte
         const data = getCachedServices(getServiceCategoryLabel('tech'));
         technicians = (data || []).map((row, idx) => normalizeInstaller(row, idx, { getField, toStateCode, resolveCoords })).filter(t => t.company || t.city || t.state);
         setServiceHeaders('technicians', data || []);
@@ -1101,6 +6867,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
+<<<<<<< HEAD
     async function loadVehicles() {
       if (vehicles.length) return;
       const stopLoading = startLoading('Loading Vehicles…');
@@ -1159,11 +6926,63 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         const allowedDealStatuses = new Set(['ACTIVE', 'STOCK']);
         const filteredVehicles = normalizedVehicles.filter((vehicle) => {
+=======
+    async function loadVehicles({ force = false, silent = false } = {}) {
+      if (vehicles.length && !force) return;
+      const stopLoading = silent ? () => {} : startLoading('Loading Vehicles…');
+      try {
+        const previousVehiclesByKey = new Map(
+          (Array.isArray(vehicles) ? vehicles : [])
+            .map((vehicle) => [getVehicleKey(vehicle), vehicle])
+            .filter(([key]) => Boolean(key))
+        );
+        const data = await vehicleService.listVehicles();
+        const normalizedVehicles = data.map((row, idx) =>
+          normalizeVehicle(row, idx, { getField, toStateCode, resolveCoords })
+        );
+        normalizedVehicles.forEach((vehicle) => applyManualVehicleMetadataOverride(vehicle));
+
+        let dealsByStockNo = new Map();
+        let openInvoiceSummaryByStockNo = new Map();
+        let invoiceSummaryAvailable = false;
+        if (supabaseClient) {
+          const stockNumbers = normalizedVehicles
+            .map((vehicle) => normalizeStockNumber(vehicle.stockNo))
+            .filter(Boolean);
+          try {
+            const [dealsResult, invoicesResult] = await Promise.allSettled([
+              fetchDealsByStockNumbers(stockNumbers),
+              fetchOpenInvoiceSummaryByStockNumbers(stockNumbers)
+            ]);
+            if (dealsResult.status === 'fulfilled') {
+              dealsByStockNo = dealsResult.value;
+            } else {
+              console.warn('DealsJP1 load warning: ' + (dealsResult.reason?.message || dealsResult.reason));
+            }
+            if (invoicesResult.status === 'fulfilled') {
+              openInvoiceSummaryByStockNo = invoicesResult.value;
+              invoiceSummaryAvailable = true;
+            } else {
+              console.warn('Invoices load warning: ' + (invoicesResult.reason?.message || invoicesResult.reason));
+            }
+          } catch (error) {
+            console.warn('Vehicle financial enrich warning: ' + (error?.message || error));
+          }
+        }
+
+        const allowedDealStatuses = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
+        const filteredVehicles = normalizedVehicles.filter((vehicle) => {
+          const previousVehicle = previousVehiclesByKey.get(getVehicleKey(vehicle)) || null;
+          if (previousVehicle) {
+            applyDerivedVehicleMetricsFromPreviousSnapshot(vehicle, previousVehicle);
+          }
+>>>>>>> impte
           const stockNo = normalizeStockNumber(vehicle.stockNo);
           const dealValues = dealsByStockNo.get(stockNo) ?? null;
           const normalizedStatus = String(dealValues?.vehicleStatus ?? '').trim().toUpperCase();
           if (normalizedStatus && !allowedDealStatuses.has(normalizedStatus)) return false;
           if (normalizedStatus) {
+<<<<<<< HEAD
             vehicle.status = normalizedStatus;
           }
           const regularAmount = dealValues?.regularAmount ?? null;
@@ -1171,10 +6990,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           const payKpi = openBalance !== null && regularAmount ? openBalance / regularAmount : null;
           vehicle.payKpi = payKpi;
           vehicle.payKpiDisplay = formatPayKpi(payKpi);
+=======
+            vehicle.vehicleStatus = normalizedStatus;
+          }
+          const regularAmount = dealValues?.regularAmount ?? null;
+          const openBalance = dealValues?.openBalance ?? null;
+          const openInvoiceSummary = openInvoiceSummaryByStockNo.get(stockNo) ?? null;
+          const invoiceOpenBalance = Number.isFinite(openInvoiceSummary?.openBalanceSum)
+            ? openInvoiceSummary.openBalanceSum
+            : null;
+          const effectiveOpenBalance = invoiceSummaryAvailable
+            ? (invoiceOpenBalance ?? 0)
+            : openBalance;
+          const payKpi = effectiveOpenBalance !== null && regularAmount ? effectiveOpenBalance / regularAmount : null;
+          const oldestOpenInvoice = openInvoiceSummary ?? null;
+          vehicle.payKpi = payKpi;
+          vehicle.payKpiDisplay = formatPayKpi(payKpi);
+          vehicle.oldestOpenInvoiceDate = oldestOpenInvoice?.value || '';
+          vehicle.oldestOpenInvoiceDateDisplay = formatInvoiceDate(vehicle.oldestOpenInvoiceDate);
+>>>>>>> impte
           return true;
         });
 
         vehicles = filteredVehicles;
+<<<<<<< HEAD
         await hydrateVehicleClickHistory(vehicles);
         vehicleHeaders = data.length ? Object.keys(data[0]) : [];
         if (!vehicleHeaders.some((header) => header.toLowerCase() === 'gps fix')) {
@@ -1186,6 +7025,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         updateVehicleFilterOptions();
         syncVehicleFilterInputs();
         renderVehicles();
+=======
+        vehicleHistoryHotspotCache.clear();
+        vehicleHistoryHotspotPendingRequests.clear();
+        relatedHotspotVehiclesCache.clear();
+        hotspotFastCoordinatePairs = [];
+        hotspotFastCoordinatePairLookupPromise = null;
+        await preloadVisibleVehicleMarkerHeadings(vehicles, { rerenderOnChange: false });
+        await hydrateVehicleClickHistory(vehicles);
+        vehicleHeaders = data.length ? ensureRequiredVehicleHeaders(Object.keys(data[0])) : [...REQUIRED_VEHICLE_HEADERS];
+        updateVehicleFilterOptions();
+        syncVehicleFilterInputs();
+        renderVehicles();
+        // PT read bounds now come from vehicles table columns.
+>>>>>>> impte
         syncVehicleSelectionFromStore(getSelectedVehicle(), { shouldFocus: true });
       } catch (err) {
         if (err?.message === 'Vehicle data provider unavailable.') {
@@ -1261,6 +7114,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       });
     }
 
+<<<<<<< HEAD
     async function loadHotspots() {
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping hotspot load.');
@@ -1268,6 +7122,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const stopLoading = startLoading('Loading hotspots…');
+=======
+    async function loadHotspots({ silent = false } = {}) {
+      if (!supabaseClient) {
+        console.warn('Database unavailable: skipping hotspot load.');
+        return;
+      }
+
+      const stopLoading = silent ? () => {} : startLoading('Loading hotspots…');
+>>>>>>> impte
       try {
         const { data, error } = await supabaseClient.from(TABLES.hotspots).select('*');
         if (error) throw error;
@@ -1280,6 +7143,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
+<<<<<<< HEAD
     async function loadBlacklistSites() {
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping blacklist load.');
@@ -1287,6 +7151,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const stopLoading = startLoading('Loading Blacklist Locations…');
+=======
+    async function loadBlacklistSites({ silent = false } = {}) {
+      if (!supabaseClient) {
+        console.warn('Database unavailable: skipping blacklist load.');
+        return;
+      }
+
+      const stopLoading = silent ? () => {} : startLoading('Loading Blacklist Locations…');
+>>>>>>> impte
       try {
         const { data, error } = await supabaseClient.from(TABLES.blacklist).select('*');
         if (error) throw error;
@@ -1312,7 +7185,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     };
 
+<<<<<<< HEAD
     async function loadPartnerService(type) {
+=======
+    async function loadPartnerService(type, { force = false, silent = false } = {}) {
+>>>>>>> impte
       if (!isServiceTypeEnabled(type)) return;
       if (!supabaseClient) return;
 
@@ -1323,7 +7200,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       try {
+<<<<<<< HEAD
         await ensureServiceCache();
+=======
+        await ensureServiceCache({ force, silent });
+>>>>>>> impte
         const data = getCachedServices(getServiceCategoryLabel(type));
         setServiceHeaders(type, data);
         const normalized = (data || []).map((row, idx) => normalizePartner(row, type, idx, { getField, toStateCode, resolveCoords }));
@@ -1335,10 +7216,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
+<<<<<<< HEAD
     async function loadAllServices() {
       if (!supabaseClient) return;
 
       await ensureServiceCache();
+=======
+    async function loadAllServices({ force = false, silent = false } = {}) {
+      if (!supabaseClient) return;
+
+      await ensureServiceCache({ force, silent });
+>>>>>>> impte
 
       const categoryMap = new Map();
       serviceCacheByCategory.forEach((rows, key) => {
@@ -1358,6 +7246,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       rebuildCustomCategoryToggles();
 
       for (const type of Object.keys(SERVICE_LOAD_CONFIG)) {
+<<<<<<< HEAD
         await loadPartnerService(type);
       }
 
@@ -1370,12 +7259,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (!isServiceTypeEnabled('custom') || !customCategoryLabels.size) return;
       if (!supabaseClient) {
         console.warn('Supabase unavailable: skipping custom categories.');
+=======
+        await loadPartnerService(type, { force, silent });
+      }
+
+      if (isServiceTypeEnabled('custom') && customCategoryLabels.size) {
+        await loadCustomServices({ force, silent });
+      }
+    }
+
+    async function loadCustomServices({ force = false, silent = false } = {}) {
+      if (!isServiceTypeEnabled('custom') || !customCategoryLabels.size) return;
+      if (!supabaseClient) {
+        console.warn('Database unavailable: skipping custom categories.');
+>>>>>>> impte
         return;
       }
 
       try {
         const labels = Array.from(customCategoryLabels);
+<<<<<<< HEAD
         await ensureServiceCache();
+=======
+        await ensureServiceCache({ force, silent });
+>>>>>>> impte
         const data = labels.flatMap((label) => getCachedServices(label));
 
         customCategories.forEach(({ layer }) => layer?.clearLayers?.());
@@ -1396,6 +7303,66 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
     }
 
+<<<<<<< HEAD
+=======
+    const refreshControlMapData = async ({
+      includeServices = true,
+      silent = true
+    } = {}) => {
+      if (dataSyncRefreshPromise) return dataSyncRefreshPromise;
+
+      dataSyncRefreshPromise = (async () => {
+        await Promise.allSettled([
+          loadVehicles({ force: true, silent }),
+          loadHotspots({ silent }),
+          loadBlacklistSites({ silent })
+        ]);
+
+        if (includeServices) {
+          await loadAllServices({ force: true, silent });
+          if (isServiceTypeEnabled('tech')) {
+            await loadTechnicians({ force: false, silent });
+          }
+        }
+
+        lastDataSyncRefreshAt = Date.now();
+      })().finally(() => {
+        dataSyncRefreshPromise = null;
+      });
+
+      return dataSyncRefreshPromise;
+    };
+
+    const startDataSyncWatchdog = () => {
+      if (typeof window === 'undefined') return () => {};
+
+      const triggerForegroundRefresh = () => {
+        const now = Date.now();
+        if ((now - lastDataSyncRefreshAt) < DATA_SYNC_FOCUS_COOLDOWN_MS) return;
+        void refreshControlMapData({ includeServices: true, silent: true });
+      };
+
+      const intervalId = window.setInterval(() => {
+        if (document.hidden) return;
+        void refreshControlMapData({ includeServices: true, silent: true });
+      }, DATA_SYNC_AUTO_REFRESH_INTERVAL_MS);
+
+      const onFocus = () => triggerForegroundRefresh();
+      const onVisibilityChange = () => {
+        if (!document.hidden) triggerForegroundRefresh();
+      };
+
+      window.addEventListener('focus', onFocus);
+      document.addEventListener('visibilitychange', onVisibilityChange);
+
+      return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener('focus', onFocus);
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+      };
+    };
+
+>>>>>>> impte
     // --- 4. Update map and list ---
     function updateTechUI(techList, target = null, clientLocation = null) {
       if (!techSidebarVisible) {
@@ -1404,6 +7371,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
       const listContainer = document.getElementById('tech-list');
       listContainer.innerHTML = '';
+<<<<<<< HEAD
 
       const origin = clientLocation || getCurrentOrigin();
       const techWithDistances = attachDistances(
@@ -1411,13 +7379,33 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         origin,
         distanceCaches.tech,
         (tech) => getDistance(origin.lat, origin.lng, tech.lat, tech.lng)
+=======
+      const filteredTechList = applyServiceFilter(techList, 'tech');
+      const totalCountEl = document.getElementById('total-count');
+      if (totalCountEl) {
+        totalCountEl.textContent = filteredTechList.length !== techList.length
+          ? `${filteredTechList.length}/${techList.length}`
+          : `${techList.length}`;
+      }
+
+      const origin = clientLocation || getCurrentOrigin();
+      const techWithDistances = attachDistances(
+        filteredTechList,
+        origin,
+        distanceCaches.tech,
+        (tech) => getMapTravelDistanceMiles(origin, tech)
+>>>>>>> impte
       );
       const sortedList = origin
         ? techWithDistances.sort((a, b) => a.distance - b.distance)
         : [...techWithDistances];
 
       const selectedTech = selectedTechId !== null
+<<<<<<< HEAD
         ? sortedList.find(t => t.id === selectedTechId) || techList.find(t => t.id === selectedTechId)
+=======
+        ? sortedList.find(t => t.id === selectedTechId) || filteredTechList.find(t => t.id === selectedTechId)
+>>>>>>> impte
         : null;
 
       const displayList = selectedTech
@@ -1441,6 +7429,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             icon: createServiceIcon(SERVICE_COLORS.tech)
           }).addTo(techLayer);
 
+<<<<<<< HEAD
           marker.bindPopup(`
             <div class="text-slate-900 p-1 font-sans">
               <strong class="block text-sm font-bold mb-1">${tech.company}</strong>
@@ -1449,6 +7438,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div class="text-[10px] text-slate-400 truncate">${tech.email}</div>
             </div>
           `);
+=======
+	          marker.bindPopup(`
+	            <div class="text-slate-900 p-1 font-sans">
+	              <strong class="block text-sm font-bold mb-1">${tech.company}</strong>
+	              <div class="text-xs text-slate-500 mb-2">${tech.city}, ${tech.state} ${tech.zip}</div>
+	              <a href="tel:${tech.phoneDial || tech.phone}" class="block bg-blue-100 text-blue-700 px-2 py-1 rounded text-center text-xs font-bold mb-1">${tech.phone}</a>
+	              <div class="text-[10px] text-slate-400 truncate">${tech.email}</div>
+	              ${buildGoogleMapsLinkHtml(tech.lat, tech.lng, { tight: true })}
+	            </div>
+	          `);
+>>>>>>> impte
 
           marker.on('click', (e) => {
             e.originalEvent.handledByMarker = true;
@@ -1463,6 +7463,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       displayList.slice(0, 50).forEach((tech, idx) => {
         const isNearest = target && idx === 0;
 
+<<<<<<< HEAD
+=======
+        const techNoteText = getServiceNoteDisplay(tech, 'tech');
+>>>>>>> impte
         const card = document.createElement('div');
         card.className = `p-3 rounded-lg border transition-colors cursor-pointer ${isNearest ? 'bg-slate-800 border-blue-500 ring-1 ring-blue-500' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`;
         card.dataset.id = tech.id;
@@ -1476,7 +7480,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           <div class="flex justify-between items-start gap-3">
             <div class="min-w-0 space-y-1">
               <h3 class="font-bold text-white text-sm break-words leading-tight" title="${tech.company}">${tech.company}</h3>
+<<<<<<< HEAD
               <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${tech.city || 'Unknown'}, ${tech.state || 'US'}</span></p>
+=======
+              <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${tech.city || 'Unknown'}, ${tech.state || 'US'}${tech.zip ? ` ${tech.zip}` : ''}</span></p>
+>>>>>>> impte
             </div>
             <div class="text-right text-[11px] text-slate-400 leading-tight space-y-0.5">
               <p class="font-semibold text-slate-200">${tech.phone || ''}</p>
@@ -1484,10 +7492,26 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               ${distanceLabel ? `<p class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation', 'h-3 w-3')}<span class="font-semibold text-slate-100">${distanceLabel}</span></p>` : ''}
             </div>
           </div>
+<<<<<<< HEAD
           ${tech.zip ? `<p class="text-[10px] text-slate-500 mt-1">${tech.zip}</p>` : ''}
 
         `;
 
+=======
+          <p class="text-[10px] text-slate-500 mt-1">Note: ${escapeHTML(techNoteText)}</p>
+          <div class="mt-2 flex justify-end">
+            <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+          </div>
+
+        `;
+
+        card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openServiceModal(tech, 'tech');
+        });
+
+>>>>>>> impte
         listContainer.appendChild(card);
       });
 
@@ -1495,21 +7519,55 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const isAnyServiceSidebarOpen = () => getVisibleServiceTypes().length > 0;
 
+<<<<<<< HEAD
     const getPartnerFilterValue = (type = 'tech') => `${serviceFilters[type] || ''}`.trim().toLowerCase();
 
     const applyServiceFilter = (list = [], type = 'tech') => {
       const query = getPartnerFilterValue(type);
+=======
+    const getServiceSearchFilterValue = (type = 'tech') => `${serviceSearchFilters[type] || ''}`.trim().toLowerCase();
+    const getServiceSearchInputId = (type) => (type === 'custom' ? 'dynamic-service-filter' : `${type}-service-filter`);
+
+    const applyServiceFilter = (list = [], type = 'tech') => {
+      const query = getServiceSearchFilterValue(type);
+>>>>>>> impte
       const allowedIds = Array.isArray(serviceFilterIds[type]) ? new Set(serviceFilterIds[type].map((id) => `${id}`)) : null;
       const baseList = allowedIds ? list.filter((partner) => allowedIds.has(`${partner.id}`)) : list;
       if (!query) return baseList;
       return baseList.filter((partner) => {
+<<<<<<< HEAD
         return [partner.company, partner.contact, partner.city, partner.state, partner.zip, partner.region]
           .some(value => `${value || ''}`.toLowerCase().includes(query));
+=======
+        const noteText = type === 'tech' ? getTechNoteText(partner) : getPartnerNoteText(partner);
+        const haystack = [
+          partner.company,
+          partner.name,
+          partner.contact,
+          partner.vendor,
+          partner.city,
+          partner.state,
+          partner.region,
+          partner.zip,
+          partner.zipcode,
+          partner.phone,
+          partner.email,
+          partner.availability,
+          partner.authorization,
+          partner.categoryLabel,
+          partner.category,
+          noteText
+        ]
+          .map((value) => `${value || ''}`.toLowerCase())
+          .join(' ');
+        return haystack.includes(query);
+>>>>>>> impte
       });
     };
 
     function filterSidebarForPartner(type, partner) {
       if (!type || !partner) return;
+<<<<<<< HEAD
       const filterValue = partner.company || partner.name || partner.zip || '';
       serviceFilters[type] = filterValue;
       setServiceFilter(type, filterValue);
@@ -1518,6 +7576,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (input) {
         input.value = filterValue;
       }
+=======
+      serviceSearchFilters[type] = [partner.company || partner.name || '', partner.zip || partner.zipcode || '']
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      const searchInput = document.getElementById(getServiceSearchInputId(type));
+      if (searchInput) searchInput.value = serviceSearchFilters[type];
+>>>>>>> impte
       renderVisibleSidebars();
     }
 
@@ -1531,8 +7597,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     const getCurrentOrigin = () => {
       if (selectedVehicleId !== null) {
+<<<<<<< HEAD
         const vehicle = vehicles.find(v => v.id === selectedVehicleId && hasValidCoords(v));
         if (vehicle) return vehicle;
+=======
+        const vehicle = getSelectedVehicleEntry();
+        if (vehicle && hasValidCoords(vehicle)) return vehicle;
+>>>>>>> impte
       }
 
       if (selectedTechId !== null) {
@@ -1548,6 +7619,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return null;
     };
 
+<<<<<<< HEAD
     const getSelectedService = (type) => selectedServiceByType[type] || null;
 
     const syncServiceFilterInputs = () => {
@@ -1564,6 +7636,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         const value = serviceFilters[type] || '';
         if (input.value !== value) {
           input.value = value;
+=======
+    const getMapTravelDistanceMiles = (fromPoint, toPoint) => {
+      if (!fromPoint || !toPoint) return Number.NaN;
+      const baseMiles = getDistance(fromPoint.lat, fromPoint.lng, toPoint.lat, toPoint.lng);
+      if (!Number.isFinite(baseMiles) || baseMiles < 0) return Number.NaN;
+      return baseMiles * MAP_DISTANCE_ROUTE_UPLIFT_MULTIPLIER;
+    };
+
+    const getSelectedService = (type) => selectedServiceByType[type] || null;
+
+    const syncServiceSearchInputs = () => {
+      SERVICE_TYPES.forEach((type) => {
+        const searchInput = document.getElementById(getServiceSearchInputId(type));
+        const searchValue = serviceSearchFilters[type] || '';
+        if (searchInput && searchInput.value !== searchValue) {
+          searchInput.value = searchValue;
+>>>>>>> impte
         }
       });
     };
@@ -1595,7 +7684,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         filteredPartners,
         origin,
         distanceCaches.partners,
+<<<<<<< HEAD
         (partner) => getDistance(origin.lat, origin.lng, partner.lat, partner.lng)
+=======
+        (partner) => getMapTravelDistanceMiles(origin, partner)
+>>>>>>> impte
       );
       const sorted = origin
         ? partnersWithDistances.sort((a, b) => a.distance - b.distance)
@@ -1634,6 +7727,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
             const locationText = formatPartnerLocation(partner);
 
+<<<<<<< HEAD
             marker.bindPopup(`
               <div class="text-slate-900 p-1 font-sans">
                 <strong class="block text-sm font-bold mb-1">${partner.company}</strong>
@@ -1642,6 +7736,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <div class="text-[10px] text-slate-500">${partner.availability || ''}</div>
               </div>
             `);
+=======
+	            marker.bindPopup(`
+	              <div class="text-slate-900 p-1 font-sans">
+	                <strong class="block text-sm font-bold mb-1">${partner.company}</strong>
+	                <div class="text-xs text-slate-500 mb-2">${locationText || 'US'}</div>
+	                <a href="tel:${partner.phoneDial || partner.phone}" class="block bg-slate-100 text-slate-800 px-2 py-1 rounded text-center text-xs font-bold mb-1">${partner.phone || 'Contact'}</a>
+	                <div class="text-[10px] text-slate-500">${partner.availability || ''}</div>
+	                ${buildGoogleMapsLinkHtml(partner.lat, partner.lng, { tight: true })}
+	              </div>
+	            `);
+>>>>>>> impte
 
             marker.on('click', (e) => {
               e.originalEvent.handledByMarker = true;
@@ -1660,17 +7765,31 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
           if (idx >= cardLimit) return;
 
+<<<<<<< HEAD
           const locationText = formatPartnerLocation(partner);
           const card = document.createElement('div');
+=======
+	          const locationText = formatPartnerLocation(partner);
+          const partnerNoteText = getServiceNoteDisplay(partner, 'partner');
+	          const card = document.createElement('div');
+>>>>>>> impte
           const isSelected = selectedService?.id === partner.id;
           card.className = `p-3 rounded-lg border transition-colors cursor-pointer ${isSelected || (idx === 0 && origin) ? 'bg-slate-800 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`;
           card.dataset.id = partner.id;
           card.dataset.type = 'partner';
           card.dataset.partnerType = type;
+<<<<<<< HEAD
           card.innerHTML = `
             <div class="flex justify-between items-start gap-3">
               <div class="min-w-0">
                 <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">${badgeLabel}</p>
+=======
+          const canOpenRepairHistory = isAuthenticatedCached();
+	          card.innerHTML = `
+	            <div class="flex justify-between items-start gap-3">
+	              <div class="min-w-0">
+	                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">${badgeLabel}</p>
+>>>>>>> impte
                 <h3 class="font-bold text-white text-sm break-words leading-tight" title="${partner.company}">${partner.company}</h3>
               </div>
               <div class="text-right text-[11px] text-slate-400 leading-tight">
@@ -1679,6 +7798,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <p class="text-[10px] text-slate-500">${partner.availability || ''}</p>
               </div>
             </div>
+<<<<<<< HEAD
             <div class="grid grid-cols-2 gap-2 mt-2 text-[11px] text-slate-300">
               <div class="flex items-center gap-1 text-slate-400">${svgIcon('mapPin')}<span>${locationText || 'US'}</span></div>
               ${origin ? `<div class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation')}<span class="font-semibold text-slate-100">${Math.round(partner.distance)} mi</span></div>` : ''}
@@ -1689,6 +7809,27 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         fragment.appendChild(card);
       });
+=======
+	            <div class="grid grid-cols-2 gap-2 mt-2 text-[11px] text-slate-300">
+	              <div class="flex items-center gap-1 text-slate-400">${svgIcon('mapPin')}<span>${locationText || 'US'}</span></div>
+	              ${origin ? `<div class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation')}<span class="font-semibold text-slate-100">${Math.round(partner.distance)} mi</span></div>` : ''}
+		              <div class="col-span-2 text-[10px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</div>
+	            </div>
+              <div class="mt-2 flex justify-end">
+                <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+              </div>
+
+	          `;
+
+          card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openServiceModal(partner, type);
+          });
+
+	        fragment.appendChild(card);
+	      });
+>>>>>>> impte
 
       if (prioritized.length > cardLimit) {
         const notice = document.createElement('p');
@@ -1714,20 +7855,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const titleEl = document.getElementById('dynamic-service-title');
       const eyebrowEl = document.getElementById('dynamic-service-eyebrow');
       const descEl = document.getElementById('dynamic-service-description');
+<<<<<<< HEAD
       const filterInput = document.getElementById('dynamic-service-filter');
+=======
+>>>>>>> impte
       if (!container) return;
 
       const meta = categoryKey ? customCategories.get(categoryKey) || ensureCustomCategoryMeta(categoryKey) : null;
       const label = meta?.label || 'Dynamic services';
       if (titleEl) titleEl.textContent = `${label} Network`;
       if (eyebrowEl) eyebrowEl.textContent = label;
+<<<<<<< HEAD
       if (descEl) descEl.textContent = `Showing ${label} partners detected in Supabase.`;
+=======
+      if (descEl) descEl.textContent = `Showing ${label} partners detected in the live dataset.`;
+>>>>>>> impte
 
       const normalizedList = list.filter((item) => !categoryKey || item?.categoryKey === categoryKey);
       const allowedIds = Array.isArray(serviceFilterIds.custom) ? new Set(serviceFilterIds.custom.map((id) => `${id}`)) : null;
       const constrainedList = allowedIds
         ? normalizedList.filter((partner) => allowedIds.has(`${partner.id}`))
         : normalizedList;
+<<<<<<< HEAD
       const filterValue = `${serviceFilters.custom || filterInput?.value || ''}`.toLowerCase();
       const origin = getCurrentOrigin();
       const withDistances = attachDistances(constrainedList, origin, distanceCaches.partners, (partner) => {
@@ -1741,6 +7890,16 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             return haystack.includes(filterValue);
           })
         : sorted;
+=======
+      const constrainedFiltered = applyServiceFilter(constrainedList, 'custom');
+      const origin = getCurrentOrigin();
+      const withDistances = attachDistances(constrainedFiltered, origin, distanceCaches.partners, (partner) => {
+        if (!origin) return 0;
+        return getMapTravelDistanceMiles(origin, partner);
+      });
+      const sorted = origin ? [...withDistances].sort((a, b) => a.distance - b.distance) : [...withDistances];
+      const filtered = sorted;
+>>>>>>> impte
 
       const markersAllowed = customSidebarVisible && isServiceTypeEnabled('custom');
       customCategories.forEach(({ layer }) => layer?.clearLayers?.());
@@ -1754,30 +7913,62 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const fragment = document.createDocumentFragment();
+<<<<<<< HEAD
       filtered.slice(0, PARTNER_CARD_LIMIT).forEach((partner) => {
         const locationText = formatPartnerLocation(partner) || 'US';
         const card = document.createElement('article');
+=======
+	      filtered.slice(0, PARTNER_CARD_LIMIT).forEach((partner) => {
+	        const locationText = formatPartnerLocation(partner) || 'US';
+        const partnerNoteText = getServiceNoteDisplay(partner, 'partner');
+	        const card = document.createElement('article');
+>>>>>>> impte
         card.className = 'rounded-xl border border-slate-800 bg-slate-900/70 p-3 shadow-sm hover:border-blue-500/70 transition-colors';
         card.dataset.id = partner.id;
         card.dataset.type = 'partner';
         card.dataset.partnerType = 'custom';
 
         const distanceLabel = origin && typeof partner.distance === 'number' ? `${Math.round(partner.distance)} mi` : '';
+<<<<<<< HEAD
         card.innerHTML = `
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="text-sm font-bold text-white leading-tight">${escapeHTML(partner.company || partner.name || 'Service')}</p>
+=======
+	        card.innerHTML = `
+	          <div class="flex items-start justify-between gap-3">
+	            <div class="min-w-0">
+	              <p class="text-sm font-bold text-white leading-tight">${escapeHTML(partner.company || partner.name || 'Service')}</p>
+>>>>>>> impte
               <p class="flex items-center gap-1 text-[11px] text-slate-400 leading-tight">${svgIcon('mapPin', 'h-3 w-3')}<span class="truncate">${escapeHTML(locationText)}</span></p>
             </div>
             <div class="text-right text-[11px] text-slate-400 leading-tight space-y-0.5">
               ${partner.phone ? `<a class="font-bold text-blue-200 block" href="tel:${partner.phoneDial || partner.phone}">${partner.phone}</a>` : ''}
               ${distanceLabel ? `<p class="flex items-center gap-1 justify-end text-slate-300">${svgIcon('navigation', 'h-3 w-3')}<span class="font-semibold text-slate-100">${distanceLabel}</span></p>` : ''}
+<<<<<<< HEAD
             </div>
           </div>
           ${partner.notes ? `<p class="mt-2 text-[11px] text-slate-400 leading-tight">${escapeHTML(partner.notes)}</p>` : ''}
         `;
 
         fragment.appendChild(card);
+=======
+	            </div>
+	          </div>
+			          <p class="mt-2 text-[11px] text-slate-400 leading-tight">Note: ${escapeHTML(partnerNoteText)}</p>
+              <div class="mt-2 flex justify-end">
+                <button type="button" data-action="service-view-more" class="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/50 bg-cyan-500/15 px-3 py-1 text-[10px] font-bold text-cyan-100 hover:bg-cyan-500/25 transition-colors">View Details</button>
+              </div>
+		        `;
+
+        card.querySelector('[data-action="service-view-more"]')?.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openServiceModal(partner, 'custom');
+        });
+
+	        fragment.appendChild(card);
+>>>>>>> impte
 
         if (markersAllowed && map && meta?.layer) {
           if (!map.hasLayer(meta.layer)) {
@@ -1818,7 +8009,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       custom: { containerId: 'dynamic-service-list', updater: renderCategorySidebar, getList: () => customServices }
     };
 
+<<<<<<< HEAD
     const findVehicleById = (id) => vehicles.find((vehicle) => `${vehicle.id}` === `${id}`);
+=======
+    const findVehicleById = (idOrKey) =>
+      findVehicleByKey(idOrKey) || vehicles.find((vehicle) => `${vehicle.id}` === `${idOrKey}`);
+>>>>>>> impte
     const findTechById = (id) => technicians.find((tech) => `${tech.id}` === `${id}`);
     const findPartnerById = (type, id) => {
       const getter = PARTNER_TYPE_CONFIG[type]?.getList;
@@ -1826,21 +8022,199 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return list.find((partner) => `${partner.id}` === `${id}`);
     };
 
+<<<<<<< HEAD
+=======
+    function getVehicleFromListCard(card) {
+      if (!card) return null;
+      const cardVehicleId = `${card.dataset.vehicleId || ''}`.trim();
+      const cardVehicleKey = `${card.dataset.vehicleKey || card.dataset.id || ''}`.trim();
+      return vehicles.find((item) => `${item?.id ?? ''}` === cardVehicleId)
+        || (cardVehicleKey ? findVehicleByKey(cardVehicleKey) : null)
+        || findVehicleById(card.dataset.id);
+    }
+
+    function getVehicleListCardKey(vehicleOrKey) {
+      if (typeof vehicleOrKey === 'string') return vehicleOrKey.trim();
+      return getVehicleKey(vehicleOrKey);
+    }
+
+    function findVehicleListCardByKey(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const vehicleKey = getVehicleListCardKey(vehicleOrKey);
+      if (!container || !vehicleKey) return null;
+      const escapedKey = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+        ? CSS.escape(vehicleKey)
+        : null;
+      if (escapedKey) {
+        const matched = container.querySelector(`[data-type="vehicle"][data-vehicle-key="${escapedKey}"]`);
+        if (matched) return matched;
+      }
+      return [...container.querySelectorAll('[data-type="vehicle"]')]
+        .find((node) => `${node?.dataset?.vehicleKey ?? ''}` === vehicleKey)
+        || null;
+    }
+
+    function captureVehicleListCardAnchor(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const vehicleKey = getVehicleListCardKey(vehicleOrKey);
+      const card = findVehicleListCardByKey(vehicleKey, container);
+      if (!card || !container || !vehicleKey) return null;
+      const containerRect = container.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      return {
+        vehicleKey,
+        offsetTop: cardRect.top - containerRect.top
+      };
+    }
+
+    function pinVehicleListCardPosition(vehicleOrKey, container = document.getElementById('vehicle-list')) {
+      const anchor = captureVehicleListCardAnchor(vehicleOrKey, container);
+      if (!anchor) return null;
+      pinnedVehicleListCardKey = anchor.vehicleKey;
+      pinnedVehicleListCardOffsetTop = anchor.offsetTop;
+      return anchor;
+    }
+
+    function clearPinnedVehicleListCardPosition() {
+      pinnedVehicleListCardKey = null;
+      pinnedVehicleListCardOffsetTop = null;
+    }
+
+    function getPinnedVehicleListCardAnchor(container = document.getElementById('vehicle-list')) {
+      const fallbackVehicleKey = pinnedVehicleListCardKey
+        || `${selectedVehicleKey || ''}`.trim()
+        || getVehicleKey(getSelectedVehicleEntry());
+      if (!fallbackVehicleKey) return null;
+      const liveAnchor = captureVehicleListCardAnchor(fallbackVehicleKey, container);
+      if (liveAnchor) {
+        pinnedVehicleListCardOffsetTop = liveAnchor.offsetTop;
+        pinnedVehicleListCardKey = liveAnchor.vehicleKey;
+        return liveAnchor;
+      }
+      if (!Number.isFinite(pinnedVehicleListCardOffsetTop)) return null;
+      return {
+        vehicleKey: fallbackVehicleKey,
+        offsetTop: pinnedVehicleListCardOffsetTop
+      };
+    }
+
+    function setElementScrollTopInstant(element, nextScrollTop) {
+      if (!element) return;
+      const previousBehavior = element.style.scrollBehavior;
+      element.style.scrollBehavior = 'auto';
+      element.scrollTop = nextScrollTop;
+      requestAnimationFrame(() => {
+        element.style.scrollBehavior = previousBehavior;
+      });
+    }
+
+    function restoreVehicleListAnchor(container, { anchor = null, fallbackScrollTop = null } = {}) {
+      if (!container) return;
+      requestAnimationFrame(() => {
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+        let nextScrollTop = Number.isFinite(fallbackScrollTop)
+          ? Math.min(Math.max(fallbackScrollTop, 0), maxScrollTop)
+          : Math.min(Math.max(container.scrollTop, 0), maxScrollTop);
+
+        if (anchor?.vehicleKey) {
+          const card = findVehicleListCardByKey(anchor.vehicleKey, container);
+          if (card) {
+            const containerRect = container.getBoundingClientRect();
+            const cardRect = card.getBoundingClientRect();
+            const currentOffsetTop = cardRect.top - containerRect.top;
+            const delta = currentOffsetTop - anchor.offsetTop;
+            nextScrollTop = Math.min(Math.max(container.scrollTop + delta, 0), maxScrollTop);
+            pinnedVehicleListCardKey = anchor.vehicleKey;
+            pinnedVehicleListCardOffsetTop = anchor.offsetTop;
+          }
+        }
+
+        setElementScrollTopInstant(container, nextScrollTop);
+      });
+    }
+
+    function isVehicleCardExpanded(vehicleOrKey) {
+      const key = typeof vehicleOrKey === 'string'
+        ? vehicleOrKey.trim()
+        : getVehicleKey(vehicleOrKey);
+      return Boolean(key) && expandedVehicleCardKeys.has(key);
+    }
+
+    function toggleVehicleCardExpanded(vehicleOrKey) {
+      const vehicle = typeof vehicleOrKey === 'string'
+        ? findVehicleByKey(vehicleOrKey.trim())
+        : vehicleOrKey;
+      const key = typeof vehicleOrKey === 'string'
+        ? vehicleOrKey.trim()
+        : getVehicleKey(vehicleOrKey);
+      if (!key) return;
+      pinVehicleListCardPosition(key);
+      const willExpand = !expandedVehicleCardKeys.has(key);
+      if (expandedVehicleCardKeys.has(key)) {
+        expandedVehicleCardKeys.delete(key);
+      } else {
+        expandedVehicleCardKeys.add(key);
+      }
+      renderVehicles({ preserveScrollTop: true });
+      if (willExpand && vehicle) {
+        void hydrateVehicleAverageMovingMilesPerDay(vehicle);
+      }
+    }
+
+    function isVehicleCardControlTarget(target, composedPath = []) {
+      const CONTROL_ACTIONS = new Set([
+        'vehicle-expand-toggle',
+        'vehicle-view-more',
+        'repair-history',
+        'gps-history',
+        'vehicle-select-checkbox'
+      ]);
+      const INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA', 'LABEL']);
+      if (target?.closest('button,a,input,select,textarea,label')) return true;
+
+      const actionHost = target?.closest('[data-action]');
+      if (actionHost && CONTROL_ACTIONS.has(actionHost.dataset.action)) return true;
+
+      return composedPath.some((node) => {
+        const action = node?.dataset?.action;
+        if (action && CONTROL_ACTIONS.has(action)) return true;
+        const tagName = typeof node?.tagName === 'string' ? node.tagName.toUpperCase() : '';
+        return tagName ? INTERACTIVE_TAGS.has(tagName) : false;
+      });
+    }
+
+>>>>>>> impte
     function handleVehicleListClick(event) {
       const container = event.currentTarget;
       const target = event.target instanceof Element ? event.target : null;
       const composedPath = typeof event.composedPath === 'function' ? event.composedPath() : [];
       const findInPath = (action) => composedPath.find((node) => node?.dataset?.action === action);
       const card = target?.closest('[data-type="vehicle"]') || composedPath.find((node) => node?.dataset?.type === 'vehicle');
+<<<<<<< HEAD
+=======
+      const expandToggleBtn = target?.closest('[data-action="vehicle-expand-toggle"]') || findInPath('vehicle-expand-toggle');
+>>>>>>> impte
       const viewMoreBtn = target?.closest('[data-action="vehicle-view-more"]') || findInPath('vehicle-view-more');
       const repairHistoryBtn = target?.closest('[data-action="repair-history"]') || findInPath('repair-history');
       const gpsHistoryBtn = target?.closest('[data-action="gps-history"]') || findInPath('gps-history');
       const selectCheckbox = target?.closest('[data-action="vehicle-select-checkbox"]') || findInPath('vehicle-select-checkbox');
       if (!card || !container.contains(card)) return;
 
+<<<<<<< HEAD
       const vehicle = findVehicleById(card.dataset.id);
       if (!vehicle) return;
 
+=======
+      const vehicle = getVehicleFromListCard(card);
+      if (!vehicle) return;
+
+      if (expandToggleBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        toggleVehicleCardExpanded(vehicle);
+        return;
+      }
+
+>>>>>>> impte
       if (viewMoreBtn) {
         event.preventDefault();
         event.stopPropagation();
@@ -1853,7 +8227,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation?.();
+<<<<<<< HEAD
         openRepairModal(vehicle);
+=======
+        void openRepairModal(vehicle);
+>>>>>>> impte
         return;
       }
 
@@ -1870,10 +8248,34 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
+<<<<<<< HEAD
       applySelection(vehicle.id, null);
       focusVehicle(vehicle);
     }
 
+=======
+      pinVehicleListCardPosition(vehicle);
+      focusVehicle(vehicle);
+    }
+
+    function handleVehicleListDoubleClick(event) {
+      const container = event.currentTarget;
+      const target = event.target instanceof Element ? event.target : null;
+      const composedPath = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const card = target?.closest('[data-type="vehicle"]') || composedPath.find((node) => node?.dataset?.type === 'vehicle');
+      if (!card || !container.contains(card)) return;
+      if (isVehicleCardControlTarget(target, composedPath)) return;
+
+      const vehicle = getVehicleFromListCard(card);
+      if (!vehicle) return;
+
+      event.preventDefault();
+      pinVehicleListCardPosition(vehicle);
+      focusVehicle(vehicle);
+      focusMapOnVehicleQuick(vehicle, { targetZoom: 15 });
+    }
+
+>>>>>>> impte
     function handleTechListClick(event) {
       const container = event.currentTarget;
       const card = event.target.closest('[data-type="tech"]');
@@ -1915,7 +8317,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function setupEventDelegation() {
       const vehicleList = document.getElementById('vehicle-list');
+<<<<<<< HEAD
       if (vehicleList) vehicleList.addEventListener('click', handleVehicleListClick);
+=======
+      if (vehicleList) {
+        vehicleList.addEventListener('click', handleVehicleListClick);
+        vehicleList.addEventListener('dblclick', handleVehicleListDoubleClick);
+      }
+>>>>>>> impte
 
       const techList = document.getElementById('tech-list');
       if (techList) techList.addEventListener('click', handleTechListClick);
@@ -1928,6 +8337,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function setupLayerToggles() {
+<<<<<<< HEAD
+=======
+      bindRouteLayerToggle();
+
+>>>>>>> impte
       createLayerToggle({
         toggleId: 'toggle-hotspots',
         labelOn: 'Hide Hotspot Areas',
@@ -1986,17 +8400,40 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             if (map?.hasLayer(vehicleLayer)) map.removeLayer(vehicleLayer);
           }
           vehicleMarkers.clear();
+<<<<<<< HEAD
           highlightLayer?.clearLayers();
+=======
+          resetRouteSegmentState({ clearEntries: true });
+          highlightLayer?.clearLayers();
+          gpsTrailLayer?.clearLayers();
+          gpsTrailRequestCounter += 1;
+>>>>>>> impte
         }
       });
     }
 
+<<<<<<< HEAD
     function renderVehicles() {
       const container = document.getElementById('vehicle-list');
       if (!container) return;
 
       if (map) map.closePopup();
       container.replaceChildren();
+=======
+    function renderVehicles({ preserveScrollTop = false } = {}) {
+      const container = document.getElementById('vehicle-list');
+      if (!container) return;
+      const previousScrollTop = preserveScrollTop ? container.scrollTop : null;
+      const currentPinnedAnchor = getPinnedVehicleListCardAnchor(container);
+
+      if (map) map.closePopup();
+      container.replaceChildren();
+      if (selectedVehicleId === null && !selectedVehicleKey) {
+        resetRouteSegmentState({ clearEntries: true });
+        highlightLayer?.clearLayers();
+        gpsTrailLayer?.clearLayers();
+      }
+>>>>>>> impte
 
       if (!vehicleMarkersVisible && map?.hasLayer(vehicleLayer)) {
         map.removeLayer(vehicleLayer);
@@ -2006,6 +8443,28 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const searchBox = document.getElementById('vehicle-search');
       const filtered = getVehicleList(searchBox?.value || '');
+<<<<<<< HEAD
+=======
+      const renderAnchor = currentPinnedAnchor?.vehicleKey
+        && filtered.some((vehicle) => `${getVehicleKey(vehicle)}` === `${currentPinnedAnchor.vehicleKey}`)
+        ? currentPinnedAnchor
+        : null;
+      const shouldPinSingleVisibleVehicleToTop = Boolean(
+        renderAnchor?.vehicleKey
+        && filtered.length === 1
+        && `${getVehicleKey(filtered[0])}` === `${renderAnchor.vehicleKey}`
+      );
+      const normalizedRenderAnchor = shouldPinSingleVisibleVehicleToTop
+        ? {
+          ...renderAnchor,
+          offsetTop: 0
+        }
+        : renderAnchor;
+      if (!renderAnchor && currentPinnedAnchor?.vehicleKey) {
+        clearPinnedVehicleListCardPosition();
+      }
+      const maxDaysParkedAcrossVehicles = getMaxDaysParkedAcrossVehicles(vehicles);
+>>>>>>> impte
       document.getElementById('vehicles-count').textContent = filtered.length;
 
       if (filtered.length === 0) {
@@ -2018,15 +8477,25 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           vehicleLayer,
           vehicleMarkers,
           visible: vehicleMarkersVisible,
+<<<<<<< HEAD
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
           isVehicleNotMoving
+=======
+          getVehicleMarkerKey: getVehicleKey,
+          getVehicleMarkerColor,
+          getVehicleMarkerBorderColor,
+          isVehicleNotMoving,
+          getVehicleMarkerOpacity: getVehicleMarkerOpacityByLastPing,
+          getVehicleMarkerHeading
+>>>>>>> impte
         });
         return;
       }
 
       const fragment = document.createDocumentFragment();
       const vehiclesForMarkers = [];
+<<<<<<< HEAD
 
       filtered.forEach((vehicle, idx) => {
         const movingMeta = getMovingMeta(vehicle);
@@ -2060,6 +8529,52 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             vehicle.locationNote = getLocationNote(vehicle.locationAccuracy);
           } else {
             console.warn(`No location data for vehicle ${vehicle.vin || vehicle.id || 'unknown'}`);
+=======
+      const canOpenRepairHistory = isAuthenticatedCached();
+
+      filtered.forEach((vehicle, idx) => {
+        const currentVehicleKey = getVehicleKey(vehicle);
+        const movingMeta = getMovingMeta(vehicle);
+
+          const focusHandler = (payload = {}) => {
+            const markerVehicle = payload?.marker?.options?.vehicleData || null;
+            const markerVehicleKey = `${payload?.marker?.options?.vehicleKey || ''}`.trim();
+            const payloadVehicle = payload?.vehicle || markerVehicle || vehicle;
+            const resolvedVehicleKey = `${markerVehicleKey || getVehicleKey(payloadVehicle) || currentVehicleKey}`.trim();
+            const currentVehicle = (resolvedVehicleKey ? findVehicleByKey(resolvedVehicleKey) : null) || payloadVehicle || vehicle;
+            if (!currentVehicle) return;
+            const originalEvent = payload?.event?.originalEvent;
+            const vehicleSelectionMatchesKey = !selectedVehicleKey || `${selectedVehicleKey}` === resolvedVehicleKey;
+            const vehicleSelectionChanged = (
+              `${selectedVehicleId ?? ''}` !== `${currentVehicle.id}`
+              || !vehicleSelectionMatchesKey
+            );
+            if (originalEvent) {
+              originalEvent.handledByMarker = true;
+              originalEvent.cycleRole = 'vehicle';
+              originalEvent.cycleKey = `vehicle-${resolvedVehicleKey}`;
+              originalEvent.vehicleSelectionChanged = vehicleSelectionChanged;
+            }
+            if (!vehicleSelectionChanged) {
+              if (payload?.marker && typeof payload.marker.openPopup === 'function') {
+                payload.marker.openPopup();
+              } else {
+                focusVehicle(currentVehicle, { autoExpandSidebarCard: true });
+              }
+              return;
+            }
+            focusVehicle(currentVehicle, { autoExpandSidebarCard: true });
+          };
+
+          const coordsInfo = getVehicleMapCoords(vehicle);
+          const coords = { lat: coordsInfo.lat, lng: coordsInfo.lng };
+          if (coordsInfo.isFallback) {
+            vehicle.locationAccuracy = 'missing';
+            vehicle.locationNote = MISSING_VEHICLE_GPS_NOTE;
+          } else {
+            vehicle.locationAccuracy = vehicle.locationAccuracy || 'exact';
+            vehicle.locationNote = getLocationNote(vehicle.locationAccuracy);
+>>>>>>> impte
           }
 
           if (coords && vehicleMarkersVisible) {
@@ -2081,6 +8596,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             : 'rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 flex items-center gap-2 text-slate-200';
           const gpsIconClasses = hasNoGps ? 'h-3 w-3 text-red-300' : 'h-3 w-3 text-amber-300';
           const gpsReasonClasses = hasNoGps ? 'text-[10px] text-red-200/90' : 'text-[10px] text-slate-400';
+<<<<<<< HEAD
           card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
           card.dataset.id = vehicle.id;
           card.dataset.type = 'vehicle';
@@ -2106,6 +8622,76 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 </div>
               </div>
             </div>
+=======
+          const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
+          const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
+          const oldestOpenInvoiceDateLabel = escapeHTML(vehicle.oldestOpenInvoiceDateDisplay || '—');
+          const ptLastReadLabel = formatDateTime(
+            vehicle.lastRead
+            ?? vehicle?.details?.pt_last_read
+            ?? vehicle?.details?.['PT Last Read']
+          );
+          const ptFirstReadLabel = formatDateTime(
+            vehicle.firstRead
+            ?? vehicle?.details?.pt_first_read
+            ?? vehicle?.details?.['PT First Read']
+            ?? vehicle?.details?.pt_first_trip
+            ?? vehicle?.details?.['PT First Trip']
+          );
+          const locationDisplay = formatVehicleSidebarAddress(
+            vehicle.shortLocation || vehicle.lastLocation || '',
+            vehicle.zipcode || ''
+          );
+          const isOnRev = Boolean(
+            checkedVehicleStateByVin.get(getVehicleVin(vehicle)) ?? checkedVehicleIds.has(vehicle.id)
+          );
+          const daysParkedBadge = getDaysParkedBadgePresentation(vehicle, maxDaysParkedAcrossVehicles);
+          const isExpanded = isVehicleCardExpanded(currentVehicleKey);
+          const expandChevron = isExpanded ? '▾' : '▸';
+          card.className = 'p-3 rounded-lg border border-slate-800 bg-slate-900/80 hover:border-amber-500/80 transition-all cursor-pointer shadow-sm hover:shadow-amber-500/20 backdrop-blur space-y-3';
+          card.dataset.id = currentVehicleKey;
+          card.dataset.vehicleKey = currentVehicleKey;
+          card.dataset.vehicleId = `${vehicle.id ?? ''}`;
+          card.dataset.type = 'vehicle';
+          card.innerHTML = `
+            <div class="relative">
+              <div class="min-w-0 space-y-1">
+                <div class="space-y-1 pr-10">
+                <p class="truncate text-[10px] font-black uppercase tracking-[0.15em] text-amber-300">${vehicle.model} <span class="text-amber-100">${vehicle.year || '—'}</span></p>
+                <h3 class="truncate font-extrabold text-white text-sm leading-tight">${vehicle.vin || 'VIN N/A'}</h3>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-0.5 text-[10px]">
+                  <span class="inline-flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-500/10 px-2 py-1 font-bold text-amber-100">${vehicle.dealStatus || vehicle.status || 'ACTIVE'}</span>
+                  <span class="inline-flex items-center gap-2 rounded-full border border-slate-800 px-2 py-1 font-semibold ${movingMeta.text} ${movingMeta.bg}">
+                    <span class="w-2 h-2 rounded-full ${movingMeta.dot}"></span>
+                    <span>${movingMeta.label}</span>
+                  </span>
+                  <span class="rounded-full border px-2 py-1 font-semibold" style="${daysParkedBadge.badgeStyle}">
+                    <span style="${daysParkedBadge.labelStyle}">Days Parked </span><span style="${daysParkedBadge.valueStyle}">${getDaysParkedDisplay(vehicle)}</span>
+                  </span>
+                  <label class="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-700 bg-slate-950/70 px-2 py-1 text-[10px] font-semibold text-slate-300 leading-none">
+                    <span>on rev?</span>
+                    <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${isOnRev ? 'checked' : ''}>
+                  </label>
+                </div>
+                <div class="flex items-center justify-between gap-2">
+                  <p class="min-w-0 text-[11px] text-blue-200 font-semibold">Customer ID: <span class="truncate text-slate-100">${vehicle.customerId || '—'}</span></p>
+                  <span class="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-100">
+                    <span class="text-emerald-200/80">Avg mi/day</span>
+                    <span class="text-slate-50" data-field="avg-moving-miles-day">${getAvgMovingMilesPerDayDisplay(vehicle)}</span>
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-action="vehicle-expand-toggle"
+                aria-expanded="${isExpanded ? 'true' : 'false'}"
+                class="absolute right-0 top-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-700 bg-slate-950/70 text-sm font-bold text-slate-300 transition hover:border-amber-400 hover:text-amber-200"
+                title="${isExpanded ? 'Collapse vehicle card' : 'Expand vehicle card'}"
+              >${expandChevron}</button>
+            </div>
+            ${isExpanded ? `
+>>>>>>> impte
             <div class="grid grid-cols-2 gap-2 text-[11px]">
               <div class="${gpsCardClasses}">
                 ${svgIcon('wifiOff', gpsIconClasses)}
@@ -2115,6 +8701,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 </div>
               </div>
               <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 flex items-center gap-2 text-slate-200">
+<<<<<<< HEAD
                 ${svgIcon('hash', 'h-3 w-3 text-blue-400')}
                 <div class="text-left leading-tight">
                   <p class="font-semibold">VIN</p>
@@ -2127,6 +8714,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                 <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
                   <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
                   <p class="text-[11px] font-semibold text-slate-100">${vehicle.payKpiDisplay || '—'}</p>
+=======
+                ${svgIcon('clock', 'h-3 w-3 text-blue-400')}
+                <div class="text-left leading-tight">
+                  <p class="text-[10px] text-slate-400">Last ${ptLastReadLabel}</p>
+                  <p class="text-[10px] text-slate-500">First ${ptFirstReadLabel}</p>
+                </div>
+              </div>
+            </div>
+              <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] text-slate-200 space-y-2">
+                <p class="text-[11px] text-slate-400 flex items-center gap-1">${svgIcon('mapPin')} ${escapeHTML(locationDisplay)}</p>
+                ${vehicle.locationNote ? `<p class="text-[10px] text-amber-200 font-semibold">${vehicle.locationNote}</p>` : ''}
+                <div class="grid grid-cols-4 gap-2">
+                <div class="rounded border border-slate-800 bg-slate-900 px-2 py-1.5">
+                  <p class="text-[9px] uppercase text-slate-500 font-bold">Pay KPI</p>
+                  <p class="text-[11px] font-semibold text-slate-100">${vehicle.payKpiDisplay || '—'}</p>
+                  <p class="text-[9px] text-slate-400 mt-0.5">${oldestOpenInvoiceDateLabel}</p>
+>>>>>>> impte
                 </div>
                 <div class="rounded border px-2 py-1.5 ${prepStatusStyles.card}">
                   <p class="text-[9px] uppercase font-bold ${prepStatusStyles.label}">Prep</p>
@@ -2141,17 +8745,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   <p class="text-[11px] font-semibold ${ptStatusStyles.value}">${vehicle.ptStatus || '—'}</p>
                 </div>
               </div>
+<<<<<<< HEAD
               <div class="flex items-center justify-between text-[11px] text-slate-400">
                 <span class="flex items-center gap-2 font-semibold text-slate-200">${svgIcon('clock', 'h-3 w-3')} PT Last Read ${formatDateTime(vehicle.lastRead)}</span>
+=======
+              <div class="flex items-center justify-end text-[11px] text-slate-400">
+>>>>>>> impte
                 <span class="text-slate-400">${vehicle.payment || ''}</span>
               </div>
             </div>
             <div class="pt-1 flex items-end justify-between gap-2">
               <div class="flex flex-col items-start gap-1">
+<<<<<<< HEAD
                 <label class="inline-flex flex-col items-start gap-1 text-[10px] font-semibold text-slate-300 leading-tight">
                   <span>on rev?</span>
                   <input type="checkbox" data-action="vehicle-select-checkbox" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-amber-400 focus:ring-amber-400" ${(checkedVehicleStateByVin.get(getVehicleVin(vehicle)) ?? checkedVehicleIds.has(vehicle.id)) ? 'checked' : ''}>
                 </label>
+=======
+>>>>>>> impte
                 <p data-action="vehicle-select-last-click" class="text-[9px] text-slate-500">${(checkedVehicleClickTimes.get(vehicle.id) || checkedVehicleClickTimesByVin.get(getVehicleVin(vehicle))) ? formatDateTime(checkedVehicleClickTimes.get(vehicle.id) || checkedVehicleClickTimesByVin.get(getVehicleVin(vehicle))) : '--'}</p>
               </div>
               <div class="flex items-center justify-end gap-2">
@@ -2159,10 +8770,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   ${svgIcon('info', 'h-3.5 w-3.5')}
                   See more
                 </button>
+<<<<<<< HEAD
                 <button type="button" data-action="repair-history" class="inline-flex items-center gap-1.5 rounded-lg border border-blue-400/50 bg-blue-500/15 px-3 py-1 text-[10px] font-bold text-blue-100 hover:bg-blue-500/25 transition-colors">Service History</button>
                 <button type="button" data-action="gps-history" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[10px] font-bold text-emerald-100 hover:bg-emerald-500/25 transition-colors">GPS Historic</button>
               </div>
             </div>
+=======
+                ${canOpenRepairHistory
+                  ? '<button type="button" data-action="repair-history" class="inline-flex items-center gap-1.5 rounded-lg border border-blue-400/50 bg-blue-500/15 px-3 py-1 text-[10px] font-bold text-blue-100 hover:bg-blue-500/25 transition-colors">Service History</button>'
+                  : ''}
+                <button type="button" data-action="gps-history" class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-3 py-1 text-[10px] font-bold text-emerald-100 hover:bg-emerald-500/25 transition-colors">GPS Historic</button>
+              </div>
+            </div>
+            ` : ''}
+>>>>>>> impte
           `;
 
           const selectCheckbox = card.querySelector('[data-action="vehicle-select-checkbox"]');
@@ -2205,7 +8826,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           if (repairHistoryButton) {
             repairHistoryButton.addEventListener('click', (event) => {
               event.stopPropagation();
+<<<<<<< HEAD
               openRepairModal(vehicle);
+=======
+              void openRepairModal(vehicle);
+>>>>>>> impte
             });
           }
 
@@ -2229,11 +8854,22 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
         container.replaceChildren(fragment);
 
+<<<<<<< HEAD
+=======
+        if (renderAnchor || previousScrollTop !== null) {
+          restoreVehicleListAnchor(container, {
+            anchor: normalizedRenderAnchor,
+            fallbackScrollTop: previousScrollTop
+          });
+        }
+
+>>>>>>> impte
         syncVehicleMarkers({
           vehiclesWithCoords: vehiclesForMarkers,
           vehicleLayer,
           vehicleMarkers,
           visible: vehicleMarkersVisible,
+<<<<<<< HEAD
           getVehicleMarkerColor,
           getVehicleMarkerBorderColor,
           isVehicleNotMoving
@@ -2249,12 +8885,45 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const storedMarker = vehicleMarkers.get(vehicle.id)?.marker;
       const markerColor = getVehicleMarkerColor(vehicle);
       const anchorMarker = storedMarker || L.circleMarker([vehicle.lat, vehicle.lng], {
+=======
+          getVehicleMarkerKey: getVehicleKey,
+          getVehicleMarkerColor,
+          getVehicleMarkerBorderColor,
+          isVehicleNotMoving,
+          getVehicleMarkerOpacity: getVehicleMarkerOpacityByLastPing,
+          getVehicleMarkerHeading
+        });
+        void preloadVisibleVehicleMarkerHeadings(filtered);
+      }
+
+    function focusVehicle(vehicle, { autoExpandSidebarCard = false } = {}) {
+      const trailRequestId = ++gpsTrailRequestCounter;
+      if (!vehicle) return;
+      if (!vehicleMarkersVisible) return;
+      const vehicleCoords = getVehicleMapCoords(vehicle);
+      clearParkingSpotCascade();
+      resetRouteSegmentState({ clearEntries: true });
+      highlightLayer.clearLayers();
+      gpsTrailLayer?.clearLayers();
+
+      const vehicleKey = getVehicleKey(vehicle);
+      const shouldAutoExpandCard = Boolean(autoExpandSidebarCard && vehicleKey);
+      if (shouldAutoExpandCard) {
+        pinVehicleListCardPosition(vehicleKey);
+        expandedVehicleCardKeys.add(vehicleKey);
+        void hydrateVehicleAverageMovingMilesPerDay(vehicle);
+      }
+      const storedMarker = vehicleMarkers.get(vehicleKey)?.marker;
+      const markerColor = getVehicleMarkerColor(vehicle);
+      const anchorMarker = storedMarker || L.circleMarker([vehicleCoords.lat, vehicleCoords.lng], {
+>>>>>>> impte
         radius: 9,
         color: '#0b1220',
         weight: 2.8,
         fillColor: markerColor,
         fillOpacity: 0.95,
         opacity: 0.98,
+<<<<<<< HEAD
         className: 'vehicle-dot'
       }).addTo(highlightLayer);
 
@@ -2302,6 +8971,36 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const pct = parseDealCompletion(value);
       if (!Number.isFinite(pct)) return min <= 0; // allow unknowns only when the range starts at 0
       return pct >= min && pct <= max;
+=======
+        className: 'vehicle-dot',
+        cycleRole: 'vehicle',
+        vehicleKey,
+        cycleKey: `vehicle-${vehicleKey}`
+      }).addTo(highlightLayer);
+
+      const halo = L.circleMarker([vehicleCoords.lat, vehicleCoords.lng], { radius: 12, color: markerColor, weight: 1.2, fillColor: markerColor, fillOpacity: 0.18 }).addTo(highlightLayer);
+      halo.bringToBack();
+
+      syncFocusedVehicleNotMovingBadge(vehicle);
+
+      showServicesFromOrigin(vehicle, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
+      const needsSelectionUpdate = (
+        `${selectedVehicleId ?? ''}` !== `${vehicle.id ?? ''}`
+        || `${selectedVehicleKey ?? ''}` !== `${vehicleKey}`
+      );
+      void renderVehicleGpsTrail(vehicle, trailRequestId);
+      if (needsSelectionUpdate) {
+        applySelection(vehicle.id, null, vehicleKey);
+      }
+    }
+
+    function matchesDealCompletionFilter(value, operator, threshold) {
+      const pct = parseDealCompletion(value);
+      if (!Number.isFinite(threshold)) return true;
+      if (!Number.isFinite(pct)) return false;
+      if (operator === 'lt') return pct < threshold;
+      return pct > threshold;
+>>>>>>> impte
     }
 
     const EMPTY_FILTER_VALUE = '__empty__';
@@ -2313,20 +9012,44 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const invPrep = normalizeFilterValue(vehicle.invPrepStatus);
       if (vehicleFilters.invPrep.length && !vehicleFilters.invPrep.includes(invPrep)) return false;
 
+<<<<<<< HEAD
       const gpsFixValue = normalizeFilterValue(vehicle.gpsFix) || EMPTY_FILTER_VALUE;
       if (vehicleFilters.gpsFix.length && !vehicleFilters.gpsFix.includes(gpsFixValue)) return false;
 
       const dealStatus = normalizeFilterValue(vehicle.status);
+=======
+      const physicalLocation = normalizeFilterValue(vehicle.physicalLocation);
+      if (vehicleFilters.physLoc.length && !vehicleFilters.physLoc.includes(physicalLocation)) return false;
+
+      const gpsFixValue = normalizeFilterValue(vehicle.gpsFix) || EMPTY_FILTER_VALUE;
+      if (vehicleFilters.gpsFix.length && !vehicleFilters.gpsFix.includes(gpsFixValue)) return false;
+
+      const dealStatus = normalizeFilterValue(vehicle.dealStatus ?? vehicle.status);
+>>>>>>> impte
       if (vehicleFilters.dealStatus.length && !vehicleFilters.dealStatus.includes(dealStatus)) return false;
 
       const ptStatus = normalizeFilterValue(vehicle.ptStatus);
       if (vehicleFilters.ptStatus.length && !vehicleFilters.ptStatus.includes(ptStatus)) return false;
 
+<<<<<<< HEAD
       if (!matchesRange(vehicle.dealCompletion, vehicleFilters.dealMin, vehicleFilters.dealMax)) return false;
+=======
+      if (!matchesDealCompletionFilter(vehicle.dealCompletion, vehicleFilters.dealOperator, vehicleFilters.dealValue)) return false;
+>>>>>>> impte
 
       const movingStatus = getMovingStatus(vehicle);
       if (vehicleFilters.moving.length && !vehicleFilters.moving.includes(movingStatus)) return false;
 
+<<<<<<< HEAD
+=======
+      if (vehicleFilters.payKpiPositiveOnly) {
+        const payKpi = Number(vehicle?.payKpi);
+        if (!Number.isFinite(payKpi) || payKpi <= 0) return false;
+      }
+
+      if (vehicleFilters.stalePingOnly && !isVehicleMarkerStaleByLastPing(vehicle)) return false;
+
+>>>>>>> impte
       return true;
     }
 
@@ -2340,7 +9063,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         .filter(hasValidCoords)
         .map(v => ({
           vehicle: v,
+<<<<<<< HEAD
           distance: getDistance(v.lat, v.lng, tech.lat, tech.lng)
+=======
+          distance: getMapTravelDistanceMiles(v, tech)
+>>>>>>> impte
         }));
       return withDistance
         .filter(item => item.distance <= 180)
@@ -2349,6 +9076,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function getDaysParkedValue(vehicle) {
+<<<<<<< HEAD
       const raw = vehicle?.daysStationary ?? vehicle?.details?.days_stationary ?? vehicle?.details?.['Days Parked'];
       if (typeof raw === 'number') return Number.isFinite(raw) ? raw : Number.NEGATIVE_INFINITY;
       if (typeof raw === 'string') {
@@ -2357,6 +9085,110 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (Number.isFinite(parsed)) return parsed;
       }
       return Number.NEGATIVE_INFINITY;
+=======
+      const historyOverride = parseDaysParkedCandidate(
+        vehicle?.historyDaysStationaryOverride
+        ?? vehicle?.details?.historyDaysStationaryOverride
+      );
+      if (Number.isFinite(historyOverride)) return historyOverride;
+
+      const raw = vehicle?.daysStationary
+        ?? vehicle?.details?.days_stationary
+        ?? vehicle?.details?.['Days Stationary']
+        ?? vehicle?.details?.['Days stationary']
+        ?? vehicle?.details?.['Days Parked'];
+      const parsedDays = parseDaysParkedCandidate(raw);
+      if (!Number.isFinite(parsedDays)) return Number.NEGATIVE_INFINITY;
+
+      const lastPingMs = getVehicleLastPingTimestampMs(vehicle);
+      const isLastPingStale = Number.isFinite(lastPingMs)
+        && (Date.now() - lastPingMs) > GPS_MOVING_UNKNOWN_STALE_READ_MS;
+      if (isLastPingStale && getMovingStatus(vehicle) !== 'stopped') {
+        return 0;
+      }
+
+      return parsedDays;
+    }
+
+    function getDaysParkedDisplay(vehicle) {
+      const days = getDaysParkedValue(vehicle);
+      if (!Number.isFinite(days)) return '—';
+      return `${Math.max(0, Math.floor(days))}`;
+    }
+
+    function getAvgMovingMilesPerDayValue(vehicle) {
+      const raw = vehicle?.avgMovingMilesPerDay ?? vehicle?.details?.avgMovingMilesPerDay;
+      const numeric = Number(raw);
+      return Number.isFinite(numeric) && numeric >= 0 ? numeric : Number.NEGATIVE_INFINITY;
+    }
+
+    function getAvgMovingMilesPerDayDisplay(vehicle) {
+      const miles = getAvgMovingMilesPerDayValue(vehicle);
+      if (!Number.isFinite(miles)) return '—';
+      if (miles >= 100) return `${Math.round(miles)} mi`;
+      if (miles >= 10) return `${miles.toFixed(1)} mi`;
+      return `${miles.toFixed(2)} mi`;
+    }
+
+    function getMaxDaysParkedAcrossVehicles(list = []) {
+      if (!Array.isArray(list) || !list.length) return 0;
+      return list.reduce((maxDays, vehicle) => {
+        const days = getDaysParkedValue(vehicle);
+        if (!Number.isFinite(days)) return maxDays;
+        return Math.max(maxDays, Math.max(0, days));
+      }, 0);
+    }
+
+    function getDaysParkedBadgePresentation(vehicle, maxDaysParked = 0) {
+      const days = getDaysParkedValue(vehicle);
+      if (!Number.isFinite(days)) {
+        return {
+          badgeStyle: 'border-color:rgba(51,65,85,0.9);background:rgba(2,6,23,0.7);box-shadow:none;',
+          labelStyle: 'color:#cbd5e1;',
+          valueStyle: 'color:#f8fafc;'
+        };
+      }
+
+      const safeDays = Math.max(0, days);
+      const progress = maxDaysParked > 0
+        ? clampUnitInterval(safeDays / maxDaysParked)
+        : 0;
+      const backgroundRgb = interpolateTrailRgb(
+        { r: 15, g: 23, b: 42 },
+        { r: 185, g: 28, b: 28 },
+        progress
+      );
+      const borderRgb = interpolateTrailRgb(
+        { r: 51, g: 65, b: 85 },
+        { r: 252, g: 165, b: 165 },
+        progress
+      );
+      const labelRgb = interpolateTrailRgb(
+        { r: 203, g: 213, b: 225 },
+        { r: 254, g: 226, b: 226 },
+        progress
+      );
+      const valueRgb = interpolateTrailRgb(
+        { r: 248, g: 250, b: 252 },
+        { r: 255, g: 255, b: 255 },
+        progress
+      );
+      const glowRgb = interpolateTrailRgb(
+        { r: 30, g: 41, b: 59 },
+        { r: 239, g: 68, b: 68 },
+        progress
+      );
+
+      return {
+        badgeStyle: [
+          `border-color:${rgbToRgba(borderRgb, interpolateNumber(0.45, 0.95, progress))}`,
+          `background:${rgbToRgba(backgroundRgb, interpolateNumber(0.22, 0.82, progress))}`,
+          `box-shadow:0 0 0 1px ${rgbToRgba(glowRgb, interpolateNumber(0.08, 0.24, progress))}`
+        ].join(';'),
+        labelStyle: `color:${rgbToHex(labelRgb)};`,
+        valueStyle: `color:${rgbToHex(valueRgb)};`
+      };
+>>>>>>> impte
     }
 
     function sortVehiclesByDaysParked(list) {
@@ -2373,6 +9205,49 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return [...list].sort((a, b) => Number(isVehicleOnRevChecked(b)) - Number(isVehicleOnRevChecked(a)));
     }
 
+<<<<<<< HEAD
+=======
+    function getPayKpiValue(vehicle) {
+      const value = Number(vehicle?.payKpi);
+      return Number.isFinite(value) ? value : Number.NEGATIVE_INFINITY;
+    }
+
+    function sortVehiclesByPayKpiDesc(list) {
+      return [...list].sort((a, b) => getPayKpiValue(b) - getPayKpiValue(a));
+    }
+
+    function sortVehiclesMissingCoordsLast(list) {
+      return list
+        .map((vehicle, index) => ({ vehicle, index }))
+        .sort((left, right) => {
+          const leftHasCoords = hasValidCoords(left.vehicle);
+          const rightHasCoords = hasValidCoords(right.vehicle);
+          if (leftHasCoords !== rightHasCoords) {
+            return leftHasCoords ? -1 : 1;
+          }
+          return left.index - right.index;
+        })
+        .map((entry) => entry.vehicle);
+    }
+
+    function hasActiveVehicleSidebarRefinements(query = '') {
+      const normalizedQuery = `${query ?? ''}`.trim();
+      return Boolean(
+        normalizedQuery
+        || selectedTechId !== null
+        || vehicleFilters.invPrep.length
+        || vehicleFilters.physLoc.length
+        || vehicleFilters.gpsFix.length
+        || vehicleFilters.moving.length
+        || vehicleFilters.dealStatus.length
+        || vehicleFilters.ptStatus.length
+        || Number.isFinite(vehicleFilters.dealValue)
+        || vehicleFilters.payKpiPositiveOnly
+        || vehicleFilters.stalePingOnly
+      );
+    }
+
+>>>>>>> impte
     function getUniqueVehicleValues(field, { includeEmpty = false } = {}) {
       const values = new Set();
       let hasEmpty = false;
@@ -2410,7 +9285,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       container.innerHTML = '';
       if (!values.length) {
         const empty = document.createElement('p');
+<<<<<<< HEAD
         empty.className = 'text-[10px] text-slate-600';
+=======
+        empty.className = 'text-[9px] text-slate-600';
+>>>>>>> impte
         empty.textContent = 'No options';
         container.appendChild(empty);
         return;
@@ -2418,13 +9297,21 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       values.forEach((value) => {
         const label = document.createElement('label');
+<<<<<<< HEAD
         label.className = 'flex items-center gap-1.5 text-[10px] text-slate-200';
+=======
+        label.className = 'flex items-center gap-1 text-[9px] text-slate-200';
+>>>>>>> impte
 
         const input = document.createElement('input');
         input.type = 'checkbox';
         input.value = value;
         input.checked = selections.includes(value);
+<<<<<<< HEAD
         input.className = 'h-3 w-3 rounded border border-slate-700 bg-slate-950 text-amber-400 focus:ring-1 focus:ring-amber-400';
+=======
+        input.className = 'h-2.5 w-2.5 rounded border border-slate-700 bg-slate-950 text-amber-400 focus:ring-1 focus:ring-amber-400';
+>>>>>>> impte
 
         const span = document.createElement('span');
         span.textContent = labelResolver(value);
@@ -2437,18 +9324,38 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function updateVehicleFilterOptions() {
       const invPrepValues = getUniqueVehicleValues('invPrepStatus');
+<<<<<<< HEAD
       const gpsValues = getUniqueVehicleValues('gpsFix', { includeEmpty: true });
       const dealStatusValues = getUniqueVehicleValues('status');
+=======
+      const physicalLocationValues = getUniqueVehicleValues('physicalLocation');
+      const gpsValues = getUniqueVehicleValues('gpsFix', { includeEmpty: true });
+      const dealStatusValues = Array.from(
+        new Set(
+          vehicles
+            .map((vehicle) => normalizeFilterValue(vehicle.dealStatus ?? vehicle.status))
+            .filter(Boolean)
+        )
+      ).sort();
+>>>>>>> impte
       const ptValues = getUniqueVehicleValues('ptStatus');
       const movingValues = getMovingOptions();
 
       vehicleFilters.invPrep = normalizeFilterSelections(invPrepValues, vehicleFilters.invPrep);
+<<<<<<< HEAD
+=======
+      vehicleFilters.physLoc = normalizeFilterSelections(physicalLocationValues, vehicleFilters.physLoc);
+>>>>>>> impte
       vehicleFilters.gpsFix = normalizeFilterSelections(gpsValues, vehicleFilters.gpsFix);
       vehicleFilters.dealStatus = normalizeFilterSelections(dealStatusValues, vehicleFilters.dealStatus);
       vehicleFilters.ptStatus = normalizeFilterSelections(ptValues, vehicleFilters.ptStatus);
       vehicleFilters.moving = normalizeFilterSelections(movingValues, vehicleFilters.moving);
 
       renderCheckboxOptions('filter-invprep', invPrepValues, vehicleFilters.invPrep);
+<<<<<<< HEAD
+=======
+      renderCheckboxOptions('filter-physloc', physicalLocationValues, vehicleFilters.physLoc);
+>>>>>>> impte
       renderCheckboxOptions('filter-gps', gpsValues, vehicleFilters.gpsFix, (value) => getGpsFixLabel(value, EMPTY_FILTER_VALUE));
       renderCheckboxOptions('filter-deal-status', dealStatusValues, vehicleFilters.dealStatus);
       renderCheckboxOptions('filter-pt', ptValues, vehicleFilters.ptStatus);
@@ -2474,6 +9381,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function updateVehicleFilterLabels() {
       updateVehicleFilterLabel('filter-invprep-toggle', vehicleFilters.invPrep);
+<<<<<<< HEAD
+=======
+      updateVehicleFilterLabel('filter-physloc-toggle', vehicleFilters.physLoc);
+>>>>>>> impte
       updateVehicleFilterLabel('filter-gps-toggle', vehicleFilters.gpsFix, (value) => getGpsFixLabel(value, EMPTY_FILTER_VALUE));
       updateVehicleFilterLabel('filter-moving-toggle', vehicleFilters.moving, getMovingLabel);
       updateVehicleFilterLabel('filter-deal-status-toggle', vehicleFilters.dealStatus);
@@ -2482,12 +9393,24 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     function syncVehicleFilterInputs() {
       const invPrepContainer = document.getElementById('filter-invprep');
+<<<<<<< HEAD
+=======
+      const physLocContainer = document.getElementById('filter-physloc');
+>>>>>>> impte
       const gpsContainer = document.getElementById('filter-gps');
       const movingContainer = document.getElementById('filter-moving');
       const dealStatusContainer = document.getElementById('filter-deal-status');
       const ptContainer = document.getElementById('filter-pt');
+<<<<<<< HEAD
       const minInput = document.getElementById('filter-deal-min');
       const maxInput = document.getElementById('filter-deal-max');
+=======
+      const dealOperatorInput = document.getElementById('filter-deal-operator');
+      const dealValueInput = document.getElementById('filter-deal-value');
+      const trailPointsInput = document.getElementById('filter-trail-points');
+      const kpiPositiveToggle = document.getElementById('filter-kpi-positive-toggle');
+      const stalePingToggle = document.getElementById('filter-stale-ping-toggle');
+>>>>>>> impte
 
       const syncCheckboxes = (container, selections) => {
         if (!container) return;
@@ -2497,29 +9420,85 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       };
 
       syncCheckboxes(invPrepContainer, vehicleFilters.invPrep);
+<<<<<<< HEAD
+=======
+      syncCheckboxes(physLocContainer, vehicleFilters.physLoc);
+>>>>>>> impte
       syncCheckboxes(gpsContainer, vehicleFilters.gpsFix);
       syncCheckboxes(movingContainer, vehicleFilters.moving);
       syncCheckboxes(dealStatusContainer, vehicleFilters.dealStatus);
       syncCheckboxes(ptContainer, vehicleFilters.ptStatus);
+<<<<<<< HEAD
       if (minInput) minInput.value = vehicleFilters.dealMin;
       if (maxInput) maxInput.value = vehicleFilters.dealMax;
+=======
+      if (dealOperatorInput) dealOperatorInput.value = vehicleFilters.dealOperator === 'lt' ? 'lt' : 'gt';
+      if (dealValueInput) dealValueInput.value = Number.isFinite(vehicleFilters.dealValue) ? String(vehicleFilters.dealValue) : '';
+      if (trailPointsInput) trailPointsInput.value = String(vehicleFilters.trailPoints);
+      if (kpiPositiveToggle) {
+        const isActive = Boolean(vehicleFilters.payKpiPositiveOnly);
+        const stateLabel = kpiPositiveToggle.querySelector('[data-kpi-filter-state]');
+        kpiPositiveToggle.setAttribute('aria-pressed', String(isActive));
+        kpiPositiveToggle.classList.toggle('border-emerald-400/60', isActive);
+        kpiPositiveToggle.classList.toggle('bg-emerald-500/20', isActive);
+        kpiPositiveToggle.classList.toggle('text-emerald-100', isActive);
+        kpiPositiveToggle.classList.toggle('border-slate-800', !isActive);
+        kpiPositiveToggle.classList.toggle('bg-slate-950', !isActive);
+        kpiPositiveToggle.classList.toggle('text-slate-300', !isActive);
+        if (stateLabel) {
+          stateLabel.textContent = isActive ? 'On' : 'Off';
+          stateLabel.classList.toggle('text-emerald-200', isActive);
+          stateLabel.classList.toggle('text-slate-500', !isActive);
+        }
+      }
+      if (stalePingToggle) {
+        const isActive = Boolean(vehicleFilters.stalePingOnly);
+        const stateLabel = stalePingToggle.querySelector('[data-stale-filter-state]');
+        stalePingToggle.setAttribute('aria-pressed', String(isActive));
+        stalePingToggle.classList.toggle('border-slate-400/70', isActive);
+        stalePingToggle.classList.toggle('bg-slate-700/45', isActive);
+        stalePingToggle.classList.toggle('text-slate-100', isActive);
+        stalePingToggle.classList.toggle('border-slate-800', !isActive);
+        stalePingToggle.classList.toggle('bg-slate-950', !isActive);
+        stalePingToggle.classList.toggle('text-slate-300', !isActive);
+        if (stateLabel) {
+          stateLabel.textContent = isActive ? 'On' : 'Off';
+          stateLabel.classList.toggle('text-slate-200', isActive);
+          stateLabel.classList.toggle('text-slate-500', !isActive);
+        }
+      }
+>>>>>>> impte
       updateVehicleFilterLabels();
     }
 
     function resetVehicleFilters() {
       vehicleFilters.invPrep = [];
+<<<<<<< HEAD
+=======
+      vehicleFilters.physLoc = [];
+>>>>>>> impte
       vehicleFilters.gpsFix = [];
       vehicleFilters.moving = [];
       vehicleFilters.dealStatus = [];
       vehicleFilters.ptStatus = [];
+<<<<<<< HEAD
       vehicleFilters.dealMin = 0;
       vehicleFilters.dealMax = 100;
+=======
+      vehicleFilters.dealOperator = 'gt';
+      vehicleFilters.dealValue = null;
+      vehicleFilters.trailPoints = DEFAULT_GPS_TRAIL_POINT_LIMIT;
+      vehicleFilters.payKpiPositiveOnly = false;
+      vehicleFilters.stalePingOnly = false;
+      gpsTrailPointLimit = DEFAULT_GPS_TRAIL_POINT_LIMIT;
+>>>>>>> impte
       syncVehicleFilterInputs();
       renderVehicles();
       persistVehicleFilterPrefs();
     }
 
     function bindVehicleFilterDropdowns() {
+<<<<<<< HEAD
       const dropdowns = [
         { toggleId: 'filter-invprep-toggle', panelId: 'filter-invprep-panel' },
         { toggleId: 'filter-gps-toggle', panelId: 'filter-gps-panel' },
@@ -2529,6 +9508,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       ];
 
       const entries = dropdowns
+=======
+      const entries = VEHICLE_FILTER_DROPDOWN_IDS
+>>>>>>> impte
         .map(({ toggleId, panelId }) => ({
           toggle: document.getElementById(toggleId),
           panel: document.getElementById(panelId)
@@ -2548,6 +9530,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       entries.forEach(({ toggle, panel }) => {
         toggle.addEventListener('click', (event) => {
           event.preventDefault();
+<<<<<<< HEAD
+=======
+          if (vehicleFiltersCollapsed) return;
+>>>>>>> impte
           const isHidden = panel.classList.contains('hidden');
           closeAll(isHidden ? panel : null);
           panel.classList.toggle('hidden', !isHidden);
@@ -2565,6 +9551,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function bindVehicleFilterHandlers() {
       const checkboxHandlers = [
         { id: 'filter-invprep', key: 'invPrep' },
+<<<<<<< HEAD
+=======
+        { id: 'filter-physloc', key: 'physLoc' },
+>>>>>>> impte
         { id: 'filter-gps', key: 'gpsFix' },
         { id: 'filter-moving', key: 'moving' },
         { id: 'filter-deal-status', key: 'dealStatus' },
@@ -2585,6 +9575,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
       });
 
+<<<<<<< HEAD
       const minInput = document.getElementById('filter-deal-min');
       const maxInput = document.getElementById('filter-deal-max');
       [minInput, maxInput].forEach((input, idx) => {
@@ -2606,6 +9597,70 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           persistVehicleFilterPrefs();
         });
       });
+=======
+      const dealOperatorInput = document.getElementById('filter-deal-operator');
+      const dealValueInput = document.getElementById('filter-deal-value');
+      if (dealOperatorInput) {
+        dealOperatorInput.addEventListener('change', () => {
+          vehicleFilters.dealOperator = dealOperatorInput.value === 'lt' ? 'lt' : 'gt';
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
+
+      if (dealValueInput) {
+        dealValueInput.addEventListener('input', () => {
+          const val = parseFloat(dealValueInput.value);
+          vehicleFilters.dealValue = Number.isFinite(val)
+            ? Math.max(0, Math.min(val, 100))
+            : null;
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
+
+      const trailPointsInput = document.getElementById('filter-trail-points');
+      if (trailPointsInput) {
+        const applyTrailPoints = () => {
+          const parsed = Number.parseInt(trailPointsInput.value, 10);
+          const nextLimit = Number.isFinite(parsed)
+            ? Math.max(MIN_GPS_TRAIL_POINT_LIMIT, Math.min(parsed, MAX_GPS_TRAIL_POINT_LIMIT))
+            : DEFAULT_GPS_TRAIL_POINT_LIMIT;
+          vehicleFilters.trailPoints = nextLimit;
+          gpsTrailPointLimit = nextLimit;
+          trailPointsInput.value = String(nextLimit);
+          persistVehicleFilterPrefs();
+
+          const selectedVehicle = getSelectedVehicleEntry();
+          if (selectedVehicle && vehicleMarkersVisible) {
+            focusVehicle(selectedVehicle);
+          }
+        };
+
+        trailPointsInput.addEventListener('change', applyTrailPoints);
+        trailPointsInput.addEventListener('blur', applyTrailPoints);
+      }
+
+      const kpiPositiveToggle = document.getElementById('filter-kpi-positive-toggle');
+      if (kpiPositiveToggle) {
+        kpiPositiveToggle.addEventListener('click', () => {
+          vehicleFilters.payKpiPositiveOnly = !vehicleFilters.payKpiPositiveOnly;
+          syncVehicleFilterInputs();
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
+
+      const stalePingToggle = document.getElementById('filter-stale-ping-toggle');
+      if (stalePingToggle) {
+        stalePingToggle.addEventListener('click', () => {
+          vehicleFilters.stalePingOnly = !vehicleFilters.stalePingOnly;
+          syncVehicleFilterInputs();
+          renderVehicles();
+          persistVehicleFilterPrefs();
+        });
+      }
+>>>>>>> impte
 
       const resetBtn = document.getElementById('vehicle-filters-reset');
       resetBtn?.addEventListener('click', (e) => {
@@ -2613,12 +9668,30 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         resetVehicleFilters();
       });
 
+<<<<<<< HEAD
       bindVehicleFilterDropdowns();
     }
 
     function getVehicleList(query) {
       if (selectedVehicleId !== null) {
         return vehicles.filter(v => v.id === selectedVehicleId);
+=======
+      const collapseBtn = document.getElementById('vehicle-filters-collapse');
+      collapseBtn?.addEventListener('click', (event) => {
+        event.preventDefault();
+        applyVehicleFiltersCollapsedState(!vehicleFiltersCollapsed);
+      });
+
+      bindVehicleFilterDropdowns();
+      applyVehicleFiltersCollapsedState(loadVehicleFiltersCollapsedPref(), { persist: false });
+    }
+
+    function getVehicleList(query) {
+      if (selectedVehicleId !== null || selectedVehicleKey) {
+        const selectedVehicle = getSelectedVehicleEntry();
+        if (!selectedVehicle) return [];
+        return [selectedVehicle];
+>>>>>>> impte
       }
 
       let baseList = vehicles;
@@ -2629,6 +9702,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       }
 
       const filtered = filterVehicles(baseList, query);
+<<<<<<< HEAD
       const shouldSortByDaysParked = vehicleFilters.moving.includes('stopped');
       const shouldPrioritizeOnRev = vehicleFilters.invPrep.includes('available for deals')
         && vehicleFilters.moving.includes('moving');
@@ -2637,6 +9711,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       if (shouldPrioritizeOnRev) {
         list = sortVehiclesByOnRevChecked(list);
       }
+=======
+      const shouldSortByPayKpiDesc = vehicleFilters.payKpiPositiveOnly;
+      const shouldSortByDaysParked = vehicleFilters.moving.includes('stopped');
+      const shouldPrioritizeOnRev = vehicleFilters.invPrep.includes('available for deals')
+        && vehicleFilters.moving.includes('moving')
+        && !shouldSortByPayKpiDesc;
+
+      let list = shouldSortByPayKpiDesc
+        ? sortVehiclesByPayKpiDesc(filtered)
+        : (shouldSortByDaysParked ? sortVehiclesByDaysParked(filtered) : filtered);
+      if (shouldPrioritizeOnRev) {
+        list = sortVehiclesByOnRevChecked(list);
+      }
+      if (!hasActiveVehicleSidebarRefinements(query)) {
+        list = sortVehiclesMissingCoordsLast(list);
+      }
+>>>>>>> impte
       return list;
     }
 
@@ -2645,7 +9736,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
       const sorted = origin
         ? baseList
+<<<<<<< HEAD
             .map(t => ({ ...t, distance: getDistance(origin.lat, origin.lng, t.lat, t.lng) }))
+=======
+            .map(t => ({ ...t, distance: getMapTravelDistanceMiles(origin, t) }))
+>>>>>>> impte
             .sort((a, b) => a.distance - b.distance)
         : [...baseList];
 
@@ -2685,7 +9780,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         return;
       }
 
+<<<<<<< HEAD
       const vehicle = vehicles.find(v => v.id === selectedVehicleId);
+=======
+      const vehicle = getSelectedVehicleEntry();
+>>>>>>> impte
       const tech = technicians.find(t => t.id === selectedTechId);
       const parts = [];
       if (vehicle) parts.push(`Vehicle ${vehicle.vin || vehicle.model}`);
@@ -2694,6 +9793,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       banner.classList.remove('hidden');
     }
 
+<<<<<<< HEAD
     function applySelection(vehicleId = null, techId = null) {
       selectedVehicleId = vehicleId;
       selectedTechId = techId;
@@ -2703,10 +9803,63 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           id: selectedVehicle?.id ?? vehicleId,
           vin: selectedVehicle?.vin || '',
           customerId: selectedVehicle?.customerId || ''
+=======
+    function applySelection(vehicleId = null, techId = null, vehicleKey = null) {
+      const previousVehicleId = selectedVehicleId;
+      const previousVehicleKey = selectedVehicleKey;
+      const previousTechId = selectedTechId;
+      const normalizedVehicleKey = `${vehicleKey || ''}`.trim();
+      const resolvedVehicleById = vehicleId !== null
+        ? (vehicles.find((vehicle) => `${vehicle.id}` === `${vehicleId}`) || null)
+        : null;
+      const resolvedVehicle = resolvedVehicleById
+        || (vehicleId !== null && normalizedVehicleKey ? findVehicleByKey(normalizedVehicleKey) : null);
+      const nextVehicleKey = vehicleId === null
+        ? null
+        : getVehicleKey(resolvedVehicle || { id: vehicleId });
+      if (vehicleId !== null) {
+        pinVehicleListCardPosition(resolvedVehicle || nextVehicleKey);
+        pinnedVehicleListCardKey = `${nextVehicleKey || ''}`.trim() || pinnedVehicleListCardKey;
+      }
+
+      if (
+        `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
+        || `${previousVehicleKey ?? ''}` !== `${nextVehicleKey ?? ''}`
+        || vehicleId === null
+      ) {
+        clearParkingSpotCascade();
+      }
+      selectedVehicleId = vehicleId;
+      selectedVehicleKey = nextVehicleKey;
+      selectedTechId = techId;
+      if (
+        `${previousVehicleId ?? ''}` !== `${vehicleId ?? ''}`
+        || `${previousVehicleKey ?? ''}` !== `${nextVehicleKey ?? ''}`
+        || `${previousTechId ?? ''}` !== `${techId ?? ''}`
+      ) {
+        resetOverlapCycleState();
+      }
+      if (vehicleId !== null && !syncingVehicleSelection) {
+        setSelectedVehicle({
+          id: resolvedVehicle?.id ?? vehicleId,
+          key: nextVehicleKey || '',
+          vin: resolvedVehicle?.vin || '',
+          customerId: resolvedVehicle?.customerId || ''
+>>>>>>> impte
         });
       } else if (vehicleId === null && !syncingVehicleSelection) {
         setSelectedVehicle(null);
       }
+<<<<<<< HEAD
+=======
+      if (vehicleId === null) {
+        clearPinnedVehicleListCardPosition();
+        gpsTrailRequestCounter += 1;
+        resetRouteSegmentState({ clearEntries: true });
+        highlightLayer?.clearLayers();
+        gpsTrailLayer?.clearLayers();
+      }
+>>>>>>> impte
       if (vehicleId !== null) {
         sidebarStateController?.setState?.('right', true);
       }
@@ -2716,10 +9869,23 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function resetSelection() {
+<<<<<<< HEAD
       selectedVehicleId = null;
       selectedTechId = null;
       Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
       highlightLayer?.clearLayers();
+=======
+      gpsTrailRequestCounter += 1;
+      resetOverlapCycleState();
+      resetRouteSegmentState({ clearEntries: true });
+      clearParkingSpotCascade();
+      selectedVehicleId = null;
+      selectedVehicleKey = null;
+      selectedTechId = null;
+      Object.keys(selectedServiceByType).forEach(key => delete selectedServiceByType[key]);
+      highlightLayer?.clearLayers();
+      gpsTrailLayer?.clearLayers();
+>>>>>>> impte
       connectionLayer?.clearLayers();
       serviceLayer?.clearLayers();
       serviceConnectionLayer?.clearLayers();
@@ -2731,7 +9897,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       renderVehicles();
       renderVisibleSidebars();
       toggleSelectionBanner();
+<<<<<<< HEAD
       sidebarStateController?.setState?.('right', false);
+=======
+>>>>>>> impte
     }
 
     function findNearestVehicle(point, maxDistanceMeters = 80000) {
@@ -2804,6 +9973,314 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       map.flyTo([location.lat, location.lng], 13, { duration: 1.5 });
     }
 
+<<<<<<< HEAD
+=======
+    const GLOBAL_SEARCH_ZIP_REGEX = /^\d{5}(?:-\d{4})?$/;
+
+    const normalizeGlobalSearchText = (value = '') => `${value || ''}`.trim().toLowerCase();
+
+    const normalizeGlobalSearchCompact = (value = '') => normalizeGlobalSearchText(value).replace(/[^a-z0-9]/g, '');
+
+    const findVehicleByGlobalSearch = (query = '') => {
+      const normalizedQuery = normalizeGlobalSearchText(query);
+      const compactQuery = normalizeGlobalSearchCompact(query);
+      if (!normalizedQuery) return null;
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      vehicles.forEach((vehicle) => {
+        const vin = normalizeGlobalSearchText(vehicle?.vin || vehicle?.VIN || '');
+        const compactVin = normalizeGlobalSearchCompact(vin);
+        const customerId = normalizeGlobalSearchText(vehicle?.customerId || '');
+        const customerName = normalizeGlobalSearchText(vehicle?.customerName || '');
+        const searchBlob = normalizeGlobalSearchText(vehicle?._searchBlob || '');
+        let score = 0;
+
+        if (vin && vin === normalizedQuery) score = Math.max(score, 560);
+        if (compactVin && compactQuery && compactVin === compactQuery) score = Math.max(score, 580);
+        if (customerId && customerId === normalizedQuery) score = Math.max(score, 500);
+        if (customerName && customerName === normalizedQuery) score = Math.max(score, 460);
+        if (vin && vin.includes(normalizedQuery)) score = Math.max(score, 420);
+        if (customerId && customerId.includes(normalizedQuery)) score = Math.max(score, 390);
+        if (customerName && customerName.includes(normalizedQuery)) score = Math.max(score, 370);
+        if (searchBlob && searchBlob.includes(normalizedQuery)) score = Math.max(score, 310);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = vehicle;
+        }
+      });
+
+      return bestMatch;
+    };
+
+    const getServiceGlobalSearchHaystack = (partner = {}, type = 'tech') => {
+      const noteText = type === 'tech' ? getTechNoteText(partner) : getPartnerNoteText(partner);
+      return [
+        partner.company,
+        partner.name,
+        partner.contact,
+        partner.vendor,
+        partner.city,
+        partner.state,
+        partner.region,
+        partner.zip,
+        partner.zipcode,
+        partner.phone,
+        partner.email,
+        partner.availability,
+        partner.authorization,
+        partner.categoryLabel,
+        partner.category,
+        noteText
+      ]
+        .map((value) => normalizeGlobalSearchText(value))
+        .join(' ');
+    };
+
+    const collectServiceGlobalSearchEntries = () => {
+      const entries = [];
+      technicians.forEach((partner) => entries.push({ type: 'tech', partner }));
+      resellers.forEach((partner) => entries.push({ type: 'reseller', partner }));
+      repairShops.forEach((partner) => entries.push({ type: 'repair', partner }));
+      customServices.forEach((partner) => entries.push({ type: 'custom', partner }));
+      return entries;
+    };
+
+    const findServiceByGlobalSearch = (query = '') => {
+      const normalizedQuery = normalizeGlobalSearchText(query);
+      if (!normalizedQuery) return null;
+
+      const entries = collectServiceGlobalSearchEntries();
+      let bestMatch = null;
+      let bestScore = 0;
+
+      entries.forEach((entry) => {
+        const partner = entry?.partner || {};
+        const company = normalizeGlobalSearchText(partner.company || partner.name);
+        const zip = normalizeGlobalSearchText(partner.zip || partner.zipcode);
+        const haystack = getServiceGlobalSearchHaystack(partner, entry.type);
+        let score = 0;
+
+        if (company && company === normalizedQuery) score = Math.max(score, 440);
+        if (zip && zip === normalizedQuery) score = Math.max(score, 420);
+        if (company && company.includes(normalizedQuery)) score = Math.max(score, 360);
+        if (haystack && haystack.includes(normalizedQuery)) score = Math.max(score, 290);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = entry;
+        }
+      });
+
+      return bestMatch;
+    };
+
+    const focusGlobalServiceMatch = (entry = null) => {
+      const type = `${entry?.type || ''}`.trim();
+      const partner = entry?.partner || null;
+      if (!type || !partner) return false;
+
+      if (type === 'custom' && partner.categoryKey) {
+        selectedCustomCategoryKey = partner.categoryKey;
+        renderCategorySidebar(selectedCustomCategoryKey, customServices);
+      }
+
+      const sidebarKey = SERVICE_SIDEBAR_KEYS[type] || (type === 'custom' ? 'custom' : 'left');
+      sidebarStateController?.setState?.(sidebarKey, true);
+      selectedServiceByType[type] = partner;
+      filterSidebarForPartner(type, partner);
+      renderVisibleSidebars();
+
+      if (hasValidCoords(partner) && map) {
+        map.flyTo([partner.lat, partner.lng], 15, { duration: 1.2 });
+        showServicePreviewCard(partner);
+      }
+
+      const origin = getCurrentOrigin() || partner;
+      if (origin) {
+        showServicesFromOrigin(origin, { forceType: type });
+      }
+      return true;
+    };
+
+    const setLegendSearchFeedback = (feedbackEl, message = '', tone = 'neutral') => {
+      if (!feedbackEl) return;
+      feedbackEl.textContent = message;
+      feedbackEl.classList.remove('text-slate-400', 'text-cyan-300', 'text-emerald-300', 'text-amber-300', 'text-rose-300');
+      if (tone === 'location') {
+        feedbackEl.classList.add('text-cyan-300');
+      } else if (tone === 'vehicle') {
+        feedbackEl.classList.add('text-emerald-300');
+      } else if (tone === 'service') {
+        feedbackEl.classList.add('text-amber-300');
+      } else if (tone === 'error') {
+        feedbackEl.classList.add('text-rose-300');
+      } else {
+        feedbackEl.classList.add('text-slate-400');
+      }
+    };
+
+    const executeLegendGlobalSearch = async (rawQuery = '', feedbackEl = null) => {
+      const query = `${rawQuery || ''}`.trim();
+      if (!query) {
+        setLegendSearchFeedback(feedbackEl, 'Type a ZIP, VIN, customer, or company.', 'neutral');
+        return false;
+      }
+
+      const activeType = isAnyServiceSidebarOpen() ? getActivePartnerType() : 'tech';
+
+      if (GLOBAL_SEARCH_ZIP_REGEX.test(query)) {
+        const location = await geocodeAddress(query);
+        if (!location) {
+          setLegendSearchFeedback(feedbackEl, `ZIP ${query} not found.`, 'error');
+          return false;
+        }
+        processLocation(location, location.name || query, activeType);
+        setLegendSearchFeedback(feedbackEl, `Located ZIP ${query}.`, 'location');
+        return true;
+      }
+
+      const vehicleMatch = findVehicleByGlobalSearch(query);
+      if (vehicleMatch) {
+        if (vehicleMarkersVisible) {
+          focusVehicle(vehicleMatch);
+        } else {
+          const coords = getVehicleMapCoords(vehicleMatch);
+          if (map && coords) {
+            map.flyTo([coords.lat, coords.lng], 14, { duration: 1.2 });
+          }
+          applySelection(vehicleMatch.id, null, getVehicleKey(vehicleMatch));
+        }
+        const vehicleLabel = `${vehicleMatch?.vin || vehicleMatch?.model || 'Vehicle'}`;
+        setLegendSearchFeedback(feedbackEl, `Vehicle found: ${vehicleLabel}`, 'vehicle');
+        return true;
+      }
+
+      let serviceMatch = findServiceByGlobalSearch(query);
+      if (!serviceMatch) {
+        await Promise.allSettled([
+          loadAllServices({ force: true, silent: true }),
+          loadTechnicians({ force: false, silent: true })
+        ]);
+        serviceMatch = findServiceByGlobalSearch(query);
+      }
+      if (serviceMatch && focusGlobalServiceMatch(serviceMatch)) {
+        const serviceName = serviceMatch?.partner?.company || serviceMatch?.partner?.name || 'Service';
+        setLegendSearchFeedback(feedbackEl, `Service found: ${serviceName}`, 'service');
+        return true;
+      }
+
+      const locationMatch = await geocodeAddress(query);
+      if (locationMatch) {
+        processLocation(locationMatch, locationMatch.name || query, activeType);
+        setLegendSearchFeedback(feedbackEl, `Location found: ${locationMatch.name || query}`, 'location');
+        return true;
+      }
+
+      setLegendSearchFeedback(feedbackEl, 'No matches found for that search.', 'error');
+      return false;
+    };
+
+    function setupLegendGlobalSearch() {
+      const toggle = document.getElementById('legend-search-toggle');
+      const panel = document.getElementById('legend-search-panel');
+      const chevron = document.getElementById('legend-search-chevron');
+      const form = document.getElementById('legend-search-form');
+      const input = document.getElementById('legend-search-input');
+      const button = document.getElementById('legend-search-btn');
+      const status = document.getElementById('legend-search-status');
+      const feedback = document.getElementById('legend-search-feedback');
+      if (!toggle || !panel || !chevron || !form || !input || !button) return;
+
+      const setExpanded = (expanded) => {
+        panel.classList.toggle('hidden', !expanded);
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        chevron.textContent = expanded ? '▾' : '▸';
+      };
+
+      setExpanded(false);
+
+      toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        setExpanded(!expanded);
+        if (!expanded) {
+          input.focus();
+        }
+      });
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const query = input.value.trim();
+        if (!query) {
+          setLegendSearchFeedback(feedback, 'Type a ZIP, VIN, customer, or company.', 'neutral');
+          return;
+        }
+
+        const originalButtonLabel = button.textContent;
+        status?.classList.remove('hidden');
+        button.textContent = '...';
+        button.disabled = true;
+        const stopLoading = startLoading('Searching map…');
+
+        try {
+          await executeLegendGlobalSearch(query, feedback);
+        } finally {
+          stopLoading();
+          status?.classList.add('hidden');
+          button.textContent = originalButtonLabel;
+          button.disabled = false;
+        }
+      });
+    }
+
+    function setupLegendResetView() {
+      const button = document.getElementById('legend-reset-view');
+      const separator = document.getElementById('legend-reset-separator');
+      if (!button) return;
+
+      const DEFAULT_VIEW_TOLERANCE_METERS = 15000;
+      const isMapAtDefaultView = () => {
+        if (!map) return true;
+        const zoom = typeof map.getZoom === 'function' ? map.getZoom() : MAP_DEFAULT_ZOOM;
+        const center = typeof map.getCenter === 'function' ? map.getCenter() : null;
+        const zoomMatches = Math.abs((Number(zoom) || MAP_DEFAULT_ZOOM) - MAP_DEFAULT_ZOOM) < 0.01;
+        if (!center || typeof map.distance !== 'function') return zoomMatches;
+        const centerDistanceMeters = map.distance(center, L.latLng(MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng));
+        return zoomMatches && centerDistanceMeters <= DEFAULT_VIEW_TOLERANCE_METERS;
+      };
+
+      const syncResetButtonVisibility = () => {
+        const shouldShow = !isMapAtDefaultView();
+        button.classList.toggle('legend-reset-button-hidden', !shouldShow);
+        button.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+        separator?.classList.toggle('has-button', shouldShow);
+      };
+
+      button.addEventListener('click', () => {
+        if (!map) return;
+        map.closePopup();
+        map.flyTo([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM, {
+          duration: 0.7,
+          easeLinearity: 0.3,
+          noMoveStart: true
+        });
+      });
+
+      const syncResetButtonVisibilitySoon = () => {
+        syncResetButtonVisibility();
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(() => syncResetButtonVisibility());
+        }
+        window.setTimeout(() => syncResetButtonVisibility(), 90);
+      };
+
+      map?.on?.('zoom move zoomend moveend viewreset resize', syncResetButtonVisibilitySoon);
+      syncResetButtonVisibilitySoon();
+    }
+
+>>>>>>> impte
     function setupAddressSearch({ formId, inputId, buttonId, statusId, partnerType }) {
       const form = document.getElementById(formId);
       const input = document.getElementById(inputId);
@@ -2866,6 +10343,171 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       partnerType: 'repair'
     });
 
+<<<<<<< HEAD
+=======
+    const SERVICE_MODAL_FIELD_RESOLVERS = {
+      company_name: (service) => service?.company || service?.name || '',
+      company: (service) => service?.company || service?.name || '',
+      contact: (service) => service?.contact || '',
+      contact_name: (service) => service?.contact || '',
+      phone: (service) => service?.phone || '',
+      email: (service) => service?.email || '',
+      city: (service) => service?.city || '',
+      state: (service) => service?.state || '',
+      region: (service) => service?.region || '',
+      zip: (service) => service?.zip || service?.zipcode || '',
+      zipcode: (service) => service?.zipcode || service?.zip || '',
+      postal_code: (service) => service?.zipcode || service?.zip || '',
+      availability: (service) => service?.availability || '',
+      authorization: (service) => service?.authorization || '',
+      notes: (service) => service?.notes || service?.note || '',
+      note: (service) => service?.note || service?.notes || '',
+      lat: (service) => service?.lat,
+      lng: (service) => service?.lng,
+      long: (service) => service?.lng,
+      longitude: (service) => service?.lng,
+      latitude: (service) => service?.lat
+    };
+
+    const normalizeServiceModalHeader = (value = '') => `${value}`.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const getServiceTypeDisplayLabel = (type = '') => {
+      if (type === 'tech') return 'Technician';
+      if (type === 'reseller') return 'Reseller';
+      if (type === 'repair') return 'Repair shop';
+      if (type === 'custom') return 'Service';
+      return 'Service';
+    };
+
+    const getServiceModalFallbackHeaders = (service = {}) => {
+      const detailKeys = Object.keys(service?.details || {});
+      const seen = new Set(detailKeys.map((key) => normalizeServiceModalHeader(key)));
+      return Object.keys(SERVICE_MODAL_FIELD_RESOLVERS).filter((key) => {
+        if (seen.has(normalizeServiceModalHeader(key))) return false;
+        const value = SERVICE_MODAL_FIELD_RESOLVERS[key]?.(service);
+        return value !== null && value !== undefined && `${value}`.trim() !== '';
+      });
+    };
+
+    const getServiceModalValue = (service = {}, header = '') => {
+      const details = service?.details || {};
+      if (details[header] !== undefined && details[header] !== null && `${details[header]}` !== '') {
+        return details[header];
+      }
+      const resolver = SERVICE_MODAL_FIELD_RESOLVERS[header];
+      if (typeof resolver === 'function') {
+        const value = resolver(service);
+        if (value !== undefined && value !== null && `${value}` !== '') return value;
+      }
+      if (service?.[header] !== undefined && service?.[header] !== null && `${service[header]}` !== '') {
+        return service[header];
+      }
+      const lowerHeader = `${header}`.toLowerCase();
+      if (service?.[lowerHeader] !== undefined && service?.[lowerHeader] !== null && `${service[lowerHeader]}` !== '') {
+        return service[lowerHeader];
+      }
+      return '—';
+    };
+
+    const formatServiceModalValue = (header = '', value = null) => {
+      if (value === null || value === undefined || value === '') return '—';
+      const normalizedHeader = `${header}`.toLowerCase();
+      if ((normalizedHeader.includes('date') || normalizedHeader.includes('time')) && !Number.isNaN(Date.parse(`${value}`))) {
+        return escapeHTML(`${formatDateTime(new Date(Date.parse(`${value}`)).toISOString())}`);
+      }
+      if (typeof value === 'object') {
+        return escapeHTML(JSON.stringify(value));
+      }
+      return escapeHTML(`${value}`);
+    };
+
+    function attachServiceModalRowDrag() {
+      const modal = document.getElementById('service-modal');
+      if (!modal) return;
+      const rows = modal.querySelectorAll('tr[data-service-header]');
+      let draggedRow = null;
+
+      rows.forEach((row) => {
+        row.addEventListener('dragstart', (event) => {
+          draggedRow = row;
+          row.classList.add('opacity-50');
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData('text/plain', row.dataset.serviceHeader || '');
+        });
+
+        row.addEventListener('dragend', () => {
+          row.classList.remove('opacity-50');
+          draggedRow = null;
+        });
+
+        row.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        });
+
+        row.addEventListener('drop', (event) => {
+          event.preventDefault();
+          if (!draggedRow || draggedRow === row) return;
+          const tbody = row.parentElement;
+          if (!tbody) return;
+          const rowList = [...tbody.querySelectorAll('tr[data-service-header]')];
+          const draggedIndex = rowList.indexOf(draggedRow);
+          const targetIndex = rowList.indexOf(row);
+          if (draggedIndex < targetIndex) {
+            tbody.insertBefore(draggedRow, row.nextSibling);
+          } else {
+            tbody.insertBefore(draggedRow, row);
+          }
+          const prefs = loadServiceModalPrefs();
+          prefs.order = [...tbody.querySelectorAll('tr[data-service-header]')].map((entry) => entry.dataset.serviceHeader);
+          saveServiceModalPrefs(prefs);
+        });
+      });
+    }
+
+    function openServiceModal(service, type = 'service') {
+      const modal = document.getElementById('service-modal');
+      const title = document.getElementById('service-modal-title');
+      const subtitle = document.getElementById('service-modal-subtitle');
+      const body = document.getElementById('service-modal-body');
+      const columnsPanel = document.getElementById('service-modal-columns-panel');
+      if (!modal || !title || !subtitle || !body) return;
+
+      const detailRecord = service?.details || {};
+      const fallbackHeaders = getServiceModalFallbackHeaders(service);
+      const { headers, hidden } = getServiceModalHeaders(detailRecord, fallbackHeaders);
+      const serviceTypeLabel = getServiceTypeDisplayLabel(type);
+      const locationText = formatPartnerLocation(service) || 'US';
+
+      title.textContent = service?.company || service?.name || serviceTypeLabel;
+      subtitle.textContent = `${serviceTypeLabel} • ${locationText}${service?.phone ? ` • ${service.phone}` : ''}`;
+      columnsPanel?.classList.add('hidden');
+
+      const detailRows = headers.map((header) => {
+        const displayHeader = SERVICE_HEADER_LABELS[header] || `${header}`.replace(/_/g, ' ');
+        const value = getServiceModalValue(service, header);
+        const safeHeader = escapeHTML(header);
+        return `
+          <tr class="border-b border-slate-800/80 ${hidden.has(header) ? 'hidden' : ''}" draggable="true" data-service-header="${safeHeader}">
+            <th class="text-left text-xs font-semibold text-slate-300 py-2 pr-3">
+              <span class="inline-flex items-center gap-2">
+                <span class="text-slate-600 text-sm">⋮⋮</span>
+                ${escapeHTML(displayHeader)}
+              </span>
+            </th>
+            <td class="text-xs text-slate-100 py-2 break-words">${formatServiceModalValue(header, value)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      body.innerHTML = `<table class="w-full text-left"><tbody>${detailRows}</tbody></table>`;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      renderServiceModalColumnsList(headers, hidden);
+      attachServiceModalRowDrag();
+    }
+
+>>>>>>> impte
     function openVehicleModal(vehicle) {
       const modal = document.getElementById('vehicle-modal');
       const title = document.getElementById('vehicle-modal-title');
@@ -2886,7 +10528,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const { headers, hidden } = getVehicleModalHeaders(vehicleHeaders);
       const detailRows = headers.map(header => {
         const displayHeader = VEHICLE_HEADER_LABELS[header] || header;
+<<<<<<< HEAD
         const editConfig = EDITABLE_VEHICLE_FIELDS[header.toLowerCase()];
+=======
+        const editConfig = EDITABLE_VEHICLE_FIELDS[normalizeVehicleHeader(header)];
+>>>>>>> impte
         const fieldKey = editConfig?.fieldKey;
         const isEditable = Boolean(editConfig);
         const value = editConfig
@@ -2920,7 +10566,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       attachVehicleModalEditors(vehicle);
     }
 
+<<<<<<< HEAD
     function openRepairModal(vehicle) {
+=======
+    async function openRepairModal(vehicle) {
+      const canAccessRepairHistory = await hasAuthenticatedAccess();
+      if (!canAccessRepairHistory) {
+        notifyAuthRequired();
+        return;
+      }
+
+>>>>>>> impte
       const modal = document.getElementById('vehicle-modal');
       const title = document.getElementById('vehicle-modal-title');
       const vinDisplay = document.getElementById('vehicle-modal-vin');
@@ -3125,6 +10781,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               <div>
                 <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">GPS History</p>
                 <p class="text-[10px] text-slate-500" data-gps-status>Loading GPS history...</p>
+<<<<<<< HEAD
+=======
+                <p class="text-[10px] text-slate-500" data-gps-winner-info></p>
+>>>>>>> impte
               </div>
               <div class="flex flex-wrap items-center gap-2">
                 <button type="button" class="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-300" data-gps-connection-status>
@@ -3135,20 +10795,40 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
                   <button type="button" class="rounded border border-slate-700 bg-slate-900 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200 hover:border-slate-500" data-gps-columns-toggle>
                     Columns
                   </button>
+<<<<<<< HEAD
                   <div class="absolute right-0 z-10 mt-2 hidden w-[320px] rounded-lg border border-slate-800 bg-slate-950/95 p-3 text-[11px] text-slate-200 shadow-xl" data-gps-columns-panel>
+=======
+                  <div class="absolute right-0 z-10 mt-2 hidden w-[420px] max-w-[calc(100vw-2rem)] rounded-lg border border-slate-800 bg-slate-950/95 p-3 text-[11px] text-slate-200 shadow-xl" data-gps-columns-panel>
+>>>>>>> impte
                     <div class="flex items-start justify-between gap-2">
                       <div>
                         <p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Column controls</p>
                         <p class="text-[10px] text-slate-500">Drag to reorder, toggle visibility, and set width.</p>
                       </div>
                     </div>
+<<<<<<< HEAD
+=======
+                    <div class="mt-3 rounded-md border border-slate-800 bg-slate-950/70 p-2">
+                      <p class="text-[10px] uppercase tracking-[0.12em] text-slate-400">Width controls</p>
+                      <div class="mt-2 flex items-center gap-2">
+                        <select class="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200" data-gps-width-column></select>
+                        <input type="number" min="80" max="1200" step="20" placeholder="Auto" class="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200" data-gps-width-value />
+                        <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:border-slate-500" data-gps-width-apply>Set</button>
+                        <button type="button" class="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:border-slate-500" data-gps-width-auto>Auto</button>
+                      </div>
+                    </div>
+>>>>>>> impte
                     <div class="mt-3 grid gap-2 max-h-64 overflow-auto" data-gps-columns-list></div>
                   </div>
                 </div>
               </div>
             </div>
             <div class="overflow-auto">
+<<<<<<< HEAD
               <table class="min-w-full text-left text-[11px] text-slate-200">
+=======
+              <table class="min-w-full table-fixed text-left text-[11px] text-slate-200">
+>>>>>>> impte
                 <thead class="text-[10px] uppercase text-slate-500" data-gps-history-head></thead>
                 <tbody class="divide-y divide-slate-800/80" data-gps-history-body>
                   <tr>
@@ -3180,9 +10860,17 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
     async function handleGpsHistoryRequest(vehicle) {
       const vin = gpsHistoryManager.getVehicleVin(vehicle);
+<<<<<<< HEAD
       const stopLoading = startLoading('Loading GPS history…');
       try {
         const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin });
+=======
+      const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+      const stopLoading = startLoading('Loading GPS history…');
+      try {
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+        await getGpsDeviceBlacklistSerials().catch(() => new Map());
+>>>>>>> impte
         openGpsHistoryModal(vehicle, { records, error });
       } finally {
         stopLoading();
@@ -3264,13 +10952,18 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
 
           try {
             if (!supabaseClient || !headerKey || vehicle?.id === undefined) {
+<<<<<<< HEAD
               throw new Error('Supabase unavailable');
+=======
+              throw new Error('Database unavailable');
+>>>>>>> impte
             }
 
             const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
             if (sessionError || !sessionData?.session) {
               const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
               if (refreshError || !refreshed?.session) {
+<<<<<<< HEAD
                 throw refreshError || new Error('Supabase session unavailable');
               }
             }
@@ -3296,6 +10989,20 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
               updateRequest,
               8000,
               'Error de comunicación con la base de datos.'
+=======
+                throw refreshError || new Error('Authentication session unavailable');
+              }
+            }
+
+            const updateRequest = supabaseClient
+              .from(updateTable)
+              .update({ [updateColumn]: newValue })
+              .eq('id', vehicle.id);
+            const { error } = await runWithTimeout(
+              updateRequest,
+              8000,
+              'Database communication error.'
+>>>>>>> impte
             );
 
             if (error) throw error;
@@ -3322,8 +11029,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
             } else {
               console.warn('Failed to update vehicle field:', error);
             }
+<<<<<<< HEAD
             if (message.includes('comunicación')) {
               alert('Error de comunicación con la base de datos.');
+=======
+            if (message.includes('communication')) {
+              alert('Database communication error.');
+>>>>>>> impte
             } else {
               alert(message || 'Failed to save vehicle update.');
             }
@@ -3379,6 +11091,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       panel?.classList.add('hidden');
     }
 
+<<<<<<< HEAD
     function attachPopupHandlers() {
       const btn = document.querySelector('.vehicle-popup button[data-view-more-popup]');
       if (btn) {
@@ -3388,6 +11101,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           if (vehicle) openVehicleModal(vehicle);
         });
       }
+=======
+    function closeServiceModal() {
+      const modal = document.getElementById('service-modal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      const panel = document.getElementById('service-modal-columns-panel');
+      panel?.classList.add('hidden');
+>>>>>>> impte
     }
 
     function getPartnerListByType(type) {
@@ -3427,7 +11149,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       let nearest = null;
       let bestDist = Infinity;
       list.forEach(item => {
+<<<<<<< HEAD
         const dist = getDistance(point.lat, point.lng, item.lat, item.lng);
+=======
+        const dist = getMapTravelDistanceMiles(point, item);
+>>>>>>> impte
         if (dist < bestDist) {
           bestDist = dist;
           nearest = item;
@@ -3515,7 +11241,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           map.flyTo([chosen.lat, chosen.lng], 15, { duration: 1.2 });
         });
 
+<<<<<<< HEAD
         const distance = getDistance(origin.lat, origin.lng, chosen.lat, chosen.lng);
+=======
+        const distance = getMapTravelDistanceMiles(origin, chosen);
+>>>>>>> impte
         addLabeledConnection(
           serviceConnectionLayer,
           origin,
@@ -3535,7 +11265,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const baseColor = SERVICE_COLORS[type] || '#818cf8';
       const color = getPartnerColor(target, baseColor);
       connectionLayer.clearLayers();
+<<<<<<< HEAD
       const miles = getDistance(origin.lat, origin.lng, target.lat, target.lng);
+=======
+      const miles = getMapTravelDistanceMiles(origin, target);
+>>>>>>> impte
       addLabeledConnection(
         connectionLayer,
         origin,
@@ -3627,6 +11361,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     function setupSidebarToggles() {
       const leftSidebar = document.getElementById('left-sidebar');
       const rightSidebar = document.getElementById('right-sidebar');
+<<<<<<< HEAD
+=======
+      const floatingSearchShell = document.getElementById('floating-search-shell');
+>>>>>>> impte
       const resellerSidebar = document.getElementById('reseller-sidebar');
       const repairSidebar = document.getElementById('repair-sidebar');
       const customSidebar = document.getElementById('dynamic-service-sidebar');
@@ -3747,6 +11485,13 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           ? defaultRightOffset
           : getSidebarWidth(configs.right.sidebar) + defaultRightOffset;
 
+<<<<<<< HEAD
+=======
+        if (floatingSearchShell) {
+          floatingSearchShell.classList.toggle('hidden', !rightSidebarIsCollapsed);
+        }
+
+>>>>>>> impte
         const rightToggleGroup = document.getElementById('right-toggle-group');
         if (rightToggleGroup) {
           rightToggleGroup.style.right = `${anchorRight}px`;
@@ -3811,6 +11556,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         if (!vehicles.length) return;
         syncVehicleSelectionFromStore(selection);
       });
+<<<<<<< HEAD
       subscribeServiceFilters((filters) => {
         Object.assign(serviceFilters, filters);
         syncServiceFilterInputs();
@@ -3820,6 +11566,8 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
         }
       });
+=======
+>>>>>>> impte
       subscribeServiceFilterIds((filters) => {
         Object.assign(serviceFilterIds, filters);
         renderVisibleSidebars();
@@ -3829,6 +11577,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         }
       });
       (async () => {
+<<<<<<< HEAD
         setupBackgroundManager();
         await loadStateCenters();
         initMap();
@@ -3858,11 +11607,64 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           input.addEventListener('input', () => {
             serviceFilters[type] = input.value;
             setServiceFilter(type, input.value);
+=======
+        try {
+          setupBackgroundManager();
+          await loadStateCenters();
+          initMap();
+          await syncAvailableServiceTypes();
+          updateServiceVisibilityUI();
+          await hydrateMapSettingsFromSupabase();
+          await clearStoredVehicleFilterPrefs();
+          await loadVehicles();
+
+          const loadNonCriticalData = async () => {
+            const backgroundTasks = [
+              loadHotspots(),
+              loadBlacklistSites(),
+              loadAllServices(),
+            ];
+            if (isServiceTypeEnabled('tech')) {
+              backgroundTasks.push(loadTechnicians());
+            }
+            await Promise.allSettled(backgroundTasks);
+          };
+
+          const scheduleNonCriticalDataLoad = () => {
+            const run = () => {
+              void loadNonCriticalData();
+            };
+            if (typeof window.requestIdleCallback === 'function') {
+              window.requestIdleCallback(() => run(), { timeout: 1200 });
+              return;
+            }
+            setTimeout(run, 0);
+          };
+
+          scheduleNonCriticalDataLoad();
+
+          setupResizableSidebars();
+          setupSidebarToggles();
+          setupLayerToggles();
+          setupLegendGlobalSearch();
+          setupLegendResetView();
+          bindVehicleFilterHandlers();
+          syncVehicleFilterInputs();
+          const filterConfigs = [
+            { type: 'tech' },
+            { type: 'reseller' },
+            { type: 'repair' },
+            { type: 'custom' },
+          ].filter(({ type }) => isServiceTypeEnabled(type));
+
+          const refreshServiceSearch = () => {
+>>>>>>> impte
             renderVisibleSidebars();
             const origin = getCurrentOrigin();
             if (origin) {
               showServicesFromOrigin(origin, { forceType: isAnyServiceSidebarOpen() ? getActivePartnerType() : null });
             }
+<<<<<<< HEAD
           });
         });
 
@@ -3914,5 +11716,105 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         startSupabaseKeepAlive({ supabaseClient, table: TABLES.vehicles });
 
         window.addEventListener('auth:role-ready', () => renderVehicles());
+=======
+          };
+
+          filterConfigs.forEach(({ type }) => {
+            const searchInput = document.getElementById(getServiceSearchInputId(type));
+            if (searchInput) {
+              searchInput.addEventListener('input', () => {
+                serviceSearchFilters[type] = searchInput.value;
+                refreshServiceSearch();
+              });
+            }
+          });
+
+	          syncServiceSearchInputs();
+
+	          setupEventDelegation();
+
+	          let vehicleSearchTimer;
+	          const vehicleSearchInput = document.getElementById('vehicle-search');
+	          const vehicleSearchClearButton = document.getElementById('vehicle-search-clear');
+	          const syncVehicleSearchClearButton = () => {
+	            if (!vehicleSearchClearButton || !vehicleSearchInput) return;
+	            vehicleSearchClearButton.classList.toggle('hidden', !vehicleSearchInput.value.trim());
+	          };
+	          vehicleSearchInput.addEventListener('input', () => {
+	            syncVehicleSearchClearButton();
+	            clearTimeout(vehicleSearchTimer);
+	            vehicleSearchTimer = setTimeout(() => renderVehicles(), 250);
+	          });
+	          vehicleSearchClearButton?.addEventListener('click', () => {
+	            vehicleSearchInput.value = '';
+	            syncVehicleSearchClearButton();
+	            clearTimeout(vehicleSearchTimer);
+	            renderVehicles();
+	            vehicleSearchInput.focus();
+	          });
+	          syncVehicleSearchClearButton();
+
+	          document.getElementById('clear-selection')?.addEventListener('click', () => resetSelection());
+          document.getElementById('vehicle-modal-close')?.addEventListener('click', closeVehicleModal);
+          document.getElementById('vehicle-modal-columns-toggle')?.addEventListener('click', () => {
+            const panel = document.getElementById('vehicle-modal-columns-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+          });
+	          document.getElementById('vehicle-modal')?.addEventListener('click', (e) => {
+	            if (e.target.id === 'vehicle-modal') closeVehicleModal();
+	          });
+          document.getElementById('service-modal-close')?.addEventListener('click', closeServiceModal);
+          document.getElementById('service-modal-columns-toggle')?.addEventListener('click', () => {
+            const panel = document.getElementById('service-modal-columns-panel');
+            if (!panel) return;
+            panel.classList.toggle('hidden');
+          });
+          document.getElementById('service-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'service-modal') closeServiceModal();
+          });
+
+	          const refreshVehicles = debounceAsync(async () => {
+            await loadVehicles({ force: true, silent: true });
+            lastDataSyncRefreshAt = Date.now();
+          }, 600);
+          const refreshHotspots = debounceAsync(async () => {
+            await loadHotspots({ silent: true });
+            lastDataSyncRefreshAt = Date.now();
+          }, 600);
+          const refreshBlacklist = debounceAsync(async () => {
+            await loadBlacklistSites({ silent: true });
+            lastDataSyncRefreshAt = Date.now();
+          }, 600);
+          const refreshServices = debounceAsync(async () => {
+            await loadAllServices({ force: true, silent: true });
+            if (isServiceTypeEnabled('tech')) {
+              await loadTechnicians({ force: false, silent: true });
+            }
+            lastDataSyncRefreshAt = Date.now();
+          }, 800);
+
+          createControlMapApiService({
+            supabaseClient,
+            tables: TABLES,
+            handlers: {
+              vehicles: refreshVehicles,
+              deals: refreshVehicles,
+              invoices: refreshVehicles,
+              hotspots: refreshHotspots,
+              blacklist: refreshBlacklist,
+              services: refreshServices
+            }
+          });
+
+          startDataSyncWatchdog();
+
+          startSupabaseKeepAlive({ supabaseClient, table: TABLES.vehicles });
+
+          window.addEventListener('auth:role-ready', () => renderVehicles());
+        } finally {
+          document.dispatchEvent(new CustomEvent('control-map:boot-complete'));
+        }
+>>>>>>> impte
       })();
     });

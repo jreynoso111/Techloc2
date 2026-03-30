@@ -1,7 +1,10 @@
 import '../authManager.js';
 import { requireSession, supabaseClient } from '../admin-auth.js';
 import '../sharedHeader.js';
+<<<<<<< HEAD
 import '../adminNav.js';
+=======
+>>>>>>> impte
 import { setupBackgroundManager } from '../backgroundManager.js';
 import {
   loadPreferredBackgroundMode,
@@ -101,6 +104,7 @@ const applySessionState = async (session) => {
   if (session?.user?.id) {
     state.currentUserId = session.user.id;
     state.currentUserEmail = session.user.email || '';
+<<<<<<< HEAD
     if (window.currentUserRole) {
       state.currentUserRole = window.currentUserRole;
     } else {
@@ -111,6 +115,14 @@ const applySessionState = async (session) => {
         .single();
       state.currentUserRole = profile?.role || 'user';
     }
+=======
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single();
+    state.currentUserRole = profile?.role || 'user';
+>>>>>>> impte
   } else {
     state.currentUserRole = 'anon';
     state.currentUserId = 'anon';

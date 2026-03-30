@@ -105,6 +105,10 @@
       height: 100%;
       cursor: col-resize;
       z-index: 10;
+<<<<<<< HEAD
+=======
+      touch-action: none;
+>>>>>>> impte
     }
     .filter-popover {
       position: absolute;
@@ -195,7 +199,11 @@
 
               <i data-lucide="file-up" class="h-4 w-4"></i>
 
+<<<<<<< HEAD
                   <span id="dataset-status">Supabase table</span>
+=======
+                  <span id="dataset-status">Live table</span>
+>>>>>>> impte
 
             </div>
 
@@ -247,7 +255,11 @@
 
               <div class="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 <div class="flex flex-wrap items-center gap-2">
+<<<<<<< HEAD
                   <span id="dataset-status" class="rounded-full border border-slate-700/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Supabase table</span>
+=======
+                  <span id="dataset-status" class="rounded-full border border-slate-700/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Live table</span>
+>>>>>>> impte
                   <div class="relative">
                     <button id="column-selector-toggle" type="button" class="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-200 transition hover:border-blue-500 hover:text-white">
                       <i data-lucide="columns" class="h-4 w-4"></i>
@@ -406,11 +418,46 @@
 
     const ADMIN_ROLE = 'administrator';
     const CHANGE_LOG_TABLE = 'admin_change_log';
+<<<<<<< HEAD
 
     const actor = { id: 'anon', email: '' };
 
     const normalizeHeader = (header = '') => {
       const aliases = {
+=======
+    let hasVerifiedAdminAccess = false;
+
+    const actor = { id: 'anon', email: '' };
+    const isAdminUser = () => hasVerifiedAdminAccess;
+    const refreshAdminAccess = async () => {
+      if (!supabaseClient?.auth?.getSession || !supabaseClient?.from) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      hasVerifiedAdminAccess = !profileError && String(profile?.role || '').toLowerCase() === ADMIN_ROLE;
+      return hasVerifiedAdminAccess;
+    };
+
+    const normalizeHeader = (header = '') => {
+      const aliases = {
+        'vehicle status': 'vehicle_status',
+        'vehicle_status': 'vehicle_status',
+>>>>>>> impte
         'deal status': 'deal_status',
         'deal_status': 'deal_status',
         'dealstatus': 'deal_status',
@@ -675,12 +722,20 @@
     };
 
     const fetchVehiclesFromSupabase = async () => {
+<<<<<<< HEAD
       if (!supabaseClient) throw new Error('Supabase client is not available.');
+=======
+      if (!supabaseClient) throw new Error('Database client is not available.');
+>>>>>>> impte
       const { data, error } = await supabaseClient.from('vehicles').select('*');
       if (error) throw error;
       const rows = Array.isArray(data) ? data : [];
       const headers = rows.length ? Object.keys(rows[0]) : [];
+<<<<<<< HEAD
       setDatasetStatus('Supabase table');
+=======
+      setDatasetStatus('Live table');
+>>>>>>> impte
       return { headers, rows };
     };
 
@@ -693,11 +748,19 @@
         fetchedHeaders = headers;
         fetchedRows = rows;
         usedSupabase = true;
+<<<<<<< HEAD
         setDatasetStatus('Supabase table');
       } catch (error) {
         console.error('Error loading vehicles from Supabase', error);
         setDatasetStatus('Supabase unavailable');
         showToast('Supabase data unavailable. Please verify the connection.', 'error');
+=======
+        setDatasetStatus('Live table');
+      } catch (error) {
+        console.error('Error loading vehicles from database', error);
+        setDatasetStatus('Connection unavailable');
+        showToast('Live data unavailable. Please verify the connection.', 'error');
+>>>>>>> impte
       }
       if (!fetchedHeaders.length || !fetchedRows.length) {
         setDatasetStatus('No data available');
@@ -870,6 +933,7 @@
 
         const resizer = document.createElement('span');
         resizer.className = 'column-resizer';
+<<<<<<< HEAD
         resizer.addEventListener('mousedown', (event) => {
           event.stopPropagation();
           const startX = event.clientX;
@@ -892,11 +956,75 @@
           };
           document.addEventListener('mousemove', handleMove);
           document.addEventListener('mouseup', handleUp);
+=======
+        resizer.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const pointerId = event.pointerId;
+          const startX = event.clientX;
+          const startWidth = th.offsetWidth;
+          const columnIndex = Array.from(th.parentElement.children).indexOf(th);
+          const headerDraggable = th.draggable;
+
+          state.isResizingColumn = true;
+          th.draggable = false;
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+          if (resizer.setPointerCapture) resizer.setPointerCapture(pointerId);
+
+          const handleMove = (moveEvent) => {
+            if (moveEvent.pointerId !== pointerId) return;
+            const nextWidth = Math.max(90, startWidth + (moveEvent.clientX - startX));
+            const widthPx = `${Math.round(nextWidth)}px`;
+            th.style.width = widthPx;
+            th.style.minWidth = widthPx;
+            state.columnWidths[header] = widthPx;
+            els.tableBody.querySelectorAll('tr').forEach((row) => {
+              const cell = row.children[columnIndex];
+              if (cell) {
+                cell.style.width = widthPx;
+                cell.style.minWidth = widthPx;
+              }
+            });
+            syncScrollbars();
+          };
+
+          const cleanup = () => {
+            resizer.removeEventListener('pointermove', handleMove);
+            resizer.removeEventListener('pointerup', handleUp);
+            resizer.removeEventListener('pointercancel', handleUp);
+            if (resizer.releasePointerCapture && resizer.hasPointerCapture?.(pointerId)) {
+              resizer.releasePointerCapture(pointerId);
+            }
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            th.draggable = headerDraggable;
+            state.isResizingColumn = false;
+            saveColumnWidths();
+          };
+
+          const handleUp = (upEvent) => {
+            if (upEvent.pointerId !== pointerId) return;
+            cleanup();
+          };
+
+          resizer.addEventListener('pointermove', handleMove);
+          resizer.addEventListener('pointerup', handleUp);
+          resizer.addEventListener('pointercancel', handleUp);
+>>>>>>> impte
         });
         th.appendChild(resizer);
 
         th.draggable = true;
+<<<<<<< HEAD
         th.addEventListener('dragstart', () => {
+=======
+        th.addEventListener('dragstart', (event) => {
+          if (state.isResizingColumn) {
+            event.preventDefault();
+            return;
+          }
+>>>>>>> impte
           state.draggingHeader = header;
         });
         th.addEventListener('dragover', (event) => {
@@ -1049,7 +1177,13 @@
 
 
 
+<<<<<<< HEAD
     const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
+=======
+    const ALLOWED_VEHICLE_STATUSES = new Set(['ACTIVE', 'STOCK', 'STOLEN']);
+
+    const normalizeVehicleStatus = (value = '') => String(value).trim().toUpperCase();
+>>>>>>> impte
 
 
 
@@ -1060,6 +1194,13 @@
       const deduped = new Map();
 
       normalizedRows.forEach((row) => {
+<<<<<<< HEAD
+=======
+        const vehicleStatus = normalizeVehicleStatus(
+          row.vehicle_status || row['vehicle status'] || row['Vehicle Status'],
+        );
+        if (!ALLOWED_VEHICLE_STATUSES.has(vehicleStatus)) return;
+>>>>>>> impte
 
         const key = row.short_vin || row.shortvin;
 
@@ -1073,6 +1214,7 @@
 
     };
 
+<<<<<<< HEAD
     const collectFixUpdatesSyncData = (rows = []) => {
       const normalizedRows = normalizeRows(rows);
       const vins = new Set();
@@ -1112,6 +1254,8 @@
 
 
 
+=======
+>>>>>>> impte
     const hydrateActor = async () => {
 
       if (!supabaseClient) return;
@@ -1148,9 +1292,15 @@
 
     const handleCsvUpload = async (file) => {
 
+<<<<<<< HEAD
       if (!supabaseClient) throw new Error('Supabase client is not available.');
 
       if (!isAdminUser()) throw new Error('Only administrators can upload vehicle data.');
+=======
+      if (!supabaseClient) throw new Error('Database client is not available.');
+
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload vehicle data.');
+>>>>>>> impte
 
       updateUploadProgress(5, 'Reading CSV');
 
@@ -1159,7 +1309,10 @@
       updateUploadProgress(20, 'Parsing rows');
 
       const { rows } = parseCsvText(text);
+<<<<<<< HEAD
       const { vins, customers } = collectFixUpdatesSyncData(rows);
+=======
+>>>>>>> impte
 
       updateUploadProgress(40, 'Normalizing vehicles');
 
@@ -1185,7 +1338,11 @@
 
       if (deleteError) throw deleteError;
 
+<<<<<<< HEAD
       updateUploadProgress(75, 'Uploading to Supabase');
+=======
+      updateUploadProgress(75, 'Uploading to database');
+>>>>>>> impte
 
       const { error } = await supabaseClient
 
@@ -1205,7 +1362,10 @@
         action: 'bulk_upsert',
         summary: `Uploaded ${mapped.length} vehicle rows via CSV`,
       });
+<<<<<<< HEAD
       await syncVehiclesFromFixUpdates({ vins, customers });
+=======
+>>>>>>> impte
 
     };
 
@@ -1355,6 +1515,10 @@
       columnWidths: {},
 
       draggingHeader: null,
+<<<<<<< HEAD
+=======
+      isResizingColumn: false,
+>>>>>>> impte
 
       pagination: {
 
@@ -1543,7 +1707,11 @@
 
         els.uploadStatus.textContent = allowed
 
+<<<<<<< HEAD
           ? 'Supabase import with dedupe'
+=======
+          ? 'Database import with dedupe'
+>>>>>>> impte
 
           : 'Admin role required to upload';
 
@@ -1712,6 +1880,7 @@
 
       if (!els.uploadForm || !els.uploadInput) return;
 
+<<<<<<< HEAD
       setUploadAvailability(isAdminUser());
 
       window.addEventListener('auth:role-ready', (event) => {
@@ -1720,6 +1889,22 @@
 
         setUploadAvailability(role === ADMIN_ROLE);
 
+=======
+      refreshAdminAccess()
+        .then((allowed) => setUploadAvailability(allowed))
+        .catch((error) => {
+          console.warn('Unable to verify vehicle upload access', error);
+          setUploadAvailability(false);
+        });
+
+      window.addEventListener('auth:role-ready', () => {
+        refreshAdminAccess()
+          .then((allowed) => setUploadAvailability(allowed))
+          .catch((error) => {
+            console.warn('Unable to refresh vehicle upload access', error);
+            setUploadAvailability(false);
+          });
+>>>>>>> impte
       });
 
       els.uploadInput.addEventListener('change', () => {
@@ -1740,7 +1925,11 @@
 
         event.preventDefault();
 
+<<<<<<< HEAD
         if (!isAdminUser()) {
+=======
+        if (!(await refreshAdminAccess())) {
+>>>>>>> impte
 
           alert('You must be an administrator to upload vehicle data.');
 
@@ -1910,7 +2099,14 @@
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     const redirectToLogin = async () => {
+<<<<<<< HEAD
       if (!supabaseClient?.auth?.getSession) return;
+=======
+      if (!supabaseClient?.auth?.getSession) {
+        window.location.href = '../login.html';
+        return;
+      }
+>>>>>>> impte
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';

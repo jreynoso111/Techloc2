@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 import { requireSession, redirectToAdminHome, supabaseClient } from './admin-auth.js';
+=======
+import { requireSession, redirectToAdminHome, redirectToLogin, supabaseClient } from './admin-auth.js';
+import { clearWebAdminSession, getWebAdminAccess, isWebAdminSession } from './web-admin-session.js';
+>>>>>>> impte
 
 const TABLE_NAME = 'gps_blacklist';
 const KEY_CANDIDATES = ['id', 'uuid', 'serial', 'device_id', 'gps_id'];
@@ -8,6 +13,13 @@ const els = {
   totalCount: document.getElementById('total-count'),
   pkLabel: document.getElementById('pk-label'),
   lastSync: document.getElementById('last-sync'),
+<<<<<<< HEAD
+=======
+  diagnosticsPanel: document.getElementById('diagnostics-panel'),
+  diagnosticsSummary: document.getElementById('diagnostics-summary'),
+  diagnosticsLog: document.getElementById('diagnostics-log'),
+  clearErrorsBtn: document.getElementById('clear-errors-btn'),
+>>>>>>> impte
   headRow: document.getElementById('table-head-row'),
   body: document.getElementById('table-body'),
   feedback: document.getElementById('feedback'),
@@ -31,6 +43,10 @@ const state = {
   rows: [],
   columns: [],
   visibleColumns: [],
+<<<<<<< HEAD
+=======
+  diagnostics: [],
+>>>>>>> impte
   searchQuery: '',
   sortColumn: '',
   sortDirection: 'asc',
@@ -42,8 +58,27 @@ const state = {
 };
 
 const ADDED_AT_COL = 'added_at';
+<<<<<<< HEAD
 const AUTO_FIELDS = new Set(['is_active', 'added_by', 'uuid']);
 const HIDDEN_COLUMNS = new Set(['uuid', 'is_active']);
+=======
+const EFFECTIVE_FROM_COL_CANDIDATES = [
+  'effective_from',
+  'effective_date',
+  'effective_start_date',
+  'blacklist_from',
+  'blacklist_date',
+  'start_date',
+  'date_from',
+  'from_date',
+  'date',
+];
+const AUTO_FIELDS = new Set(['is_active', 'added_by', 'uuid']);
+const HIDDEN_COLUMNS = new Set(['uuid', 'is_active']);
+const ADMIN_ROLE = 'administrator';
+const DIAGNOSTIC_LIMIT = 40;
+let diagnosticsBound = false;
+>>>>>>> impte
 
 const setStatus = (message, tone = 'neutral') => {
   if (!els.statusPill) return;
@@ -70,6 +105,130 @@ const setFeedback = (message, tone = 'neutral') => {
 
 
 const normalizeColumnName = (value) => String(value || '').trim().toLowerCase();
+<<<<<<< HEAD
+=======
+const normalizeRole = (value) => String(value || '').trim().toLowerCase();
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+const toText = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch (_error) {
+    return String(value);
+  }
+};
+
+const normalizeErrorPayload = (error) => {
+  if (!error) {
+    return {
+      message: 'Unknown error',
+      code: null,
+      details: null,
+      hint: null,
+    };
+  }
+
+  if (typeof error === 'string') {
+    return {
+      message: error,
+      code: null,
+      details: null,
+      hint: null,
+    };
+  }
+
+  return {
+    message: toText(error.message || error.error || 'Unknown error'),
+    code: toText(error.code || ''),
+    details: toText(error.details || ''),
+    hint: toText(error.hint || ''),
+  };
+};
+
+const renderDiagnostics = () => {
+  if (!els.diagnosticsPanel || !els.diagnosticsSummary || !els.diagnosticsLog) return;
+
+  if (!state.diagnostics.length) {
+    els.diagnosticsPanel.classList.add('hidden');
+    els.diagnosticsSummary.textContent = 'No runtime errors detected.';
+    els.diagnosticsLog.textContent = '';
+    return;
+  }
+
+  els.diagnosticsPanel.classList.remove('hidden');
+  els.diagnosticsSummary.textContent = `${state.diagnostics.length} error(s) detected during this session.`;
+  els.diagnosticsLog.textContent = state.diagnostics
+    .map((entry, index) => {
+      const lines = [
+        `#${index + 1} ${entry.at}`,
+        `context: ${entry.context}`,
+        `message: ${entry.message}`,
+      ];
+      if (entry.code) lines.push(`code: ${entry.code}`);
+      if (entry.details) lines.push(`details: ${entry.details}`);
+      if (entry.hint) lines.push(`hint: ${entry.hint}`);
+      if (entry.metadata && Object.keys(entry.metadata).length) lines.push(`meta: ${toText(entry.metadata)}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
+};
+
+const reportError = (context, error, metadata = {}) => {
+  const payload = normalizeErrorPayload(error);
+  const entry = {
+    at: new Date().toISOString(),
+    context,
+    message: payload.message || 'Unknown error',
+    code: payload.code || null,
+    details: payload.details || null,
+    hint: payload.hint || null,
+    metadata,
+  };
+
+  state.diagnostics.unshift(entry);
+  if (state.diagnostics.length > DIAGNOSTIC_LIMIT) {
+    state.diagnostics.length = DIAGNOSTIC_LIMIT;
+  }
+
+  renderDiagnostics();
+
+  const suffix = entry.code ? ` [${entry.code}]` : '';
+  setStatus('Error detected', 'error');
+  setFeedback(`${entry.context}: ${entry.message}${suffix}`, 'error');
+
+  console.error(`[gps_blacklist_admin] ${context}`, error, metadata);
+};
+
+const bindDiagnostics = () => {
+  if (diagnosticsBound) return;
+  diagnosticsBound = true;
+
+  els.clearErrorsBtn?.addEventListener('click', () => {
+    state.diagnostics = [];
+    renderDiagnostics();
+    setFeedback('Diagnostics cleared.', 'neutral');
+  });
+
+  window.addEventListener('error', (event) => {
+    reportError('window.error', event.error || event.message || 'Unhandled window error', {
+      filename: event.filename,
+      lineno: event.lineno,
+      colno: event.colno,
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    reportError('window.unhandledrejection', event.reason || 'Unhandled promise rejection');
+  });
+};
+>>>>>>> impte
 
 const detectPrimaryKey = (columns) => KEY_CANDIDATES.find((key) => columns.includes(key)) || null;
 
@@ -82,6 +241,17 @@ const getDisplayColumns = (rows) => {
 const findColumnByNormalizedName = (normalizedName) =>
   state.columns.find((col) => normalizeColumnName(col) === normalizeColumnName(normalizedName)) || null;
 
+<<<<<<< HEAD
+=======
+const normalizeDateColumnToken = (value = '') => normalizeColumnName(value).replace(/[^a-z0-9]/g, '');
+
+const EFFECTIVE_FROM_COLUMN_TOKENS = new Set(
+  EFFECTIVE_FROM_COL_CANDIDATES.map((column) => normalizeDateColumnToken(column)),
+);
+
+const isEffectiveFromColumn = (columnName) => EFFECTIVE_FROM_COLUMN_TOKENS.has(normalizeDateColumnToken(columnName));
+
+>>>>>>> impte
 const formatAddedAt = (value) => {
   if (!value) return '—';
   const date = new Date(value);
@@ -95,8 +265,39 @@ const formatAddedAt = (value) => {
   return `${mm}/${dd}/${yy} [${hh}:${min}]`;
 };
 
+<<<<<<< HEAD
 const isAddedAtColumn = (columnName) => normalizeColumnName(columnName) === ADDED_AT_COL;
 
+=======
+const formatEffectiveFromDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${mm}/${dd}/${yy}`;
+};
+
+const isAddedAtColumn = (columnName) => normalizeColumnName(columnName) === ADDED_AT_COL;
+
+const toDateInputValue = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    const yyyy = String(parsed.getFullYear());
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const raw = String(value).trim();
+  const isoDate = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return isoDate ? isoDate[1] : '';
+};
+
+>>>>>>> impte
 
 
 const compareValues = (a, b) => {
@@ -136,7 +337,11 @@ const getFilteredRows = () => {
 
 const renderColumnSelectors = () => {
   const options = state.visibleColumns
+<<<<<<< HEAD
     .map((col) => `<option value="${col}">${col}</option>`)
+=======
+    .map((col) => `<option value="${escapeHtml(col)}">${escapeHtml(col)}</option>`)
+>>>>>>> impte
     .join('');
 
   if (els.sortColumn) {
@@ -152,10 +357,18 @@ const renderColumnSelectors = () => {
 
 const formatCell = (columnName, value) => {
   if (value === null || value === undefined || value === '') return '—';
+<<<<<<< HEAD
   if (isAddedAtColumn(columnName)) return formatAddedAt(value);
   if (typeof value === 'object') return JSON.stringify(value);
   const valueText = String(value);
   return valueText.length > 80 ? `${valueText.slice(0, 77)}...` : valueText;
+=======
+  if (isAddedAtColumn(columnName)) return escapeHtml(formatAddedAt(value));
+  if (isEffectiveFromColumn(columnName)) return escapeHtml(formatEffectiveFromDate(value));
+  if (typeof value === 'object') return escapeHtml(JSON.stringify(value));
+  const valueText = String(value);
+  return escapeHtml(valueText.length > 80 ? `${valueText.slice(0, 77)}...` : valueText);
+>>>>>>> impte
 };
 
 const renderHeader = () => {
@@ -163,7 +376,11 @@ const renderHeader = () => {
   const headers = state.visibleColumns
     .map(
       (col) =>
+<<<<<<< HEAD
         `<th class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-300">${col.toUpperCase()}</th>`,
+=======
+        `<th class="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-300">${escapeHtml(col.toUpperCase())}</th>`,
+>>>>>>> impte
     )
     .join('');
   els.headRow.innerHTML = `${headers}<th class="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-300">ACCIONES</th>`;
@@ -184,7 +401,11 @@ const renderTable = () => {
     .map((row) => {
       const rowKey = state.primaryKey ? row[state.primaryKey] : '';
       const cells = state.visibleColumns
+<<<<<<< HEAD
         .map((col) => `<td class="max-w-[260px] truncate px-3 py-2 text-slate-200" title="${String(row[col] ?? '')}">${formatCell(col, row[col])}</td>`)
+=======
+        .map((col) => `<td class="max-w-[260px] truncate px-3 py-2 text-slate-200" title="${escapeHtml(String(row[col] ?? ''))}">${formatCell(col, row[col])}</td>`)
+>>>>>>> impte
         .join('');
 
       return `
@@ -192,8 +413,13 @@ const renderTable = () => {
           ${cells}
           <td class="px-3 py-2">
             <div class="flex justify-end gap-2">
+<<<<<<< HEAD
               <button type="button" title="Edit" data-edit="${String(rowKey ?? '')}" class="h-7 w-7 rounded-md border border-blue-700/60 text-sm text-blue-200 hover:bg-blue-600/20">✎</button>
               <button type="button" title="Delete" data-delete="${String(rowKey ?? '')}" class="h-7 w-7 rounded-md border border-red-700/60 text-sm text-red-200 hover:bg-red-600/20">🗑</button>
+=======
+              <button type="button" title="Edit" data-edit="${escapeHtml(String(rowKey ?? ''))}" class="h-7 w-7 rounded-md border border-blue-700/60 text-sm text-blue-200 hover:bg-blue-600/20">✎</button>
+              <button type="button" title="Delete" data-delete="${escapeHtml(String(rowKey ?? ''))}" class="h-7 w-7 rounded-md border border-red-700/60 text-sm text-red-200 hover:bg-red-600/20">🗑</button>
+>>>>>>> impte
             </div>
           </td>
         </tr>
@@ -221,13 +447,23 @@ const openModal = (title, row = null) => {
   editableColumns.forEach((col) => {
     const value = row?.[col] ?? '';
     const fieldId = `field-${col}`;
+<<<<<<< HEAD
     const inputType = typeof value === 'number' ? 'number' : 'text';
+=======
+    const dateField = isEffectiveFromColumn(col);
+    const inputType = dateField ? 'date' : (typeof value === 'number' ? 'number' : 'text');
+    const inputValue = dateField ? toDateInputValue(value) : String(value);
+>>>>>>> impte
     els.rowForm.insertAdjacentHTML(
       'beforeend',
       `
       <label class="grid gap-1 text-xs font-semibold uppercase tracking-wide text-slate-300" for="${fieldId}">
         <span>${col}</span>
+<<<<<<< HEAD
         <input id="${fieldId}" data-field="${col}" type="${inputType}" value="${String(value).replaceAll('"', '&quot;')}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-blue-500 focus:outline-none" />
+=======
+        <input id="${fieldId}" data-field="${col}" data-date-field="${dateField ? 'true' : 'false'}" type="${inputType}" value="${String(inputValue).replaceAll('"', '&quot;')}" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-100 focus:border-blue-500 focus:outline-none" />
+>>>>>>> impte
       </label>
       `,
     );
@@ -248,7 +484,15 @@ const buildPayloadFromForm = () => {
   els.rowForm.querySelectorAll('[data-field]').forEach((input) => {
     const field = input.dataset.field;
     const raw = input.value;
+<<<<<<< HEAD
     payload[field] = raw === '' ? null : raw;
+=======
+    if (raw === '') {
+      payload[field] = null;
+      return;
+    }
+    payload[field] = raw;
+>>>>>>> impte
   });
   return payload;
 };
@@ -278,8 +522,16 @@ const saveModalRecord = async () => {
   if (state.editingKey !== null && state.primaryKey) {
     const { error } = await supabaseClient.from(TABLE_NAME).update(payload).eq(state.primaryKey, state.editingKey);
     if (error) {
+<<<<<<< HEAD
       setStatus('Error updating', 'error');
       setFeedback(error.message || 'Could not update the record.', 'error');
+=======
+      reportError('saveModalRecord.update', error, {
+        table: TABLE_NAME,
+        primaryKey: state.primaryKey,
+        rowKey: state.editingKey,
+      });
+>>>>>>> impte
       return;
     }
     setFeedback('Record updated successfully.', 'success');
@@ -287,8 +539,14 @@ const saveModalRecord = async () => {
     const insertPayload = applyInsertDefaults(payload);
     const { error } = await supabaseClient.from(TABLE_NAME).insert([insertPayload]);
     if (error) {
+<<<<<<< HEAD
       setStatus('Error inserting', 'error');
       setFeedback(error.message || 'Could not insert the record.', 'error');
+=======
+      reportError('saveModalRecord.insert', error, {
+        table: TABLE_NAME,
+      });
+>>>>>>> impte
       return;
     }
     setFeedback('Record inserted successfully.', 'success');
@@ -303,9 +561,26 @@ const fetchRows = async () => {
   const { data, error } = await supabaseClient.from(TABLE_NAME).select('*').limit(500);
 
   if (error) {
+<<<<<<< HEAD
     console.error(`Error loading ${TABLE_NAME}`, error);
     setStatus('Error loading', 'error');
     setFeedback(error.message || 'Could not query the table.', 'error');
+=======
+    const isPermissionError = String(error?.code || '') === '42501';
+    if (isPermissionError) {
+      reportError('fetchRows.select', error, {
+        table: TABLE_NAME,
+        authHint: 'The request is not authenticated as an admin user.',
+      });
+      setFeedback(
+        'Permission denied. Re-login with your administrator account from /pages/login.html.',
+        'error',
+      );
+      return;
+    }
+
+    reportError('fetchRows.select', error, { table: TABLE_NAME });
+>>>>>>> impte
     return;
   }
 
@@ -325,6 +600,7 @@ const fetchRows = async () => {
 };
 
 const validateAdminRole = async (session) => {
+<<<<<<< HEAD
   const userId = session?.user?.id;
   if (!userId) return false;
 
@@ -335,6 +611,59 @@ const validateAdminRole = async (session) => {
   }
 
   return String(data?.role || '').toLowerCase() === 'administrator';
+=======
+  const roleCandidates = new Set(
+    [
+      window.currentUserRole,
+      document.body?.dataset.userRole,
+      session?.user?.user_metadata?.role,
+      session?.user?.app_metadata?.role,
+    ]
+      .map((role) => normalizeRole(role))
+      .filter(Boolean),
+  );
+
+  if (isWebAdminSession(session)) {
+    const localRole = normalizeRole(getWebAdminAccess()?.role);
+    if (localRole) roleCandidates.add(localRole);
+  }
+
+  // Resolve source of truth from profiles to avoid auth metadata races.
+  const userId = session?.user?.id;
+  if (userId && supabaseClient?.from) {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('role, status')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      reportError('validateAdminRole.profile_lookup', error, { userId });
+    } else if (data) {
+      const profileRole = normalizeRole(data.role);
+      const profileStatus = normalizeRole(data.status) || 'active';
+      if (profileRole) {
+        roleCandidates.add(profileRole);
+        window.currentUserRole = profileRole;
+        if (document.body) document.body.dataset.userRole = profileRole;
+      }
+      if (profileStatus) {
+        window.currentUserStatus = profileStatus;
+        if (document.body) document.body.dataset.userStatus = profileStatus;
+      }
+      if (profileStatus === 'suspended') return false;
+    }
+  }
+
+  if (roleCandidates.has(ADMIN_ROLE)) return true;
+
+  reportError(
+    'validateAdminRole',
+    { message: 'Administrator role was not found for the current user.' },
+    { roles: [...roleCandidates] },
+  );
+  return false;
+>>>>>>> impte
 };
 
 const handleRowActions = async (event) => {
@@ -354,8 +683,16 @@ const handleRowActions = async (event) => {
     setStatus('Deleting…');
     const { error } = await supabaseClient.from(TABLE_NAME).delete().eq(state.primaryKey, deleteValue);
     if (error) {
+<<<<<<< HEAD
       setStatus('Error deleting', 'error');
       setFeedback(error.message || 'Could not delete the record.', 'error');
+=======
+      reportError('handleRowActions.delete', error, {
+        table: TABLE_NAME,
+        primaryKey: state.primaryKey,
+        rowKey: deleteValue,
+      });
+>>>>>>> impte
       return;
     }
 
@@ -366,12 +703,34 @@ const handleRowActions = async (event) => {
 
 const initialize = async () => {
   try {
+<<<<<<< HEAD
     const session = await requireSession();
+=======
+    bindDiagnostics();
+    renderDiagnostics();
+
+    const session = await requireSession();
+    if (isWebAdminSession(session)) {
+      clearWebAdminSession();
+      reportError('initialize.auth_mode', {
+        message: 'GPS Blacklist requires a full authenticated session. Local admin mode is not enough.',
+      });
+      setStatus('Authenticated session required', 'error');
+      setFeedback('Go to /pages/login.html and sign in with your administrator account.', 'error');
+      setTimeout(() => redirectToLogin(), 500);
+      return;
+    }
+
+>>>>>>> impte
     state.currentUserLabel = session?.user?.email || session?.user?.id || 'unknown-user';
 
     const isAdmin = await validateAdminRole(session);
 
     if (!isAdmin) {
+<<<<<<< HEAD
+=======
+      reportError('initialize.authorization', { message: 'Administrator role is required for this page.' });
+>>>>>>> impte
       redirectToAdminHome();
       return;
     }
@@ -423,22 +782,34 @@ const initialize = async () => {
     els.modalCancel?.addEventListener('click', closeModal);
     els.modalSave?.addEventListener('click', () => {
       saveModalRecord().catch((error) => {
+<<<<<<< HEAD
         console.error('Save failed', error);
         setFeedback('Could not save the record.', 'error');
+=======
+        reportError('saveModalRecord.catch', error);
+>>>>>>> impte
       });
     });
 
     els.body?.addEventListener('click', (event) => {
       handleRowActions(event).catch((error) => {
+<<<<<<< HEAD
         console.error('Row action failed', error);
         setFeedback('Could not complete the action.', 'error');
+=======
+        reportError('handleRowActions.catch', error);
+>>>>>>> impte
       });
     });
 
     await fetchRows();
     window.lucide?.createIcons();
   } catch (error) {
+<<<<<<< HEAD
     console.error('GPS blacklist admin initialization failed', error);
+=======
+    reportError('initialize.catch', error);
+>>>>>>> impte
     setStatus('Session error', 'error');
   }
 };

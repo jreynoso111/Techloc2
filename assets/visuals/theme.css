@@ -1,10 +1,18 @@
 /* Global darker tone for TechLoc pages */
 :root {
+<<<<<<< HEAD
   --page-bg: #030712;
   --page-bg-secondary: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.08), transparent 35%),
     radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.08), transparent 30%),
     #030712;
   --card-surface: rgba(15, 23, 42, 0.7);
+=======
+  --page-bg: #000000;
+  --page-bg-secondary: radial-gradient(circle at 18% 18%, rgba(56, 189, 248, 0.04), transparent 34%),
+    radial-gradient(circle at 82% 0%, rgba(148, 163, 184, 0.04), transparent 30%),
+    #000000;
+  --card-surface: rgba(0, 0, 0, 0.76);
+>>>>>>> impte
   --card-border: rgba(255, 255, 255, 0.06);
   --muted-foreground: #94a3b8;
   color-scheme: dark;
@@ -12,6 +20,10 @@
 
 body {
   background: var(--page-bg-secondary);
+<<<<<<< HEAD
+=======
+  background-color: #000000;
+>>>>>>> impte
   color: #e2e8f0;
 }
 
@@ -30,6 +42,196 @@ body {
 }
 
 .dark-panel {
+<<<<<<< HEAD
   background: rgba(2, 6, 23, 0.65) !important;
   border-color: rgba(255, 255, 255, 0.04) !important;
 }
+=======
+  background: rgba(0, 0, 0, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Global black palette across Tailwind-driven pages */
+.bg-slate-950,
+.bg-slate-950\/95,
+.bg-slate-950\/92,
+.bg-slate-950\/90,
+.bg-slate-950\/85,
+.bg-slate-950\/80,
+.bg-slate-950\/70,
+.bg-slate-950\/60,
+.bg-slate-950\/50,
+.bg-slate-950\/40,
+.bg-slate-950\/30,
+.bg-slate-950\/20,
+.bg-slate-950\/10 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(0 0 0 / var(--tw-bg-opacity, 1)) !important;
+}
+
+.bg-slate-900,
+.bg-slate-900\/95,
+.bg-slate-900\/92,
+.bg-slate-900\/90,
+.bg-slate-900\/85,
+.bg-slate-900\/80,
+.bg-slate-900\/70,
+.bg-slate-900\/60,
+.bg-slate-900\/50,
+.bg-slate-900\/40,
+.bg-slate-900\/30,
+.bg-slate-900\/20,
+.bg-slate-900\/10 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(5 5 5 / var(--tw-bg-opacity, 1)) !important;
+}
+
+.bg-slate-800,
+.bg-slate-800\/95,
+.bg-slate-800\/90,
+.bg-slate-800\/85,
+.bg-slate-800\/80,
+.bg-slate-800\/70,
+.bg-slate-800\/60,
+.bg-slate-800\/50,
+.bg-slate-800\/40,
+.bg-slate-800\/30 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(10 10 10 / var(--tw-bg-opacity, 1)) !important;
+}
+
+.hover\:bg-slate-900:hover,
+.hover\:bg-slate-900\/60:hover,
+.hover\:bg-slate-800:hover,
+.hover\:bg-slate-800\/60:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.from-slate-950 {
+  --tw-gradient-from: #000000 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(0 0 0 / 0) var(--tw-gradient-to-position) !important;
+}
+
+.from-slate-900,
+.from-slate-800 {
+  --tw-gradient-from: #080808 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgb(8 8 8 / 0) var(--tw-gradient-to-position) !important;
+}
+
+.to-slate-950,
+.to-slate-900 {
+  --tw-gradient-to: #000000 var(--tw-gradient-to-position) !important;
+}
+
+.shadow-blue-900\/30,
+.shadow-blue-900\/20,
+.shadow-blue-900\/10,
+.shadow-slate-900\/80,
+.shadow-slate-900\/60,
+.shadow-slate-900\/50 {
+  --tw-shadow-color: rgba(0, 0, 0, 0.5) !important;
+  --tw-shadow: var(--tw-shadow-colored) !important;
+}
+
+/* Shared header consistency lock across pages with custom density/font rules */
+[data-site-header].tl-header-root {
+  position: sticky;
+  top: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-site-header] .tl-header-shell {
+  max-width: 1152px !important;
+  padding: 14px 24px !important;
+  gap: 14px !important;
+}
+
+[data-site-header] .tl-header-brand-row {
+  gap: 14px !important;
+}
+
+[data-site-header] .tl-header-brand {
+  gap: 10px !important;
+}
+
+[data-site-header] .tl-header-mark {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 14px !important;
+}
+
+[data-site-header] .tl-header-mobile,
+[data-site-header] .tl-header-nav-shell,
+[data-site-header] [data-contact-dropdown],
+[data-site-header] .tl-header-account {
+  background: rgba(0, 0, 0, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-site-header] .tl-header-link:hover,
+[data-site-header] [data-contact-dropdown] a:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+[data-site-header] .tl-header-eyebrow {
+  font-size: 11px !important;
+  letter-spacing: 0.16em !important;
+}
+
+[data-site-header] .tl-header-title {
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+
+[data-site-header] .tl-header-mobile {
+  border-radius: 14px !important;
+  padding: 8px !important;
+}
+
+[data-site-header] .tl-header-nav-shell {
+  gap: 12px !important;
+  font-size: 13px !important;
+  border-radius: 16px !important;
+  padding: 12px !important;
+}
+
+[data-site-header] .tl-header-nav {
+  gap: 8px !important;
+}
+
+[data-site-header] .tl-header-link {
+  font-size: 13px !important;
+  line-height: 1.25 !important;
+  padding: 5px 12px !important;
+}
+
+[data-site-header] .tl-header-actions {
+  gap: 10px !important;
+  padding-top: 10px !important;
+}
+
+[data-site-header] .tl-header-account {
+  font-size: 11px !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+}
+
+[data-site-header] .tl-header-auth {
+  font-size: 11px !important;
+  padding: 5px 12px !important;
+}
+
+@media (min-width: 768px) {
+  [data-site-header] .tl-header-nav-shell {
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  [data-site-header] .tl-header-actions {
+    padding-top: 0 !important;
+  }
+}
+>>>>>>> impte

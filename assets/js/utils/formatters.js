@@ -82,7 +82,11 @@ export const getVehicleMarkerBorderColor = (fillColor) => {
   return '#991b1b';
 };
 
+<<<<<<< HEAD
 const parsePtLastReadDate = (value) => {
+=======
+export const parsePtLastReadDate = (value) => {
+>>>>>>> impte
   if (!value) return null;
   const raw = String(value).trim();
   if (!raw) return null;
@@ -120,6 +124,7 @@ const getPtLastReadStatus = (value) => {
   return 'fresh';
 };
 
+<<<<<<< HEAD
 export const getMovingStatus = (vehicle = {}) => {
   const ptReadStatus = getPtLastReadStatus(vehicle?.lastRead);
   if (ptReadStatus === 'unknown') return 'unknown';
@@ -127,6 +132,111 @@ export const getMovingStatus = (vehicle = {}) => {
   const movingValue = parseInt(vehicle.moving || vehicle.movingCalc || vehicle.gpsMoving || '', 10);
   if (movingValue === 1) return 'moving';
   if (movingValue === -1) return 'stopped';
+=======
+const getVehicleLastReadCandidate = (vehicle = {}) => {
+  const details = vehicle?.details || {};
+  return vehicle?.lastRead
+    ?? details?.pt_last_read
+    ?? details?.pt_last_ping
+    ?? details?.pt_lastread
+    ?? details?.last_read
+    ?? details?.['PT Last Read']
+    ?? details?.['PT Last Read ']
+    ?? details?.['Last Read']
+    ?? details?.gps_time
+    ?? details?.updated_at
+    ?? '';
+};
+
+const parseMovingIndicator = (...candidates) => {
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const raw = String(candidate).trim();
+    if (!raw) continue;
+    const numeric = Number.parseInt(raw, 10);
+    if (Number.isFinite(numeric)) {
+      if (numeric === 1) return 'moving';
+      if (numeric === -1 || numeric === 0) return 'stopped';
+    }
+    const normalized = raw.toLowerCase();
+    if (normalized === 'moving' || normalized === 'move' || normalized === 'true' || normalized === 'yes') {
+      return 'moving';
+    }
+    if (
+      normalized === 'not moving' ||
+      normalized === 'stopped' ||
+      normalized === 'stop' ||
+      normalized === 'false' ||
+      normalized === 'no'
+    ) {
+      return 'stopped';
+    }
+  }
+  return null;
+};
+
+const parseStationaryDays = (...candidates) => {
+  const parseFirstNumericToken = (value) => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const normalized = raw.replace(/,/g, '');
+    const match = normalized.match(/[+-]?(?:\d+\.?\d*|\.\d+)/);
+    if (!match) return null;
+    const parsed = Number.parseFloat(match[0]);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) continue;
+    const numeric = parseFirstNumericToken(candidate);
+    if (!Number.isFinite(numeric)) continue;
+    return Math.max(0, numeric);
+  }
+  return null;
+};
+
+export const getMovingStatus = (vehicle = {}) => {
+  const stationaryDays = parseStationaryDays(
+    vehicle?.daysStationary,
+    vehicle?.details?.days_stationary,
+    vehicle?.details?.['Days Stationary'],
+    vehicle?.details?.['Days stationary'],
+    vehicle?.details?.['Days Parked']
+  );
+
+  const explicitStatus = parseMovingIndicator(
+    vehicle?.historyMovingOverride,
+    vehicle?.details?.historyMovingOverride,
+    vehicle?.moving,
+    vehicle?.movingCalc,
+    vehicle?.gpsMoving,
+    vehicle?.details?.moving,
+    vehicle?.details?.moving_calc,
+    vehicle?.details?.gps_moving,
+    vehicle?.details?.['Moving'],
+    vehicle?.details?.['Moving (Calc)'],
+    vehicle?.details?.['GPS Moving']
+  );
+
+  if (explicitStatus === 'moving' || explicitStatus === 'stopped') {
+    return explicitStatus;
+  }
+
+  const lastReadStatus = getPtLastReadStatus(getVehicleLastReadCandidate(vehicle));
+  if (lastReadStatus === 'unknown') {
+    return 'unknown';
+  }
+
+  if (stationaryDays !== null && stationaryDays > 0) {
+    return 'stopped';
+  }
+
+  if (stationaryDays !== null) {
+    return stationaryDays <= 0 ? 'moving' : 'stopped';
+  }
+
+>>>>>>> impte
   return 'unknown';
 };
 

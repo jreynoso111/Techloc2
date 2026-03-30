@@ -116,6 +116,32 @@
 
   <script type="module">
     import { setupBackgroundManager } from './assets/scripts/backgroundManager.js';
+<<<<<<< HEAD
+=======
+    import { supabase as supabaseClient } from './assets/js/supabaseClient.js';
+
+    const getValidClient = () => {
+      const client = supabaseClient || window.supabaseClient || null;
+      if (!client?.auth?.getSession) return null;
+      return client;
+    };
+
+    const safeSessionStorageGet = (key) => {
+      try {
+        return sessionStorage.getItem(key);
+      } catch (_error) {
+        return null;
+      }
+    };
+
+    const safeSessionStorageSet = (key, value) => {
+      try {
+        sessionStorage.setItem(key, value);
+      } catch (_error) {
+        // Non-blocking on restricted storage environments.
+      }
+    };
+>>>>>>> impte
 
     // --- 1. LÓGICA DE ESTADÍSTICAS (SUPABASE) ---
     const animateValue = (id, start, end, duration) => {
@@ -156,14 +182,22 @@
       const CACHE_DURATION = 300000; // 5 minutos
 
       // Intentamos obtener el cliente desde window (definido en supabaseClient.js)
+<<<<<<< HEAD
       const client = window.supabaseClient || window.supabase;
+=======
+      const client = getValidClient();
+>>>>>>> impte
 
       if (!client) {
         console.error("Supabase client not initialized.");
         return;
       }
 
+<<<<<<< HEAD
       const cachedStats = sessionStorage.getItem(CACHE_KEY);
+=======
+      const cachedStats = safeSessionStorageGet(CACHE_KEY);
+>>>>>>> impte
       if (cachedStats) {
         try {
           const { totalCount, availableCount, uniqueStates, avgRating, timestamp } = JSON.parse(cachedStats);
@@ -214,7 +248,11 @@
         // D. SLA Rating: Valor estático alto (hasta que tengas columna de rating real)
         const avgRating = 4.8;
 
+<<<<<<< HEAD
         sessionStorage.setItem(CACHE_KEY, JSON.stringify({
+=======
+        safeSessionStorageSet(CACHE_KEY, JSON.stringify({
+>>>>>>> impte
           totalCount,
           availableCount,
           uniqueStates,
@@ -238,7 +276,11 @@
     const handleAuthUI = async () => {
         const loginBtn = document.getElementById('nav-login');
         const logoutBtn = document.getElementById('nav-logout');
+<<<<<<< HEAD
         const client = window.supabase || window.supabaseClient;
+=======
+        const client = getValidClient();
+>>>>>>> impte
 
         if (!client) return;
 
@@ -262,12 +304,25 @@
         };
 
         // Verificar estado inicial y escuchar cambios
+<<<<<<< HEAD
         const { data: { session } } = await client.auth.getSession();
         updateButtonState(session);
 
         client.auth.onAuthStateChange((_event, session) => {
             updateButtonState(session);
         });
+=======
+        try {
+          const { data: { session } } = await client.auth.getSession();
+          updateButtonState(session);
+
+          client.auth.onAuthStateChange((_event, session) => {
+              updateButtonState(session);
+          });
+        } catch (error) {
+          console.error('Failed to initialize auth UI', error);
+        }
+>>>>>>> impte
     };
 
     // --- 3. INICIALIZACIÓN ---
@@ -308,13 +363,27 @@
       }
 
       // Iniciar fondo de constelación
+<<<<<<< HEAD
       setupBackgroundManager();
+=======
+      try {
+        setupBackgroundManager();
+      } catch (error) {
+        console.warn('Background manager failed to initialize.', error);
+      }
+>>>>>>> impte
 
       // Ejecutar lógica de autenticación
       handleAuthUI();
 
       // Cargar estadísticas de la base de datos
+<<<<<<< HEAD
       fetchServiceStats();
+=======
+      fetchServiceStats().catch((error) => {
+        console.warn('Home stats load warning:', error);
+      });
+>>>>>>> impte
     });
   </script>
   <script type="module" src="assets/scripts/sharedHeader.js"></script>

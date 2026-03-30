@@ -7,7 +7,12 @@ export const vehiclePopupTemplate = ({
   locationNote = '',
   accuracyDot = '',
   gpsFix = 'Unknown',
+<<<<<<< HEAD
   dealCompletion = '—'
+=======
+  dealCompletion = '—',
+  mapsUrl = ''
+>>>>>>> impte
 } = {}) => `
   <div class="w-[240px] bg-slate-950/90 text-white">
     <div class="p-3 space-y-2">
@@ -40,7 +45,14 @@ export const vehiclePopupTemplate = ({
         </div>
       </div>
 
+<<<<<<< HEAD
       <div class="flex items-center justify-end">
+=======
+      <div class="flex items-center justify-end gap-2">
+        ${mapsUrl
+          ? `<a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" class="map-coord-link-btn is-tight">Google Maps</a>`
+          : ''}
+>>>>>>> impte
         <button type="button" data-view-more-popup class="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/50 bg-amber-500/15 px-3 py-1 text-[10px] font-bold text-amber-100 hover:bg-amber-500/25 transition-colors">
           More details
         </button>

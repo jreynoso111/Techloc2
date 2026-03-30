@@ -98,10 +98,13 @@
                   <i data-lucide="wrench" class="h-4 w-4"></i>
                   Open services
                 </a>
+<<<<<<< HEAD
                 <a href="vehicles.html" class="inline-flex items-center gap-2 rounded-full border border-blue-600 bg-blue-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blue-100 transition hover:-translate-y-0.5 hover:border-blue-400">
                   <i data-lucide="car" class="h-4 w-4"></i>
                   View vehicles
                 </a>
+=======
+>>>>>>> impte
                 <a href="analytics.html" class="inline-flex items-center gap-2 rounded-full border border-amber-600 bg-amber-600/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:-translate-y-0.5 hover:border-amber-400">
                   <i data-lucide="activity" class="h-4 w-4"></i>
                   Analytics panel
@@ -136,7 +139,11 @@
               <div class="grid gap-3 md:grid-cols-3">
                 <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                   <p class="text-sm font-semibold text-slate-200">Active providers</p>
+<<<<<<< HEAD
                   <p class="text-xs text-slate-400">Synced directly from Supabase Services.</p>
+=======
+                  <p class="text-xs text-slate-400">Synced directly from the live services dataset.</p>
+>>>>>>> impte
                 </div>
                 <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                   <p class="text-sm font-semibold text-slate-200">Monitored fleet</p>
@@ -167,7 +174,11 @@
           <div class="flex items-center justify-between">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Data room</p>
+<<<<<<< HEAD
               <h3 class="text-xl font-bold text-white">Supabase live tables</h3>
+=======
+              <h3 class="text-xl font-bold text-white">Live data tables</h3>
+>>>>>>> impte
               <p class="text-sm text-slate-400">Updated statistics for every connected dataset.</p>
             </div>
             <div class="text-sm font-semibold text-slate-300">Real-time database statistics</div>
@@ -182,9 +193,15 @@
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
                   <h3 class="text-lg font-bold text-white">Import Deals CSV</h3>
+<<<<<<< HEAD
                   <p class="text-sm text-slate-400">Upsert into DealsJP1 (Finance Only).</p>
                 </div>
                 <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Filter: Finance</span>
+=======
+                  <p class="text-sm text-slate-400">Upsert into DealsJP1 (Finance EX/EXT).</p>
+                </div>
+                <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Filter: FINANCE-EX / FINANCE-EXT</span>
+>>>>>>> impte
               </div>
 
               <div class="mt-auto space-y-4">
@@ -207,7 +224,11 @@
                     <div id="deals-progress-bar" class="h-2 w-0 bg-emerald-500 transition-all duration-200"></div>
                   </div>
                 </div>
+<<<<<<< HEAD
                 <p class="text-xs leading-relaxed text-slate-400">Requires: VIN, Current Stock No. & Sales Channel containing 'Finance'.</p>
+=======
+                <p class="text-xs leading-relaxed text-slate-400">Requires: VIN, Current Stock No, and Sales Channel = FINANCE-EX or FINANCE-EXT.</p>
+>>>>>>> impte
               </div>
             </section>
 
@@ -250,7 +271,11 @@
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-200">Secure upload</p>
                   <h3 class="text-lg font-bold text-white">Import PT Last Ping</h3>
+<<<<<<< HEAD
                   <p class="text-sm text-slate-400">Upload PT-LastPing data to Supabase (Serial required).</p>
+=======
+                  <p class="text-sm text-slate-400">Upload PT-LastPing data to the live database (Serial required).</p>
+>>>>>>> impte
                 </div>
                 <span class="shrink-0 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">Serial required</span>
               </div>
@@ -275,7 +300,11 @@
                     <div id="pt-ping-progress-bar" class="h-2 w-0 bg-indigo-500 transition-all duration-200"></div>
                   </div>
                 </div>
+<<<<<<< HEAD
                 <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to Supabase (no VIN check). Conflicts resolved by VIN + Serial.</p>
+=======
+                <p id="pt-ping-status" class="text-xs leading-relaxed text-slate-400">Serial is required; all rows are sent to the live database after VIN validation. Conflict handling uses Serial + day bucket with automatic fallback.</p>
+>>>>>>> impte
                 <details id="pt-error-box" class="hidden overflow-hidden rounded-xl border border-rose-900/60 bg-rose-950/60 text-xs text-rose-100 shadow-inner shadow-rose-950/50">
                   <summary class="cursor-pointer px-3 py-2 font-semibold text-rose-200">Error details</summary>
                   <pre id="pt-error-pre" class="max-h-64 overflow-auto whitespace-pre-wrap px-3 pb-3 pt-1 font-mono text-[11px] leading-relaxed text-rose-100"></pre>
@@ -321,6 +350,10 @@
       loadPreferredBackgroundMode,
       persistBackgroundMode,
     } from '../../assets/scripts/backgroundPreference.js';
+<<<<<<< HEAD
+=======
+    import { createGpsHistoryManager } from '../../assets/scripts/gpsHistory.js';
+>>>>>>> impte
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     function cleanHeaderKey(key) {
@@ -352,6 +385,16 @@
       'TAM Legacy Stock #',
       'Payment Method'
     ];
+<<<<<<< HEAD
+=======
+    const FALLBACK_NS_INVOICES_COLUMNS = [
+      'Date',
+      'Document Number',
+      'Stock No',
+      'Amount',
+      'Amount Remaining',
+    ];
+>>>>>>> impte
     const PT_PING_COLUMNS = [
       'Serial',
       'Year',
@@ -366,8 +409,18 @@
       'Lat',
       'Long',
     ];
+<<<<<<< HEAD
     const PT_PING_BATCH_SIZE = 10;
     const PT_PING_BATCH_DELAY_MS = 150;
+=======
+    const PT_PING_INITIAL_BATCH_SIZE = 150;
+    const PT_PING_MIN_BATCH_SIZE = 10;
+    const PT_PING_BATCH_DELAY_MS = 25;
+    const PT_PING_MAX_RETRIES_PER_BATCH = 3;
+    const PT_PING_RETRY_BASE_DELAY_MS = 500;
+    const PT_PING_PRIMARY_CONFLICT_TARGET = 'Serial,read_day,day_half';
+    const PT_PING_FALLBACK_CONFLICT_TARGET = 'Serial,Date';
+>>>>>>> impte
     const PT_PING_HEADER_MAP = (() => {
       const map = new Map();
       PT_PING_COLUMNS.forEach((col) => {
@@ -378,7 +431,11 @@
       return map;
     })();
     
+<<<<<<< HEAD
     // --- LISTA MAESTRA (Validación Local) ---
+=======
+    // Master list used for local CSV-to-column mapping.
+>>>>>>> impte
     const KNOWN_DEALS_COLUMNS = [
       'Deal Status', 'Deal Date', 'HOLD', 'Current Stock No', 'Customer', 'Brand', 'Model',
       'Model Year', 'VIN', 'Corrected VIN', 'Vehicle Status', 'Mileage', 'Driver License #',
@@ -396,6 +453,16 @@
       'Current Title Subsidiary', 'Current Title Physical Location', 'Title In Date', 'Title Out Date', 
       'Financing Company', 'Broker', 'Return Type', 'Actual System Return Date', 'Returned By'
     ];
+<<<<<<< HEAD
+=======
+    const FALLBACK_DEALS_COLUMNS = [
+      'Current Stock No',
+      'VIN',
+      'Sales Channel',
+      'Deal Status',
+      'Vehicle Status',
+    ];
+>>>>>>> impte
 
     const DATASETS = [
       {
@@ -420,6 +487,7 @@
         displayName: 'Deals'
       },
       {
+<<<<<<< HEAD
         table: 'Titles',
         scope: 'Compliance',
         title: 'Titles table',
@@ -427,6 +495,8 @@
         displayName: 'Titles'
       },
       {
+=======
+>>>>>>> impte
         table: NS_INVOICES_TABLE,
         scope: 'Finance',
         title: 'NS Invoices & Payments',
@@ -443,11 +513,43 @@
     ];
 
     const ADMIN_ROLE = 'administrator';
+<<<<<<< HEAD
     const isAdminUser = () => (window.currentUserRole || '').toLowerCase() === ADMIN_ROLE;
+=======
+    let hasVerifiedAdminAccess = false;
+    const isAdminUser = () => hasVerifiedAdminAccess;
+    const refreshAdminAccess = async () => {
+      if (!supabaseClient?.auth?.getSession || !supabaseClient?.from) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+      if (sessionError) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) {
+        hasVerifiedAdminAccess = false;
+        return hasVerifiedAdminAccess;
+      }
+      const { data: profile, error: profileError } = await supabaseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      hasVerifiedAdminAccess = !profileError && String(profile?.role || '').toLowerCase() === ADMIN_ROLE;
+      return hasVerifiedAdminAccess;
+    };
+>>>>>>> impte
 
     const toNumber = (value) => {
       if (value === undefined || value === null) return null;
       const cleaned = typeof value === 'string' ? value.replace(/,/g, '').trim() : value;
+<<<<<<< HEAD
+=======
+      if (cleaned === '') return null;
+>>>>>>> impte
       const num = Number(cleaned);
       return Number.isFinite(num) ? num : null;
     };
@@ -499,6 +601,31 @@
       box.classList.remove('hidden');
     };
 
+<<<<<<< HEAD
+=======
+    const registerGlobalAlertIgnorePattern = (pattern) => {
+      if (typeof window === 'undefined') return () => {};
+      const normalized = String(pattern || '').trim();
+      if (!normalized) return () => {};
+
+      const currentPatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+        ? window.__techlocIgnoredAlertRequestPatterns
+        : [];
+      const alreadyPresent = currentPatterns.includes(normalized);
+      if (!alreadyPresent) {
+        window.__techlocIgnoredAlertRequestPatterns = [...currentPatterns, normalized];
+      }
+
+      return () => {
+        if (alreadyPresent) return;
+        const activePatterns = Array.isArray(window.__techlocIgnoredAlertRequestPatterns)
+          ? window.__techlocIgnoredAlertRequestPatterns
+          : [];
+        window.__techlocIgnoredAlertRequestPatterns = activePatterns.filter((item) => item !== normalized);
+      };
+    };
+
+>>>>>>> impte
     const buildSlimPtPayload = (row = {}) => {
       const clean = (value) => cleanValue(value);
       const numericOrValue = (value) => {
@@ -517,8 +644,13 @@
         VIN: clean(row?.['VIN']),
         Date: clean(row?.['Date']),
         address: clean(row?.['address']),
+<<<<<<< HEAD
         Lat: numericOrValue(row?.['Lat']),
         Long: numericOrValue(row?.['Long']),
+=======
+        Lat: toNumber(row?.['Lat']),
+        Long: toNumber(row?.['Long']),
+>>>>>>> impte
       };
 
       return Object.entries(slim).reduce((acc, [key, value]) => {
@@ -529,6 +661,178 @@
       }, {});
     };
 
+<<<<<<< HEAD
+=======
+    const gpsHistoryTools = createGpsHistoryManager();
+    const chunkArray = (items = [], chunkSize = 100) => {
+      const safeChunkSize = Math.max(1, Number(chunkSize) || 100);
+      const chunks = [];
+      for (let index = 0; index < items.length; index += safeChunkSize) {
+        chunks.push(items.slice(index, index + safeChunkSize));
+      }
+      return chunks;
+    };
+
+    const normalizeUpperTrimmedValue = (value) => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized || '';
+    };
+
+    const hasValidPtCoordinates = (row = {}) => {
+      const lat = toNumber(row?.['Lat'] ?? row?.Lat ?? row?.lat);
+      const lng = toNumber(row?.['Long'] ?? row?.Long ?? row?.long ?? row?.lng);
+      return Number.isFinite(lat) && Number.isFinite(lng);
+    };
+
+    const parsePtComparableTimestamp = (value) => {
+      const normalized = normalizePtDate(value) || value;
+      const timestamp = Date.parse(normalized || '');
+      return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
+    };
+
+    const buildVehiclePtSyncPayload = (vehicleRow = {}, records = []) => {
+      if (!vehicleRow?.id || !Array.isArray(records) || !records.length) return null;
+
+      const normalizedVehicle = {
+        id: vehicleRow.id,
+        vin: vehicleRow.VIN,
+        ptSerial: vehicleRow['pt serial'],
+        encoreSerial: vehicleRow['encore serial'],
+        winnerSerial: vehicleRow['winner serial'],
+        details: vehicleRow
+      };
+
+      const resolvedWinnerSerial = typeof gpsHistoryTools.resolveVehicleWinnerSerialFromRecords === 'function'
+        ? gpsHistoryTools.resolveVehicleWinnerSerialFromRecords(normalizedVehicle, records)
+        : '';
+      const scopedRecords = resolvedWinnerSerial
+        ? records.filter((record) => {
+          const recordSerial = typeof gpsHistoryTools.getRecordSerial === 'function'
+            ? gpsHistoryTools.getRecordSerial(record)
+            : String(record?.Serial || '').trim().toUpperCase();
+          return recordSerial === resolvedWinnerSerial;
+        })
+        : records;
+      const sourceRecords = (scopedRecords.length ? scopedRecords : records)
+        .filter((record) => hasValidPtCoordinates(record));
+      if (!sourceRecords.length) return null;
+      const orderedRecords = [...sourceRecords].sort((left, right) => (
+        parsePtComparableTimestamp(left?.Date) - parsePtComparableTimestamp(right?.Date)
+      ));
+      const firstRecord = orderedRecords[0] || null;
+      const latestRecord = orderedRecords[orderedRecords.length - 1] || null;
+      if (!latestRecord) return null;
+
+      const payload = { id: vehicleRow.id };
+      const nextSerial = resolvedWinnerSerial
+        || (typeof gpsHistoryTools.getRecordSerial === 'function'
+          ? gpsHistoryTools.getRecordSerial(latestRecord)
+          : normalizeUpperTrimmedValue(latestRecord?.Serial));
+      const firstRead = normalizePtDate(firstRecord?.Date);
+      const lastRead = normalizePtDate(latestRecord?.Date);
+      const currentLastReadMs = parsePtComparableTimestamp(vehicleRow?.['pt last read']);
+      const nextLastReadMs = parsePtComparableTimestamp(latestRecord?.Date);
+      const lat = toNumber(latestRecord?.Lat);
+      const lng = toNumber(latestRecord?.Long);
+
+      if (
+        Number.isFinite(currentLastReadMs)
+        && Number.isFinite(nextLastReadMs)
+        && nextLastReadMs < currentLastReadMs
+      ) {
+        return null;
+      }
+
+      if (nextSerial) payload['pt serial'] = nextSerial;
+      if (firstRead) payload['pt first read'] = firstRead;
+      if (lastRead) payload['pt last read'] = lastRead;
+      if (latestRecord?.moved !== undefined && latestRecord?.moved !== null && `${latestRecord.moved}` !== '') {
+        payload.moving = latestRecord.moved;
+      }
+      if (
+        latestRecord?.days_stationary !== undefined
+        && latestRecord?.days_stationary !== null
+        && `${latestRecord.days_stationary}` !== ''
+      ) {
+        payload.days_stationary = latestRecord.days_stationary;
+      }
+      if (lat !== null) payload.lat = lat;
+      if (lng !== null) payload.long = lng;
+
+      return Object.keys(payload).length > 1 ? payload : null;
+    };
+
+    const syncVehiclesFromPtLastPing = async (vins = []) => {
+      if (!supabaseClient) return { updated: 0, skipped: 0 };
+
+      const normalizedVins = Array.from(new Set(
+        (vins || [])
+          .map((vin) => normalizeUpperTrimmedValue(vin))
+          .filter(Boolean)
+      ));
+      if (!normalizedVins.length) return { updated: 0, skipped: 0 };
+
+      const releaseVehiclesAlertIgnore = registerGlobalAlertIgnorePattern('/rest/v1/vehicles');
+      try {
+        const { data: vehicleRows, error: vehicleError } = await supabaseClient
+          .from('vehicles')
+          .select('*');
+        if (vehicleError) throw vehicleError;
+
+        const matchingVehicles = (vehicleRows || []).filter((row) => (
+          normalizedVins.includes(normalizeUpperTrimmedValue(row?.VIN))
+        ));
+        if (!matchingVehicles.length) {
+          return { updated: 0, skipped: normalizedVins.length };
+        }
+
+        const ptRows = [];
+        for (const vinChunk of chunkArray(normalizedVins, 50)) {
+          const { data, error } = await supabaseClient
+            .from('PT-LastPing')
+            .select('VIN,Date,Serial,moved,days_stationary,Lat,Long,address')
+            .in('VIN', vinChunk);
+          if (error) throw error;
+          ptRows.push(...(data || []));
+        }
+
+        const recordsByVin = new Map();
+        ptRows.forEach((row) => {
+          const vin = normalizeUpperTrimmedValue(row?.VIN);
+          if (!vin) return;
+          const bucket = recordsByVin.get(vin) || [];
+          bucket.push(row);
+          recordsByVin.set(vin, bucket);
+        });
+
+        const payloads = matchingVehicles
+          .map((vehicleRow) => {
+            const vin = normalizeUpperTrimmedValue(vehicleRow?.VIN);
+            return buildVehiclePtSyncPayload(vehicleRow, recordsByVin.get(vin) || []);
+          })
+          .filter(Boolean);
+
+        if (!payloads.length) {
+          return { updated: 0, skipped: normalizedVins.length };
+        }
+
+        for (const payloadChunk of chunkArray(payloads, 100)) {
+          const { error } = await supabaseClient
+            .from('vehicles')
+            .upsert(payloadChunk, { onConflict: 'id' });
+          if (error) throw error;
+        }
+
+        return {
+          updated: payloads.length,
+          skipped: Math.max(0, normalizedVins.length - payloads.length)
+        };
+      } finally {
+        releaseVehiclesAlertIgnore();
+      }
+    };
+
+>>>>>>> impte
     const normalizePtHeaders = (headers = []) => {
       const normalized = new Set();
       headers.forEach((header) => {
@@ -558,13 +862,21 @@
 
     const tableColumnCache = new Map();
 
+<<<<<<< HEAD
     const fetchTableColumns = async (tableName) => {
       if (tableColumnCache.has(tableName)) return tableColumnCache.get(tableName);
       const emptySet = new Set();
+=======
+    const fetchTableColumns = async (tableName, fallbackColumns = []) => {
+      if (tableColumnCache.has(tableName)) return tableColumnCache.get(tableName);
+      const fallbackSet = new Set((fallbackColumns || []).filter(Boolean));
+      const emptySet = new Set(fallbackSet);
+>>>>>>> impte
       if (!supabaseClient) return emptySet;
       let columns = [];
       try {
         const { data, error } = await supabaseClient
+<<<<<<< HEAD
           .from('information_schema.columns')
           .select('column_name')
           .eq('table_schema', 'public')
@@ -586,6 +898,16 @@
           console.warn('Unable to infer columns from sample row:', err);
         }
       }
+=======
+          .from(tableName)
+          .select('*')
+          .limit(1);
+        if (!error && data?.length) columns = Object.keys(data[0]);
+      } catch (err) {
+        console.warn(`Unable to infer columns for ${tableName} from sample row:`, err);
+      }
+      if (!columns.length && fallbackSet.size) columns = Array.from(fallbackSet);
+>>>>>>> impte
       const columnSet = new Set(columns);
       tableColumnCache.set(tableName, columnSet);
       return columnSet;
@@ -621,6 +943,27 @@
       return message.includes('row-level') || message.includes('rls') || message.includes('permission');
     };
 
+<<<<<<< HEAD
+=======
+    const getSupabaseErrorText = (error) =>
+      [error?.message, error?.code, error?.details, error?.hint]
+        .filter(Boolean)
+        .join(' | ')
+        .toLowerCase();
+
+    const isSchemaMismatchError = (error) => {
+      const text = getSupabaseErrorText(error);
+      return (
+        text.includes('schema cache') ||
+        text.includes('column') && text.includes('does not exist') ||
+        text.includes('column') && text.includes('not found')
+      );
+    };
+
+    const shortSupabaseError = (error) =>
+      [error?.message, error?.details, error?.hint].filter(Boolean).join(' | ') || 'Unknown error';
+
+>>>>>>> impte
     const getTableStats = async (dataset) => {
       if (!supabaseClient) {
         return { rows: 0, columns: 0, lastUpdated: null, restricted: true, message: 'Client unavailable' };
@@ -741,10 +1084,17 @@
       }, 4200);
     };
 
+<<<<<<< HEAD
     // --- UPLOAD DEALS: AHORA ROBUSTO Y NORMALIZADO (CON FILTRO DE DUPLICADOS) ---
     const uploadDealsRows = async (rows, parseErrors = 0, rawHeaders = []) => {
       if (!supabaseClient) throw new Error('Supabase client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload deals data.');
+=======
+    // Deals upload with row normalization and duplicate filtering.
+    const uploadDealsRows = async (rows, parseErrors = 0, rawHeaders = []) => {
+      if (!supabaseClient) throw new Error('Supabase client unavailable.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload deals data.');
+>>>>>>> impte
 
       const submitBtn = document.getElementById('deals-upload-button');
       const progressWrap = document.getElementById('deals-progress');
@@ -766,6 +1116,7 @@
       };
       
       const columnMap = buildColumnMap(KNOWN_DEALS_COLUMNS);
+<<<<<<< HEAD
       const tableColumns = await fetchTableColumns(DEALS_TABLE);
       if (!tableColumns.size) {
         showToast('No database columns detected for Deals. Upload stopped.', 'error');
@@ -773,10 +1124,22 @@
       }
       const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
       const conflictColumn = allowedColumnMap.get('current stock no');
+=======
+      const tableColumns = await fetchTableColumns(DEALS_TABLE, KNOWN_DEALS_COLUMNS);
+      const usingFallbackSchema = !tableColumns.size;
+      const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_DEALS_COLUMNS) : tableColumns;
+      if (usingFallbackSchema) {
+        console.warn('Deals schema introspection unavailable. Upload will continue with core columns only.');
+      }
+      const allowedColumnMap = filterColumnMapByTable(columnMap, effectiveColumns);
+      const conflictColumn = allowedColumnMap.get('current stock no');
+      const salesChannelColumn = allowedColumnMap.get('sales channel');
+>>>>>>> impte
       const dealStatusColumn = allowedColumnMap.get('deal status');
       const vehicleStatusColumn = allowedColumnMap.get('vehicle status');
       const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
       const hasStockHeader = normalizedHeaders.has('current stock no');
+<<<<<<< HEAD
       const hasDealStatusHeader = normalizedHeaders.has('deal status');
       const hasVehicleStatusHeader = normalizedHeaders.has('vehicle status');
 
@@ -786,6 +1149,16 @@
         if (trimmed === 'FINANCE-EX' || trimmed === 'FINANCE EXT' || trimmed === 'FINANCE-EXT') {
           return 'FINANCE-EXT';
         }
+=======
+      const hasSalesChannelHeader = normalizedHeaders.has('sales channel');
+      const hasDealStatusHeader = normalizedHeaders.has('deal status');
+      const hasVehicleStatusHeader = normalizedHeaders.has('vehicle status');
+      const normalizeAllowedSalesChannel = (value) => {
+        if (typeof value !== 'string') return '';
+        const normalized = value.trim().toUpperCase().replace(/\s+/g, '-');
+        if (normalized === 'FINANCE-EX') return 'FINANCE-EX';
+        if (normalized === 'FINANCE-EXT') return 'FINANCE-EXT';
+>>>>>>> impte
         return '';
       };
 
@@ -793,18 +1166,31 @@
         showToast('Deals table missing required column: Current Stock No.', 'error');
         return;
       }
+<<<<<<< HEAD
 
       setProgress(0, 'Preparing & deduplicating rows...');
       
       // 1. DEDUPLICACIÓN PARA EVITAR ERROR 'ON CONFLICT'
       const uniqueDealsMap = new Map();
       let skippedInvalid = 0;
+=======
+      if (!salesChannelColumn || !hasSalesChannelHeader) {
+        showToast('Deals upload requires Sales Channel in both CSV and database table.', 'error');
+        return;
+      }
+
+      setProgress(0, 'Preparing & deduplicating rows...');
+      
+      // Deduplicate by stock number to avoid onConflict batch failures.
+      const uniqueDealsMap = new Map();
+>>>>>>> impte
       let skippedInvalidSalesChannel = 0;
       let skippedMissingRequired = 0;
       let duplicatesRemoved = 0;
 
       rows.forEach((rawRow) => {
         const normalizedRow = normalizeRow(rawRow);
+<<<<<<< HEAD
         // Validaciones
         const salesChannel = normalizedRow['sales channel'];
         const normalizedSalesChannel = normalizeFinanceSalesChannel(salesChannel);
@@ -818,12 +1204,23 @@
         if (normalizedSalesChannel) {
           normalizedRow['sales channel'] = normalizedSalesChannel;
         }
+=======
+        const normalizedSalesChannel = normalizeAllowedSalesChannel(normalizedRow['sales channel']);
+        if (!normalizedSalesChannel) {
+          skippedInvalidSalesChannel += 1;
+          return;
+        }
+        normalizedRow['sales channel'] = normalizedSalesChannel;
+>>>>>>> impte
 
         const stockNumber = normalizeStockNumber(normalizedRow['current stock no']);
         const vin = cleanValue(normalizedRow['vin']);
 
         if (!stockNumber || !vin) {
+<<<<<<< HEAD
           skippedInvalid += 1;
+=======
+>>>>>>> impte
           skippedMissingRequired += 1;
           return; 
         }
@@ -837,6 +1234,10 @@
         });
 
         mapped[conflictColumn] = stockNumber;
+<<<<<<< HEAD
+=======
+        mapped[salesChannelColumn] = normalizedSalesChannel;
+>>>>>>> impte
         if (dealStatusColumn && hasDealStatusHeader) {
           mapped[dealStatusColumn] = cleanValue(normalizedRow['deal status']) ?? null;
         }
@@ -844,21 +1245,35 @@
           mapped[vehicleStatusColumn] = cleanValue(normalizedRow['vehicle status']) ?? null;
         }
 
+<<<<<<< HEAD
         // LLAVE UNICA: VIN + Current Stock No
         const uniqueKey = `${vin}_${stockNumber}`;
+=======
+        // Unique key aligned with onConflict target.
+        const uniqueKey = `${stockNumber}`;
+>>>>>>> impte
 
         if (uniqueDealsMap.has(uniqueKey)) {
             duplicatesRemoved++;
         }
+<<<<<<< HEAD
         // Sobrescribimos (se queda el último del CSV)
+=======
+        // Keep the most recent row for each stock number from the CSV.
+>>>>>>> impte
         uniqueDealsMap.set(uniqueKey, mapped);
       });
 
       const filteredRows = Array.from(uniqueDealsMap.values());
 
       if (!filteredRows.length) {
+<<<<<<< HEAD
         setProgress(0, 'No finance rows detected.');
         showToast('No valid FINANCE rows detected.\nCheck "Current Stock No." and "Sales Channel".', 'error');
+=======
+        setProgress(0, 'No valid rows detected.');
+        showToast('No valid rows detected.\nCheck "Current Stock No.", "VIN", and "Sales Channel" (FINANCE-EX / FINANCE-EXT).', 'error');
+>>>>>>> impte
         return;
       }
 
@@ -890,7 +1305,15 @@
           .select();
 
         if (error) {
+<<<<<<< HEAD
           console.error('Supabase upsert error:', error);
+=======
+          console.error('Database upsert error:', error);
+          if (isSchemaMismatchError(error)) {
+            showToast('Deals upload schema mismatch: ' + shortSupabaseError(error), 'error');
+            return;
+          }
+>>>>>>> impte
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             return;
@@ -917,10 +1340,30 @@
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
+<<<<<<< HEAD
+=======
+      setProgress(98, 'Recalculating DealsJP1 last-deal flags...');
+
+      const { data: recalcData, error: recalcError } = await supabaseClient.rpc('recalc_dealsjp1_last_deal');
+      if (recalcError) {
+        console.error('Database DealsJP1 last-deal recalculation error:', recalcError);
+        if (isRlsBlocked(recalcError)) {
+          showToast('Deals uploaded, but last-deal recalculation was blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
+        } else if (isSchemaMismatchError(recalcError)) {
+          showToast('Deals uploaded, but last-deal recalculation has a schema mismatch: ' + shortSupabaseError(recalcError), 'error');
+        } else {
+          showToast('DealsJP1 last-deal recalculation failed: ' + shortSupabaseError(recalcError), 'error');
+        }
+        setProgress(100, 'Upload completed, but last-deal recalculation failed.');
+        return;
+      }
+
+>>>>>>> impte
       setProgress(100, 'Running DealsJP1 vehicle sync...');
 
       const { data: syncData, error: syncError } = await supabaseClient.rpc('sync_vehicles_from_dealsjp1_lastdeal');
       if (syncError) {
+<<<<<<< HEAD
         console.error('Supabase DealsJP1 sync error:', syncError);
         showToast('DealsJP1 vehicle sync failed: ' + formatSupabaseError(syncError), 'error');
         throw syncError;
@@ -939,6 +1382,29 @@
         '\nTotal rows processed: ' + rows.length +
         '\nProcessed (Unique Finance): ' + filteredRows.length +
         '\nUpserted: ' + totalUpserted +
+=======
+        console.error('Database DealsJP1 sync error:', syncError);
+        if (isRlsBlocked(syncError)) {
+          showToast('Deals uploaded, but vehicle sync was blocked by database permissions: ' + shortSupabaseError(syncError), 'error');
+        } else if (isSchemaMismatchError(syncError)) {
+          showToast('Deals uploaded, but vehicle sync has a schema mismatch: ' + shortSupabaseError(syncError), 'error');
+        } else {
+          showToast('DealsJP1 vehicle sync failed: ' + shortSupabaseError(syncError), 'error');
+        }
+        setProgress(100, 'Upload completed, but vehicle sync failed.');
+        return;
+      }
+
+      console.info('DealsJP1 last-deal recalculation updated rows:', recalcData);
+      console.info('DealsJP1 vehicle sync updated rows:', syncData);
+
+      const summary =
+        'Completed.' +
+        '\nTotal rows processed: ' + rows.length +
+        '\nProcessed (Unique by Stock No): ' + filteredRows.length +
+        '\nUpserted: ' + totalUpserted +
+        '\nLast Deal recalculated rows: ' + (recalcData ?? 0) +
+>>>>>>> impte
         '\nSkipped (Invalid Sales Channel): ' + skippedInvalidSalesChannel +
         '\nSkipped (Missing Stock No or VIN): ' + skippedMissingRequired +
         '\nDuplicates Removed: ' + duplicatesRemoved + 
@@ -970,8 +1436,13 @@
     };
 
     const uploadInvoicesRows = async (rows, parseErrors = 0, rawHeaders = []) => {
+<<<<<<< HEAD
       if (!supabaseClient) throw new Error('Supabase client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload invoice data.');
+=======
+      if (!supabaseClient) throw new Error('Database client unavailable.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload invoice data.');
+>>>>>>> impte
 
       const submitBtn = document.getElementById('ns-invoices-upload-button');
       const progressWrap = document.getElementById('ns-invoices-progress');
@@ -993,10 +1464,26 @@
       };
 
       const columnMap = buildColumnMap(NS_INVOICES_COLUMNS);
+<<<<<<< HEAD
       const tableColumns = new Set(NS_INVOICES_COLUMNS);
       const allowedColumnMap = filterColumnMapByTable(columnMap, tableColumns);
       const conflictColumn = allowedColumnMap.get('document number');
       const conflictColumns = 'Stock No,Document Number,Date';
+=======
+      const tableColumns = await fetchTableColumns(NS_INVOICES_TABLE, NS_INVOICES_COLUMNS);
+      const usingFallbackSchema = !tableColumns.size;
+      const effectiveColumns = usingFallbackSchema ? new Set(FALLBACK_NS_INVOICES_COLUMNS) : tableColumns;
+      if (usingFallbackSchema) {
+        console.warn('NS invoices schema introspection unavailable. Upload will continue with core columns only.');
+      }
+      const allowedColumnMap = filterColumnMapByTable(columnMap, effectiveColumns);
+      const conflictColumn = allowedColumnMap.get('document number');
+      const conflictParts = ['stock no', 'document number', 'date'];
+      const conflictMappedColumns = conflictParts
+        .map((part) => allowedColumnMap.get(part))
+        .filter(Boolean);
+      const conflictColumns = conflictMappedColumns.join(',');
+>>>>>>> impte
       const normalizedHeaders = new Set(rawHeaders.map((header) => cleanHeaderKey(header)));
       const hasDocumentNumberHeader = normalizedHeaders.has('document number');
       const hasStockNoHeader = normalizedHeaders.has('stock no');
@@ -1005,6 +1492,13 @@
         showToast('Local configuration error: "Document Number" missing from invoice columns.', 'error');
         return;
       }
+<<<<<<< HEAD
+=======
+      if (conflictMappedColumns.length !== conflictParts.length) {
+        showToast('NS invoices table is missing one or more conflict columns (Stock No, Document Number, Date).', 'error');
+        return;
+      }
+>>>>>>> impte
 
       setProgress(0, 'Loading Deals stock numbers...');
 
@@ -1012,7 +1506,11 @@
       try {
         dealsStockNumberSet = await fetchDealsStockNumberSet();
       } catch (err) {
+<<<<<<< HEAD
         console.error('Supabase fetch error (Deals stock numbers):', err);
+=======
+        console.error('Database fetch error (Deals stock numbers):', err);
+>>>>>>> impte
         showToast('Unable to load Deals stock numbers for validation.', 'error');
         setProgress(0, 'Failed to load Deals stock numbers.');
         return;
@@ -1028,8 +1526,20 @@
 
       const { error: truncateError } = await supabaseClient.rpc('truncate_ns_invoices');
       if (truncateError) {
+<<<<<<< HEAD
         console.error('Supabase truncate error:', truncateError);
         showToast('Cannot clear previous NS invoices: ' + truncateError.message, 'error');
+=======
+        console.error('Database truncate error:', truncateError);
+        if (isRlsBlocked(truncateError)) {
+          showToast('Cannot clear previous NS invoices due to database permissions: ' + shortSupabaseError(truncateError), 'error');
+        } else if (isSchemaMismatchError(truncateError)) {
+          showToast('Cannot clear previous NS invoices due to schema mismatch: ' + shortSupabaseError(truncateError), 'error');
+        } else {
+          showToast('Cannot clear previous NS invoices: ' + shortSupabaseError(truncateError), 'error');
+        }
+        setProgress(5, 'Failed to clear previous invoice data.');
+>>>>>>> impte
         return;
       }
 
@@ -1104,7 +1614,15 @@
           .upsert(batch, { onConflict: conflictColumns, ignoreDuplicates: true });
 
         if (error) {
+<<<<<<< HEAD
           console.error('Supabase upsert error:', error);
+=======
+          console.error('Database upsert error:', error);
+          if (isSchemaMismatchError(error)) {
+            showToast('Invoices upload schema mismatch: ' + shortSupabaseError(error), 'error');
+            return;
+          }
+>>>>>>> impte
           if (isRlsBlocked(error)) {
             showToast('Upload blocked by security policy (RLS).', 'error');
             return;
@@ -1133,8 +1651,19 @@
       setProgress(95, 'Recalculating open balances...');
       const { error: recalcError } = await supabaseClient.rpc('recalc_open_balance_all_ns_invoices');
       if (recalcError) {
+<<<<<<< HEAD
         console.error('Supabase open balance recalculation error:', recalcError);
         showToast('Open balance recalculation failed: ' + recalcError.message, 'error');
+=======
+        console.error('Database open balance recalculation error:', recalcError);
+        if (isRlsBlocked(recalcError)) {
+          showToast('Open balance recalculation blocked by database permissions: ' + shortSupabaseError(recalcError), 'error');
+        } else if (isSchemaMismatchError(recalcError)) {
+          showToast('Open balance recalculation failed due to schema mismatch: ' + shortSupabaseError(recalcError), 'error');
+        } else {
+          showToast('Open balance recalculation failed: ' + shortSupabaseError(recalcError), 'error');
+        }
+>>>>>>> impte
       }
 
       const summary =
@@ -1154,8 +1683,13 @@
       const form = document.getElementById('deals-upload-form');
       const fileInput = document.getElementById('deals-file');
       const submitBtn = document.getElementById('deals-upload-button');
+<<<<<<< HEAD
       const requireAdmin = () => {
         const allowed = isAdminUser();
+=======
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
+>>>>>>> impte
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1164,6 +1698,7 @@
         return allowed;
       };
       if (!form || !fileInput || !submitBtn) return;
+<<<<<<< HEAD
       const syncAccess = () => requireAdmin();
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
@@ -1171,6 +1706,15 @@
       submitBtn.addEventListener('click', (event) => {
         event.preventDefault(); 
         if (!requireAdmin()) {
+=======
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify deals admin access', error));
+      syncAccess();
+      window.addEventListener('auth:role-updated', syncAccess);
+      
+      submitBtn.addEventListener('click', async (event) => {
+        event.preventDefault(); 
+        if (!(await requireAdmin())) {
+>>>>>>> impte
           showToast('Only administrators can upload deals data.', 'error');
           return;
         }
@@ -1214,8 +1758,13 @@
       const form = document.getElementById('ns-invoices-upload-form');
       const fileInput = document.getElementById('ns-invoices-file');
       const submitBtn = document.getElementById('ns-invoices-upload-button');
+<<<<<<< HEAD
       const requireAdmin = () => {
         const allowed = isAdminUser();
+=======
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
+>>>>>>> impte
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1224,6 +1773,7 @@
         return allowed;
       };
       if (!form || !fileInput || !submitBtn) return;
+<<<<<<< HEAD
       const syncAccess = () => requireAdmin();
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
@@ -1231,6 +1781,15 @@
       submitBtn.addEventListener('click', (event) => {
         event.preventDefault();
         if (!requireAdmin()) {
+=======
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify invoice admin access', error));
+      syncAccess();
+      window.addEventListener('auth:role-updated', syncAccess);
+
+      submitBtn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (!(await requireAdmin())) {
+>>>>>>> impte
           showToast('Only administrators can upload invoice data.', 'error');
           return;
         }
@@ -1280,8 +1839,13 @@
         if (status) status.textContent = text;
       };
 
+<<<<<<< HEAD
       const requireAdmin = () => {
         const allowed = isAdminUser();
+=======
+      const requireAdmin = async () => {
+        const allowed = await refreshAdminAccess();
+>>>>>>> impte
         if (fileInput) fileInput.disabled = !allowed;
         if (submitBtn) submitBtn.disabled = !allowed;
         const titleText = allowed ? '' : 'Administrator access required';
@@ -1291,13 +1855,21 @@
       };
 
       if (!form || !fileInput || !submitBtn) return;
+<<<<<<< HEAD
       const syncAccess = () => requireAdmin();
+=======
+      const syncAccess = () => requireAdmin().catch((error) => console.warn('Unable to verify PT ping admin access', error));
+>>>>>>> impte
       syncAccess();
       window.addEventListener('auth:role-updated', syncAccess);
 
       submitBtn.addEventListener('click', async (event) => {
         event.preventDefault();
+<<<<<<< HEAD
         if (!requireAdmin()) {
+=======
+        if (!(await requireAdmin())) {
+>>>>>>> impte
           showToast('Only administrators can upload PT ping data.', 'error');
           return;
         }
@@ -1392,7 +1964,11 @@
                 .replace(/^\uFEFF/, '')
                 .replace(/\u00A0/g, ' ')
                 .trim(),
+<<<<<<< HEAD
             worker: false,
+=======
+            worker: true,
+>>>>>>> impte
             complete: (results) => {
               const headers = results.meta?.fields || [];
               resolve({ rows: results.data || [], headers, errors: results.errors || [] });
@@ -1500,9 +2076,24 @@
       }
     };
 
+<<<<<<< HEAD
     const uploadPtPingRows = async (rows, parseErrors = 0) => {
       if (!supabaseClient) throw new Error('Supabase client unavailable.');
       if (!isAdminUser()) throw new Error('Only administrators can upload PT ping data.');
+=======
+    const purgePtRowsMissingCoordinates = async () => {
+      const { error, count } = await supabaseClient
+        .from('PT-LastPing')
+        .delete({ count: 'exact' })
+        .or('Lat.is.null,Long.is.null');
+      if (error) throw error;
+      return Number.isFinite(Number(count)) ? Number(count) : 0;
+    };
+
+    const uploadPtPingRows = async (rows, parseErrors = 0) => {
+      if (!supabaseClient) throw new Error('Database client unavailable.');
+      if (!(await refreshAdminAccess())) throw new Error('Only administrators can upload PT ping data.');
+>>>>>>> impte
 
       const normalizeVinLast6 = (vin) => {
         if (!vin && vin !== 0) return null;
@@ -1542,6 +2133,7 @@
       const errorPre = document.getElementById('pt-error-pre');
       const rejectedRows = [];
       const cleanedRows = (rows || []).map(sanitizePtPingRow);
+<<<<<<< HEAD
       const ptPingDedupFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'America/New_York',
         year: 'numeric',
@@ -1554,12 +2146,21 @@
         inserted: 0,
         batches: 0,
         rejectedMissingRequired: 0,
+=======
+      const aggregated = {
+        inserted: 0,
+        batches: 0,
+        deletedMissingCoordinates: 0,
+        rejectedMissingRequired: 0,
+        rejectedMissingCoordinates: 0,
+>>>>>>> impte
         rejectedInvalidDate: 0,
         skippedDeduplication: 0,
         skippedSupabaseDuplicates: 0,
         rejectedNoMatchVin: 0,
       };
 
+<<<<<<< HEAD
       const recalcPtMovedForSerials = async (serials = []) => {
         if (!serials.length) return;
         try {
@@ -1588,6 +2189,18 @@
         if (!year || !month || !day || Number.isNaN(hour)) return { readDay: null, dayHalf: null };
         const readDay = `${year}-${month}-${day}`;
         const dayHalf = hour < 12 ? 0 : 1;
+=======
+      const derivePtDayParts = (dateVal) => {
+        const parsedDate = new Date(dateVal);
+        if (Number.isNaN(parsedDate.getTime())) return { readDay: null, dayHalf: null };
+        const year = parsedDate.getUTCFullYear();
+        const month = String(parsedDate.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(parsedDate.getUTCDate()).padStart(2, '0');
+        const hour = parsedDate.getUTCHours();
+        if (!year || !month || !day || Number.isNaN(hour)) return { readDay: null, dayHalf: null };
+        const readDay = `${year}-${month}-${day}`;
+        const dayHalf = Math.min(2, Math.floor(hour / 8));
+>>>>>>> impte
         return { readDay, dayHalf };
       };
 
@@ -1598,12 +2211,134 @@
         return `${serialVal}__${readDay}__${dayHalf}`;
       };
 
+<<<<<<< HEAD
       const deduplicateValidRows = (rowsToDedup) => {
         const latestByKey = new Map();
+=======
+      const PT_STATIONARY_COORDINATE_THRESHOLD_METERS = 120;
+
+      const getPtPointDistanceMeters = (fromPoint, toPoint) => {
+        if (!fromPoint || !toPoint) return Number.POSITIVE_INFINITY;
+        const fromLat = toNumber(fromPoint?.lat);
+        const fromLng = toNumber(fromPoint?.lng);
+        const toLat = toNumber(toPoint?.lat);
+        const toLng = toNumber(toPoint?.lng);
+        if (!Number.isFinite(fromLat) || !Number.isFinite(fromLng) || !Number.isFinite(toLat) || !Number.isFinite(toLng)) {
+          return Number.POSITIVE_INFINITY;
+        }
+        const toRadians = (value) => value * (Math.PI / 180);
+        const earthRadiusMeters = 6371000;
+        const deltaLat = toRadians(toLat - fromLat);
+        const deltaLng = toRadians(toLng - fromLng);
+        const lat1 = toRadians(fromLat);
+        const lat2 = toRadians(toLat);
+        const a = (Math.sin(deltaLat / 2) ** 2)
+          + (Math.cos(lat1) * Math.cos(lat2) * (Math.sin(deltaLng / 2) ** 2));
+        const boundedA = Math.min(1, Math.max(0, a));
+        const c = 2 * Math.atan2(Math.sqrt(boundedA), Math.sqrt(1 - boundedA));
+        return earthRadiusMeters * c;
+      };
+
+      const parsePtRowMovingState = (row = {}) => {
+        const candidates = [
+          row?.moved,
+          row?.Moved,
+          row?.moving,
+          row?.Moving,
+          row?.moving_calc,
+          row?.['Moving (Calc)'],
+          row?.['GPS Moving'],
+          row?.gps_moving
+        ];
+        for (const candidate of candidates) {
+          if (candidate === null || candidate === undefined) continue;
+          const raw = `${candidate}`.trim();
+          if (!raw) continue;
+          const numeric = Number.parseInt(raw, 10);
+          if (Number.isFinite(numeric)) {
+            if (numeric === 1) return 'moving';
+            if (numeric === 0 || numeric === -1) return 'stopped';
+          }
+          const normalized = raw.toLowerCase();
+          if (['moving', 'move', 'true', 'yes'].includes(normalized)) return 'moving';
+          if (['stopped', 'not moving', 'stop', 'false', 'no', 'parked'].includes(normalized)) return 'stopped';
+        }
+        return 'unknown';
+      };
+
+      const isStationaryPtDayGroup = (entries = []) => {
+        if (!Array.isArray(entries) || entries.length <= 1) return true;
+        const normalizedEntries = entries
+          .map((entry) => ({
+            ...entry,
+            timestamp: Date.parse(entry?.row?.['Date'] || ''),
+            lat: toNumber(entry?.row?.['Lat'] ?? entry?.row?.Lat ?? entry?.row?.lat),
+            lng: toNumber(entry?.row?.['Long'] ?? entry?.row?.Long ?? entry?.row?.long ?? entry?.row?.lng),
+            movementState: parsePtRowMovingState(entry?.row)
+          }))
+          .sort((a, b) => {
+            const timeA = Number.isFinite(a.timestamp) ? a.timestamp : Number.NEGATIVE_INFINITY;
+            const timeB = Number.isFinite(b.timestamp) ? b.timestamp : Number.NEGATIVE_INFINITY;
+            return timeA - timeB;
+          });
+
+        if (normalizedEntries.some((entry) => entry.movementState === 'moving')) return false;
+
+        const firstWithCoords = normalizedEntries.find((entry) => Number.isFinite(entry.lat) && Number.isFinite(entry.lng));
+        if (!firstWithCoords) {
+          return !normalizedEntries.some((entry) => entry.movementState === 'unknown');
+        }
+
+        return normalizedEntries.every((entry) => {
+          if (!Number.isFinite(entry.lat) || !Number.isFinite(entry.lng)) return true;
+          const distanceMeters = getPtPointDistanceMeters(firstWithCoords, entry);
+          return Number.isFinite(distanceMeters) && distanceMeters <= PT_STATIONARY_COORDINATE_THRESHOLD_METERS;
+        });
+      };
+
+      const deduplicateValidRows = (rowsToDedup) => {
+        const entriesBySerialDay = new Map();
+        rowsToDedup.forEach((entry) => {
+          const serialVal = `${entry?.row?.['Serial'] || ''}`.trim();
+          if (!serialVal || !entry?.readDay) return;
+          const bucketKey = `${serialVal}__${entry.readDay}`;
+          const bucket = entriesBySerialDay.get(bucketKey) || [];
+          bucket.push(entry);
+          entriesBySerialDay.set(bucketKey, bucket);
+        });
+
+        const latestByKey = new Map();
+        const latestByStationaryDay = new Map();
+        const stationaryStateByDay = new Map();
+>>>>>>> impte
 
         rowsToDedup.forEach(({ row, readDay, dayHalf }, index) => {
           const serialVal = row?.['Serial'];
           const dateVal = row?.['Date'];
+<<<<<<< HEAD
+=======
+          const stationaryDayKey = `${serialVal || ''}__${readDay || ''}`;
+          const dayEntries = entriesBySerialDay.get(stationaryDayKey) || [];
+          const isStationaryDay = stationaryStateByDay.has(stationaryDayKey)
+            ? stationaryStateByDay.get(stationaryDayKey)
+            : isStationaryPtDayGroup(dayEntries);
+          stationaryStateByDay.set(stationaryDayKey, isStationaryDay);
+          if (serialVal && readDay && isStationaryDay) {
+            const currentTime = new Date(dateVal).getTime();
+            const existing = latestByStationaryDay.get(stationaryDayKey);
+            if (existing) {
+              aggregated.skippedDeduplication += 1;
+              const existingTime = new Date(existing.row?.['Date']).getTime();
+              if (!Number.isNaN(currentTime) && (Number.isNaN(existingTime) || currentTime >= existingTime)) {
+                latestByStationaryDay.set(stationaryDayKey, { row, index });
+              }
+            } else {
+              latestByStationaryDay.set(stationaryDayKey, { row, index });
+            }
+            return;
+          }
+
+>>>>>>> impte
           const key = buildPtPingDedupKey(serialVal, dateVal) || `${serialVal}__${readDay}__${dayHalf}`;
           const currentTime = new Date(dateVal).getTime();
           const existing = latestByKey.get(key);
@@ -1618,7 +2353,14 @@
           latestByKey.set(key, { row, index });
         });
 
+<<<<<<< HEAD
         return Array.from(latestByKey.values())
+=======
+        return Array.from([
+          ...latestByKey.values(),
+          ...latestByStationaryDay.values()
+        ])
+>>>>>>> impte
           .sort((a, b) => a.index - b.index)
           .map((entry) => entry.row);
       };
@@ -1643,7 +2385,23 @@
       resetErrorBox();
       setProgress(0, 'Preparing upload...');
 
+<<<<<<< HEAD
       setStatus(`Validating ${cleanedRows.length} rows (Serial and Date required)...`);
+=======
+      try {
+        setStatus('Removing PT rows without coordinates...');
+        aggregated.deletedMissingCoordinates = await purgePtRowsMissingCoordinates();
+      } catch (err) {
+        console.error('Failed to purge PT rows without coordinates', err);
+        showToast('Unable to remove PT rows without coordinates.', 'error');
+        setStatus('PT cleanup failed.');
+        setProgress(0, 'Cleanup failed');
+        showPtError(err, 'PT rows without coordinates cleanup failed');
+        return;
+      }
+
+      setStatus(`Validating ${cleanedRows.length} rows (Serial, Date, Lat and Long required)...`);
+>>>>>>> impte
       let dealsVinSet;
       try {
         setStatus('Loading reference VINs...');
@@ -1687,11 +2445,21 @@
           rejectedRows.push({ ...rest, error: 'VIN not in Deals (last 6 mismatch)' });
           return;
         }
+<<<<<<< HEAD
+=======
+        if (!hasValidPtCoordinates(row)) {
+          aggregated.rejectedMissingCoordinates += 1;
+          const { __invalidDate, ...rest } = row;
+          rejectedRows.push({ ...rest, error: 'Missing Lat or Long' });
+          return;
+        }
+>>>>>>> impte
         delete row.__invalidDate;
         validRows.push({ row, readDay, dayHalf });
       });
 
       if (!validRows.length) {
+<<<<<<< HEAD
         setStatus('No rows contained both Serial and Date values.');
         setProgress(0, 'No valid rows');
         showToast('No rows contained both Serial and Date values.', 'error');
@@ -1767,6 +2535,213 @@
       showToast(summary, 'success');
       if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
       lucide.createIcons();
+=======
+        setStatus('No rows contained Serial, Date, Lat, and Long values.');
+        setProgress(0, 'No valid rows');
+        showToast('No rows contained Serial, Date, Lat, and Long values.', 'error');
+        return;
+      }
+
+      const getPtBatchErrorText = (error) =>
+        [error?.message, error?.details, error?.hint, error?.code, error?.status, error?.statusCode]
+          .filter(Boolean)
+          .join(' | ')
+          .toLowerCase();
+
+      const isPtBatchRetryable = (error) => {
+        const text = getPtBatchErrorText(error);
+        const code = (error?.code || '').toLowerCase();
+        const statusCode = Number(error?.status ?? error?.statusCode);
+        return (
+          code === '57014' ||
+          code === '53300' ||
+          (Number.isFinite(statusCode) && statusCode >= 500) ||
+          text.includes('statement timeout') ||
+          text.includes('timeout') ||
+          text.includes('timed out') ||
+          text.includes('http error 500') ||
+          text.includes('http error 502') ||
+          text.includes('http error 503') ||
+          text.includes('http error 504') ||
+          text.includes('gateway timeout') ||
+          text.includes('failed to fetch') ||
+          text.includes('network') ||
+          text.includes('aborterror') ||
+          text.includes('payload too large') ||
+          text.includes('request body too large')
+        );
+      };
+
+      const isPtOnConflictConfigError = (error) => {
+        const text = getPtBatchErrorText(error);
+        return (
+          text.includes('on conflict') ||
+          text.includes('on_conflict') ||
+          text.includes('schema cache') ||
+          text.includes('read_day') ||
+          text.includes('day_half') ||
+          text.includes('no unique or exclusion constraint')
+        );
+      };
+
+      const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      const dedupedRows = deduplicateValidRows(validRows);
+      let nextIndex = 0;
+      let targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, dedupedRows.length);
+      let ptConflictTarget = PT_PING_PRIMARY_CONFLICT_TARGET;
+      const releasePtLastPingAlertIgnore = registerGlobalAlertIgnorePattern('/rest/v1/PT-LastPing');
+      try {
+        while (nextIndex < dedupedRows.length) {
+          const remaining = dedupedRows.length - nextIndex;
+          let batchSize = Math.min(targetBatchSize, remaining);
+          let retryAttempt = 0;
+          let uploaded = false;
+
+          while (!uploaded) {
+            const sliceEnd = nextIndex + batchSize;
+            const batchRows = dedupedRows.slice(nextIndex, sliceEnd);
+            const batch = batchRows.map(buildSlimPtPayload);
+            const batchNumber = aggregated.batches + 1;
+            const retryLabel = retryAttempt > 0 ? `, retry ${retryAttempt}` : '';
+
+            setStatus(
+              `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows ` +
+              `(batch ${batchNumber}, size ${batchSize}${retryLabel})...`
+            );
+            setProgress(
+              (nextIndex / dedupedRows.length) * 90,
+              `Uploading ${Math.min(sliceEnd, dedupedRows.length)} of ${dedupedRows.length} rows`,
+            );
+
+            const { error } = await supabaseClient
+              .from('PT-LastPing')
+              .upsert(batch, {
+                onConflict: ptConflictTarget,
+                ignoreDuplicates: true,
+              });
+
+            if (!error) {
+              aggregated.batches += 1;
+              aggregated.inserted += batch.length;
+              nextIndex = sliceEnd;
+              uploaded = true;
+              setProgress(
+                (nextIndex / dedupedRows.length) * 90,
+                `Uploaded ${nextIndex} of ${dedupedRows.length} rows`,
+              );
+              if (targetBatchSize < PT_PING_INITIAL_BATCH_SIZE) {
+                targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, Math.floor(targetBatchSize * 1.5));
+              }
+              if (PT_PING_BATCH_DELAY_MS > 0) {
+                await waitMs(PT_PING_BATCH_DELAY_MS);
+              }
+              continue;
+            }
+
+            console.error('Database PT upload error:', {
+              error,
+              nextIndex,
+              batchSize,
+              retryAttempt,
+              ptConflictTarget,
+            });
+
+            if (isRlsBlocked(error)) {
+              showToast('Upload blocked by security policy (RLS).', 'error');
+              setStatus('Upload blocked by security policy (RLS).');
+              setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} blocked`);
+              showPtError(error, `Batch ${batchNumber} blocked`);
+              return;
+            }
+
+            if (isPtOnConflictConfigError(error) && ptConflictTarget !== PT_PING_FALLBACK_CONFLICT_TARGET) {
+              ptConflictTarget = PT_PING_FALLBACK_CONFLICT_TARGET;
+              retryAttempt = 0;
+              setStatus('Conflict key read_day/day_half unavailable. Switching to Serial + Date and retrying...');
+              await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
+              continue;
+            }
+
+            if (isPtBatchRetryable(error) && batchSize > PT_PING_MIN_BATCH_SIZE) {
+              const nextBatchSize = Math.max(PT_PING_MIN_BATCH_SIZE, Math.floor(batchSize / 2));
+              if (nextBatchSize < batchSize) {
+                batchSize = nextBatchSize;
+                targetBatchSize = nextBatchSize;
+                retryAttempt = 0;
+                setStatus(`Batch timed out. Reducing batch size to ${batchSize} and retrying...`);
+                await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
+                continue;
+              }
+            }
+
+            if (isPtBatchRetryable(error) && retryAttempt < PT_PING_MAX_RETRIES_PER_BATCH) {
+              retryAttempt += 1;
+              const retryDelayMs = PT_PING_RETRY_BASE_DELAY_MS * retryAttempt;
+              setStatus(
+                `Temporary upload error on batch ${batchNumber}. ` +
+                `Retrying in ${(retryDelayMs / 1000).toFixed(1)}s...`
+              );
+              await waitMs(retryDelayMs);
+              continue;
+            }
+
+            showToast('Upload failed', 'error');
+            setStatus('Upload failed: ' + (error?.message || 'Unknown error'));
+            setProgress((nextIndex / dedupedRows.length) * 90, `Batch ${batchNumber} failed`);
+            showPtError(
+              error,
+              `Batch ${batchNumber} failed (batch size ${batchSize}, conflict target ${ptConflictTarget}).`
+            );
+            throw error;
+          }
+        }
+
+        setProgress(94, 'Synchronizing vehicles snapshot...');
+        let vehicleSyncResult = null;
+        try {
+          setStatus('Synchronizing vehicles snapshot from PT history...');
+          vehicleSyncResult = await syncVehiclesFromPtLastPing(
+            dedupedRows.map((row) => row?.VIN).filter(Boolean)
+          );
+        } catch (error) {
+          console.error('PT vehicles sync warning:', error);
+          showPtError(error, 'PT upload vehicle snapshot sync failed');
+          showToast(
+            'PT uploaded, but vehicles snapshot sync failed: ' + (error?.message || 'Unknown error'),
+            'error'
+          );
+        }
+
+        setProgress(100, 'Done');
+
+        const summary =
+          'Completed.' +
+          '\nBatches: ' + aggregated.batches +
+          '\nDeleted existing rows without coordinates: ' + aggregated.deletedMissingCoordinates +
+          '\nSent to database: ' + aggregated.inserted +
+          '\nVehicles synced: ' + (vehicleSyncResult?.updated ?? 0) +
+          '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
+          '\nRejected (missing Lat/Long): ' + aggregated.rejectedMissingCoordinates +
+          '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
+          '\nSkipped duplicates (client 8-hour bucket): ' + aggregated.skippedDeduplication +
+          '\nDuplicate handling: ON CONFLICT DO NOTHING' +
+          '\nRejected (VIN not in Deals): ' + aggregated.rejectedNoMatchVin +
+          '\nErrors: ' + parseErrors;
+        setStatus(
+          `Upload complete. Removed invalid existing rows: ${aggregated.deletedMissingCoordinates} ` +
+          `Sent: ${aggregated.inserted} ` +
+          `Vehicles synced: ${vehicleSyncResult?.updated ?? 0} ` +
+          `Skipped (client dedup): ${aggregated.skippedDeduplication} ` +
+          `Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedMissingCoordinates + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`
+        );
+        showToast(summary, 'success');
+        if (submitBtn) submitBtn.innerHTML = '<i data-lucide="upload-cloud" class="h-4 w-4"></i><span>Upload</span>';
+        lucide.createIcons();
+      } finally {
+        releasePtLastPingAlertIgnore();
+      }
+>>>>>>> impte
     };
 
     const initBackground = async () => {
@@ -1793,7 +2768,14 @@
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     const redirectToLogin = async () => {
+<<<<<<< HEAD
       if (!supabaseClient?.auth?.getSession) return;
+=======
+      if (!supabaseClient?.auth?.getSession) {
+        window.location.href = '../login.html';
+        return;
+      }
+>>>>>>> impte
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';

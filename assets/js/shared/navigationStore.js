@@ -28,10 +28,18 @@ const safeParse = (value) => {
 
 const normalizeSelection = (selection) => {
   if (!selection) return null;
+<<<<<<< HEAD
+=======
+  const key = selection.key ? String(selection.key).trim() : '';
+>>>>>>> impte
   const vin = selection.vin ? String(selection.vin).trim() : '';
   const customerId = selection.customerId ? String(selection.customerId).trim() : '';
   return {
     id: selection.id ?? null,
+<<<<<<< HEAD
+=======
+    key,
+>>>>>>> impte
     vin,
     customerId,
     updatedAt: selection.updatedAt || Date.now(),

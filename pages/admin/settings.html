@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechLoc • Admin Settings</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="../../assets/js/supabaseClient.js"></script>
+  <script type="module" src="../../assets/scripts/authManager.js"></script>
+  <script type="module" src="../../assets/scripts/admin-auth.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { slate: { 950: '#020617' } },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="../../assets/visuals/theme.css" />
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-50" data-page-title="Admin Settings" data-active-nav="settings">
+  <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
+    <div class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/60">
+      <span class="h-3 w-3 animate-pulse rounded-full bg-cyan-400"></span>
+      <p class="text-sm font-semibold text-slate-200">Validating admin access…</p>
+    </div>
+  </div>
+
+  <div data-auth-protected class="hidden">
+    <div class="sticky top-0 z-50 space-y-px">
+      <div data-shared-header></div>
+      <div data-admin-nav data-admin-nav="settings"></div>
+    </div>
+
+    <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-60"></canvas>
+
+    <main class="mx-auto w-full max-w-5xl space-y-6 px-6 py-8 lg:px-10">
+    <section class="rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-slate-900/50">
+      <div class="space-y-2">
+        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">Platform settings</p>
+        <h1 class="text-3xl font-black text-white">Control map parameters</h1>
+        <p class="text-sm text-slate-300">
+          Configure behavior rules for map rendering. This page is the base to centralize additional operational parameters.
+        </p>
+      </div>
+    </section>
+
+    <form id="admin-settings-form" class="space-y-6">
+      <section class="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/50">
+        <div class="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">Vehicle markers</p>
+            <h2 class="text-xl font-bold text-white">PT Last Ping transparency rule</h2>
+          </div>
+          <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+            Control Map
+          </span>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <label class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Days without PT Last Ping</span>
+            <input
+              id="setting-stale-days"
+              type="number"
+              min="0"
+              max="365"
+              step="1"
+              class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+            />
+            <p class="text-xs text-slate-400">If vehicle ping age is equal or greater than this value, marker becomes transparent.</p>
+          </label>
+
+          <label class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Marker opacity when stale</span>
+            <input
+              id="setting-stale-opacity"
+              type="range"
+              min="0.2"
+              max="1"
+              step="0.05"
+              class="w-full accent-cyan-400"
+            />
+            <p class="text-xs text-slate-300">Current value: <strong id="setting-stale-opacity-value">55%</strong></p>
+          </label>
+        </div>
+      </section>
+
+      <section class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+        <p id="settings-status" class="text-xs text-slate-400">Changes are stored in this browser profile.</p>
+        <div class="flex items-center gap-2">
+          <button
+            id="settings-reset"
+            type="button"
+            class="inline-flex items-center gap-2 rounded-lg border border-amber-500/60 bg-amber-500/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-100 hover:bg-amber-500/20"
+          >
+            <i data-lucide="rotate-ccw" class="h-4 w-4"></i>
+            Restore defaults
+          </button>
+          <button
+            type="submit"
+            class="inline-flex items-center gap-2 rounded-lg border border-cyan-500/70 bg-cyan-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-cyan-100 hover:bg-cyan-500/25"
+          >
+            <i data-lucide="save" class="h-4 w-4"></i>
+            Save settings
+          </button>
+        </div>
+      </section>
+    </form>
+    </main>
+  </div>
+
+  <script type="module" src="../../assets/scripts/sharedHeader.js"></script>
+  <script type="module" src="../../assets/scripts/adminNav.js"></script>
+  <script type="module" src="../../assets/scripts/admin-settings-page.js"></script>
+</body>
+</html>

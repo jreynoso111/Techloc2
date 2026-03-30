@@ -48,9 +48,15 @@ body[data-density="compact"] .text-sm { font-size: var(--text-xs) !important; }
   padding: 0.15rem 0.35rem;
   border-radius: 9999px;
   border: 1px solid rgba(148, 163, 184, 0.55);
+<<<<<<< HEAD
   background: rgba(2, 6, 23, 0.9);
   color: inherit;
   text-shadow: 0 1px 6px rgba(15, 23, 42, 0.85);
+=======
+  background: rgba(0, 0, 0, 0.88);
+  color: inherit;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
+>>>>>>> impte
 }
 
 body.select-none {
@@ -84,7 +90,11 @@ body.resize-row {
   top: 0;
   z-index: 30;
   height: 12px;
+<<<<<<< HEAD
   background: rgba(2, 6, 23, 0.85);
+=======
+  background: rgba(0, 0, 0, 0.88);
+>>>>>>> impte
   backdrop-filter: blur(10px);
   border: 1px solid rgba(30, 41, 59, 0.7);
   border-radius: 12px;
@@ -95,10 +105,78 @@ body.resize-row {
 }
 
 [data-bar-chart] {
+<<<<<<< HEAD
   grid-auto-flow: column;
   grid-auto-columns: minmax(var(--chart-col-min, 88px), 1fr);
   grid-template-columns: none;
   overflow-x: auto;
+=======
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(clamp(56px, 9vw, var(--chart-col-min, 88px)), 1fr);
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+
+[data-bar-chart] > * {
+  min-width: 0;
+}
+
+#deal-alerts-layout,
+#deal-charts-layout,
+#status-tertiary-layout,
+#deal-status-panel,
+#alerts-panel,
+#status-primary-card,
+#status-secondary-card,
+#status-tertiary-card,
+#status-tertiary-secondary-card {
+  min-width: 0;
+}
+
+@media (max-width: 1023px) {
+  main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  #deal-status-panel,
+  #alerts-panel,
+  #status-primary-card,
+  #status-secondary-card,
+  #status-tertiary-card,
+  #status-tertiary-secondary-card {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    min-height: 220px;
+    height: auto !important;
+  }
+
+  #panel-resizer,
+  #chart-resizer,
+  #tertiary-chart-resizer,
+  #panel-height-resizer,
+  [data-full-chart-resizer] {
+    display: none !important;
+  }
+}
+
+@media (max-width: 640px) {
+  [data-bar-chart] {
+    grid-auto-columns: minmax(56px, 1fr);
+    gap: 0.35rem;
+  }
+
+  .chart-legend {
+    max-width: 84px;
+    padding: 0.1rem 0.25rem;
+    font-size: 0.58rem;
+  }
+>>>>>>> impte
 }
 
 .column-resizer {
