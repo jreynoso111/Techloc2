@@ -82,11 +82,7 @@ export const getVehicleMarkerBorderColor = (fillColor) => {
   return '#991b1b';
 };
 
-<<<<<<< HEAD
-const parsePtLastReadDate = (value) => {
-=======
 export const parsePtLastReadDate = (value) => {
->>>>>>> impte
   if (!value) return null;
   const raw = String(value).trim();
   if (!raw) return null;
@@ -124,15 +120,6 @@ const getPtLastReadStatus = (value) => {
   return 'fresh';
 };
 
-<<<<<<< HEAD
-export const getMovingStatus = (vehicle = {}) => {
-  const ptReadStatus = getPtLastReadStatus(vehicle?.lastRead);
-  if (ptReadStatus === 'unknown') return 'unknown';
-  if (ptReadStatus === 'stale') return 'stopped';
-  const movingValue = parseInt(vehicle.moving || vehicle.movingCalc || vehicle.gpsMoving || '', 10);
-  if (movingValue === 1) return 'moving';
-  if (movingValue === -1) return 'stopped';
-=======
 const getVehicleLastReadCandidate = (vehicle = {}) => {
   const details = vehicle?.details || {};
   return vehicle?.lastRead
@@ -236,7 +223,6 @@ export const getMovingStatus = (vehicle = {}) => {
     return stationaryDays <= 0 ? 'moving' : 'stopped';
   }
 
->>>>>>> impte
   return 'unknown';
 };
 

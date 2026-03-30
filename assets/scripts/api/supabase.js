@@ -1,6 +1,4 @@
 import { DashboardState } from '../core/state.js';
-<<<<<<< HEAD
-=======
 import { assertSupabaseTarget } from '../env.js';
 
 const MAX_PAGE_SIZE = 1000;
@@ -34,7 +32,6 @@ export const fetchAllRowsFromTable = async ({ supabaseClient, tableName, pageSiz
 
   return { data: allRows, error: null };
 };
->>>>>>> impte
 
 const resolveSupabaseModule = async () => {
   const moduleUrls = [
@@ -67,8 +64,6 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
     throw new Error('supabaseClient.js loaded but did not export a Supabase client (expected export const supabase = createClient(...)).');
   } catch (error) {
     if (supabaseUrl && supabaseAnonKey) {
-<<<<<<< HEAD
-=======
       if (!assertSupabaseTarget(supabaseUrl, supabaseAnonKey)) {
         if (showDebug) {
           showDebug(
@@ -79,18 +74,12 @@ export const getSupabaseClient = async ({ supabaseUrl, supabaseAnonKey, showDebu
         }
         return null;
       }
->>>>>>> impte
       return window.supabase.createClient(supabaseUrl, supabaseAnonKey);
     }
     if (showDebug) {
       showDebug(
-<<<<<<< HEAD
-        'Supabase client not available',
-        'Tu import falló y el fallback no tiene URL/KEY. Revisa supabaseClient.js export o pega credenciales aquí.',
-=======
         'Database client not available',
         'Import failed and the fallback has no URL/KEY. Check the data client export or provide credentials here.',
->>>>>>> impte
         { error: String(error) }
       );
     }
@@ -134,11 +123,7 @@ export const hydrateVehiclesFromSupabase = async ({
   getField,
 }) => {
   if (supabaseClient === null) {
-<<<<<<< HEAD
-    console.warn('Supabase client not available, skipping vehicle hydration.');
-=======
     console.warn('Database client not available, skipping vehicle hydration.');
->>>>>>> impte
     DashboardState.ui.isLoading = false;
     setConnectionStatus('Offline');
     renderDashboard();
@@ -153,17 +138,10 @@ export const hydrateVehiclesFromSupabase = async ({
 
   setConnectionStatus('Reconnecting…');
 
-<<<<<<< HEAD
-  const { data, error } = await supabaseClient
-    .from('DealsJP1')
-    .select('*')
-    .limit(5000);
-=======
   const { data, error } = await fetchAllRowsFromTable({
     supabaseClient,
     tableName: 'DealsJP1',
   });
->>>>>>> impte
 
   if (error) {
     setConnectionStatus('Offline');
@@ -172,13 +150,8 @@ export const hydrateVehiclesFromSupabase = async ({
 
     if (showDebug) {
       showDebug(
-<<<<<<< HEAD
-        'Supabase SELECT failed',
-        'Esto suele ser RLS (no tienes SELECT permitido), credenciales, o tabla/columnas distintas.',
-=======
         'Database SELECT failed',
         'Esto suele ser RLS (no tienes SELECT permitido), credenciales, o tabla/columnas distintas en DealsJP1.',
->>>>>>> impte
         { code: error.code, message: error.message, details: error.details, hint: error.hint }
       );
     }
@@ -188,11 +161,6 @@ export const hydrateVehiclesFromSupabase = async ({
   DashboardState.schema = buildSchemaFromData(data || []);
 
   setVehiclesFromArray((data || []).map((vehicle) => {
-<<<<<<< HEAD
-    const updatedAt = getField(vehicle, 'Updated At', 'Updated', 'Last Updated');
-    return {
-      ...vehicle,
-=======
     const ptLastRead = vehicle?.['PT Last Read'] ?? vehicle?.['pt last read'] ?? vehicle?.pt_last_read ?? null;
     const lastPingFallback = vehicle?.['Last Ping'] ?? vehicle?.last_ping ?? ptLastRead ?? null;
     const updatedAt = getField(vehicle, 'Updated At', 'Updated', 'Last Updated', 'Last Update');
@@ -201,18 +169,13 @@ export const hydrateVehiclesFromSupabase = async ({
       'PT Last Read': ptLastRead,
       pt_last_read: ptLastRead,
       last_ping: lastPingFallback,
->>>>>>> impte
       lastEventAt: updatedAt ? new Date(updatedAt).getTime() : null,
     };
   }));
 
   DashboardState.ui.isLoading = false;
   initializeTablePreferences();
-<<<<<<< HEAD
-  setupFilters({ preserveSelections: true });
-=======
   setupFilters({ preserveSelections: false });
->>>>>>> impte
   renderDashboard();
   setConnectionStatus('Live');
 };

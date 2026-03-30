@@ -48,15 +48,9 @@ body[data-density="compact"] .text-sm { font-size: var(--text-xs) !important; }
   padding: 0.15rem 0.35rem;
   border-radius: 9999px;
   border: 1px solid rgba(148, 163, 184, 0.55);
-<<<<<<< HEAD
-  background: rgba(2, 6, 23, 0.9);
-  color: inherit;
-  text-shadow: 0 1px 6px rgba(15, 23, 42, 0.85);
-=======
   background: rgba(0, 0, 0, 0.88);
   color: inherit;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.85);
->>>>>>> impte
 }
 
 body.select-none {
@@ -90,11 +84,7 @@ body.resize-row {
   top: 0;
   z-index: 30;
   height: 12px;
-<<<<<<< HEAD
-  background: rgba(2, 6, 23, 0.85);
-=======
   background: rgba(0, 0, 0, 0.88);
->>>>>>> impte
   backdrop-filter: blur(10px);
   border: 1px solid rgba(30, 41, 59, 0.7);
   border-radius: 12px;
@@ -105,12 +95,6 @@ body.resize-row {
 }
 
 [data-bar-chart] {
-<<<<<<< HEAD
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(var(--chart-col-min, 88px), 1fr);
-  grid-template-columns: none;
-  overflow-x: auto;
-=======
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -176,7 +160,6 @@ body.resize-row {
     padding: 0.1rem 0.25rem;
     font-size: 0.58rem;
   }
->>>>>>> impte
 }
 
 .column-resizer {

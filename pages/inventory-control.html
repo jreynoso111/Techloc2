@@ -31,8 +31,6 @@
 </head>
 
 <body class="min-h-screen bg-slate-950 font-sans text-slate-50" data-density="compact" data-page-title="Inventory Control" data-active-nav="inventory-control">
-<<<<<<< HEAD
-=======
   <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
     <div class="flex flex-col items-center gap-4 text-center">
       <div class="h-12 w-12 animate-spin rounded-full border-4 border-slate-700 border-t-blue-400"></div>
@@ -42,27 +40,18 @@
       </div>
     </div>
   </div>
->>>>>>> impte
   <div data-shared-header></div>
   <div class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen" aria-hidden="true">
     <canvas id="constellation-canvas" class="h-full w-full"></canvas>
   </div>
 
-<<<<<<< HEAD
-  <main class="relative z-20 mx-auto flex w-full max-w-none flex-1 flex-col gap-3 px-6 py-4">
-=======
   <main data-auth-protected class="relative z-20 mx-auto hidden w-full max-w-none flex-1 flex-col gap-3 px-6 py-4" aria-hidden="true">
->>>>>>> impte
 
     <!-- Debug banner (only appears on error) -->
     <section id="debug-banner" class="hidden rounded-3xl border border-rose-800/60 bg-rose-950/40 p-4">
       <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-<<<<<<< HEAD
-          <p class="text-[10px] uppercase tracking-[0.3em] text-rose-200/80">Data / Supabase Debug</p>
-=======
           <p class="text-[10px] uppercase tracking-[0.3em] text-rose-200/80">Data / Connection Debug</p>
->>>>>>> impte
           <h3 class="text-lg font-bold text-white">Unable to load data</h3>
           <p id="debug-text" class="mt-1 text-sm text-rose-100/80"></p>
         </div>
@@ -88,20 +77,6 @@
           <button id="location-filter-toggle" type="button" data-pill-control class="flex items-center gap-2 rounded-2xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-100 transition hover:border-blue-400 hover:text-white" aria-pressed="false">
             Key Locations
           </button>
-<<<<<<< HEAD
-          <div id="vehicle-status-filters" class="mt-2 flex w-full justify-center md:mt-0 md:w-auto md:flex-1 md:justify-center"></div>
-          <div class="relative">
-            <button id="sales-channel-toggle" type="button" class="flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-200" aria-expanded="false">
-              <span id="sales-channel-label">Sales Channel</span>
-              <span id="sales-channel-summary" class="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-0.5 text-[10px] font-semibold text-slate-300">0</span>
-            </button>
-            <div id="sales-channel-panel" class="absolute right-0 z-40 mt-2 hidden w-56 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-800 bg-slate-950/95 p-3 text-xs text-slate-200 shadow-lg">
-              <p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-400">Choose channels</p>
-              <div id="sales-channel-options" class="mt-2 grid gap-2"></div>
-            </div>
-          </div>
-=======
->>>>>>> impte
           <label class="flex items-center gap-2 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-200">
             <span>Last Deal</span>
             <select id="last-deal-select" class="h-6 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
@@ -115,17 +90,10 @@
 
 
 
-<<<<<<< HEAD
-      <div id="deal-alerts-layout" class="mt-3 flex flex-col gap-3 lg:flex-row" aria-live="polite">
-        <div id="deal-status-panel" class="flex-1">
-          <div id="deal-charts-layout" class="flex flex-col gap-3 lg:flex-row lg:items-stretch">
-            <div id="status-primary-card" class="flex h-full min-h-[220px] flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-primary">
-=======
       <div id="deal-alerts-layout" class="mt-3 flex min-w-0 flex-col gap-3 lg:flex-row" aria-live="polite">
         <div id="deal-status-panel" class="min-w-0 flex-1">
           <div id="deal-charts-layout" class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-stretch">
             <div id="status-primary-card" class="flex h-full min-h-[220px] min-w-0 flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-primary">
->>>>>>> impte
             <div class="flex flex-wrap items-center justify-between gap-4">
               <div class="flex flex-wrap items-center gap-3">
                 <label class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -153,11 +121,7 @@
           <div id="chart-resizer" class="resize-handle hidden w-2 items-stretch justify-center lg:flex">
             <span class="h-full w-0.5 rounded-full bg-slate-800"></span>
           </div>
-<<<<<<< HEAD
-          <div id="status-secondary-card" class="flex h-full min-h-[220px] flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-secondary">
-=======
           <div id="status-secondary-card" class="flex h-full min-h-[220px] min-w-0 flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-secondary">
->>>>>>> impte
             <div class="flex flex-wrap items-center justify-end gap-3">
               <label class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Segment
@@ -187,11 +151,7 @@
           <span class="h-full w-0.5 rounded-full bg-slate-800"></span>
         </div>
 
-<<<<<<< HEAD
-        <div id="alerts-panel" class="rounded-3xl border border-slate-800 bg-slate-900/60 p-4 shadow-dashboard lg:w-[300px]" data-collapsed="false">
-=======
         <div id="alerts-panel" class="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/60 p-4 shadow-dashboard lg:w-[300px]" data-collapsed="false">
->>>>>>> impte
           <div class="flex items-center justify-between gap-3">
             <div>
               <p class="text-xs uppercase tracking-[0.3em] text-slate-400">Alerts</p>
@@ -217,11 +177,7 @@
                 </button>
               </div>
               <div class="flex flex-1 flex-col space-y-3 overflow-hidden text-sm text-slate-200">
-<<<<<<< HEAD
-                <p>The red badge reflects the number of DealsJP1 rows where Vehicle Status is Active, Stock, or Stolen.</p>
-=======
                 <p>The red badge reflects the number of DealsJP1 rows where Last Deal is true and Vehicle Status is Active.</p>
->>>>>>> impte
                 <div class="flex flex-1 flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Matching deals</p>
@@ -261,13 +217,8 @@
                   <i data-lucide="alert-triangle" class="h-4 w-4"></i>
                 </span>
                 <div class="min-w-0 flex-1 text-left">
-<<<<<<< HEAD
-                  <p class="truncate text-[11px] font-semibold text-white">DealsJP1 Alerts</p>
-                  <p class="truncate text-[10px] text-rose-100/80">Vehicle Status: active, stock, or stolen.</p>
-=======
                   <p class="truncate text-[11px] font-semibold text-white">Deals Alerts</p>
                   <p class="truncate text-[10px] text-rose-100/80">Last Deal: true and Vehicle Status: active.</p>
->>>>>>> impte
                 </div>
                 <span id="alerts-deals-row-count" class="rounded-lg border border-rose-500/40 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-rose-200">0</span>
               </button>
@@ -278,11 +229,7 @@
               </span>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-[11px] font-semibold text-white">GPS Offline Cluster</p>
-<<<<<<< HEAD
-                <p class="truncate text-[10px] text-slate-400">VIN con Last Ping &gt; 10 días o sin dato.</p>
-=======
                 <p class="truncate text-[10px] text-slate-400">VIN with Last Ping &gt; 10 days or missing data.</p>
->>>>>>> impte
               </div>
               <span id="alerts-gps-offline-count" class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-amber-200">0</span>
             </li>
@@ -316,13 +263,8 @@
     </section>
 
     <section class="p-3">
-<<<<<<< HEAD
-      <div id="status-tertiary-layout" class="flex flex-col gap-3 lg:flex-row lg:items-stretch">
-        <div id="status-tertiary-card" class="flex min-h-[220px] flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-tertiary" data-collapsed="false" data-full-chart-card>
-=======
       <div id="status-tertiary-layout" class="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-stretch">
         <div id="status-tertiary-card" class="flex min-h-[220px] min-w-0 flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-tertiary" data-collapsed="false" data-full-chart-card>
->>>>>>> impte
           <div class="flex flex-wrap items-center justify-between gap-3">
             <label class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
               Segment
@@ -356,11 +298,7 @@
         <div id="tertiary-chart-resizer" class="resize-handle hidden w-2 items-stretch justify-center lg:flex">
           <span class="h-full w-0.5 rounded-full bg-slate-800"></span>
         </div>
-<<<<<<< HEAD
-        <div id="status-tertiary-secondary-card" class="flex min-h-[220px] flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-tertiary-2" data-collapsed="false" data-full-chart-card>
-=======
         <div id="status-tertiary-secondary-card" class="flex min-h-[220px] min-w-0 flex-col rounded-3xl border border-slate-800 bg-slate-900/60 p-3 shadow-dashboard lg:flex-1" data-chart-id="status-tertiary-2" data-collapsed="false" data-full-chart-card>
->>>>>>> impte
           <div class="flex flex-wrap items-center justify-between gap-3">
             <label class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
               Segment

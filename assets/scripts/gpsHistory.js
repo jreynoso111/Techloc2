@@ -5,11 +5,7 @@ const getDefaultHelpers = () => ({
 
 const getVehicleVin = (vehicle) => {
   const vin = vehicle?.VIN ?? vehicle?.vin ?? vehicle?.details?.VIN ?? '';
-<<<<<<< HEAD
-  return typeof vin === 'string' ? vin.trim() : '';
-=======
   return typeof vin === 'string' ? vin.trim().toUpperCase() : '';
->>>>>>> impte
 };
 
 const getVehicleId = (vehicle) => {
@@ -22,8 +18,6 @@ const getVehicleId = (vehicle) => {
   return vehicleId ? `${vehicleId}`.trim() : '';
 };
 
-<<<<<<< HEAD
-=======
 const normalizeSerial = (value) => {
   if (value === null || value === undefined) return '';
   return String(value).trim().toUpperCase();
@@ -629,49 +623,20 @@ const resolveVehicleWinnerSerialFromRecords = (
   return getMostRecentSerialFromRecords(records);
 };
 
->>>>>>> impte
 const createGpsHistoryManager = ({
   supabaseClient,
   ensureSupabaseSession,
   runWithTimeout,
   timeoutMs = 10000,
   tableName,
-<<<<<<< HEAD
-=======
   isSerialBlacklisted,
   getSerialBlacklistEffectiveFromMs,
->>>>>>> impte
   escapeHTML,
   formatDateTime
 } = {}) => {
   const helpers = getDefaultHelpers();
   const safeEscape = escapeHTML || helpers.escapeHTML;
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
-<<<<<<< HEAD
-
-  const fetchGpsHistory = async ({ vin, vehicleId } = {}) => {
-    const normalizedVin = typeof vin === 'string' ? vin.trim() : '';
-    const normalizedVehicleId = typeof vehicleId === 'string' ? vehicleId.trim() : '';
-    if (!supabaseClient || (!normalizedVin && !normalizedVehicleId)) {
-      return { records: [], error: supabaseClient ? new Error('VIN missing') : new Error('Supabase unavailable') };
-    }
-    try {
-      await ensureSupabaseSession?.();
-      const sourceTable = tableName || '"PT-LastPing"';
-      const baseQuery = supabaseClient
-        .from(sourceTable)
-        .select('*');
-      const query = normalizedVin
-        ? baseQuery.eq('VIN', normalizedVin)
-        : baseQuery.eq('vehicle_id', normalizedVehicleId);
-      const { data, error } = await runWithTimeout(
-        query,
-        timeoutMs,
-        'GPS history request timed out.'
-      );
-      if (error) throw error;
-      const records = Array.isArray(data) ? data : [];
-=======
   const serialIsBlacklisted = (serial = '', timestampMs = Date.now(), record = null) => {
     try {
       const normalized = normalizeSerial(serial);
@@ -761,7 +726,6 @@ const createGpsHistoryManager = ({
       }
       if (!records.length && lastError) throw lastError;
 
->>>>>>> impte
       records.sort((a, b) => {
         const idA = a?.id;
         const idB = b?.id;
@@ -783,10 +747,7 @@ const createGpsHistoryManager = ({
         if (Number.isNaN(timeB)) return -1;
         return timeB - timeA;
       });
-<<<<<<< HEAD
-=======
       records = records.filter((record) => hasValidGpsHistoryCoordinates(record));
->>>>>>> impte
       return { records, error: null };
     } catch (error) {
       console.error('Failed to load GPS history:', error);
@@ -797,20 +758,12 @@ const createGpsHistoryManager = ({
   const setupGpsHistoryUI = ({ vehicle, body, signal, records: preloadedRecords, error: preloadedError }) => {
     const VIN = getVehicleVin(vehicle);
     const vehicleId = getVehicleId(vehicle);
-<<<<<<< HEAD
-=======
     let winnerSerial = getVehicleWinnerSerial(vehicle);
->>>>>>> impte
     const historyBody = body.querySelector('[data-gps-history-body]');
     const historyHead = body.querySelector('[data-gps-history-head]');
     const columnsToggle = body.querySelector('[data-gps-columns-toggle]');
     const columnsPanel = body.querySelector('[data-gps-columns-panel]');
     const columnsList = body.querySelector('[data-gps-columns-list]');
-<<<<<<< HEAD
-    const searchInput = body.querySelector('[data-gps-search]');
-    const statusText = body.querySelector('[data-gps-status]');
-    const connectionStatus = body.querySelector('[data-gps-connection-status]');
-=======
     const widthColumnSelect = body.querySelector('[data-gps-width-column]');
     const widthValueInput = body.querySelector('[data-gps-width-value]');
     const widthApplyButton = body.querySelector('[data-gps-width-apply]');
@@ -821,7 +774,6 @@ const createGpsHistoryManager = ({
     const viewWinnerButton = body.querySelector('[data-gps-view="winner"]');
     const viewAllButton = body.querySelector('[data-gps-view="all"]');
     const winnerInfo = body.querySelector('[data-gps-winner-info]');
->>>>>>> impte
 
     let gpsCache = [];
     let gpsColumns = [];
@@ -832,11 +784,6 @@ const createGpsHistoryManager = ({
     let searchQuery = '';
     let sortKey = '';
     let sortDirection = 'desc';
-<<<<<<< HEAD
-
-    const COLUMN_STORAGE_KEY = 'gpsHistoryColumnPrefs';
-    const WIDTH_STORAGE_KEY = 'gpsHistoryColumnWidths';
-=======
     let activeResize = null;
     let activeHeaderDragKey = '';
     let suppressSortUntil = 0;
@@ -850,7 +797,6 @@ const createGpsHistoryManager = ({
     let preferenceScope = 'anonymous';
     const MIN_COLUMN_WIDTH = 80;
     const MAX_COLUMN_WIDTH = 1200;
->>>>>>> impte
 
     const DEFAULT_COLUMN_ORDER = [
       'created_at',
@@ -870,21 +816,6 @@ const createGpsHistoryManager = ({
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (match) => match.toUpperCase());
 
-<<<<<<< HEAD
-    const loadPreferences = () => {
-      let savedPrefs = {};
-      let savedWidths = {};
-      try {
-        savedPrefs = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '{}');
-      } catch (error) {
-        savedPrefs = {};
-      }
-      try {
-        savedWidths = JSON.parse(localStorage.getItem(WIDTH_STORAGE_KEY) || '{}');
-      } catch (error) {
-        savedWidths = {};
-      }
-=======
     const getStorageKey = (baseKey) => `${baseKey}:${preferenceScope}`;
 
     const parseWidthValue = (value) => {
@@ -973,20 +904,12 @@ const createGpsHistoryManager = ({
       savedWidths = parseStored(getStorageKey(WIDTH_STORAGE_KEY_BASE))
         || parseStored(WIDTH_STORAGE_KEY_BASE)
         || {};
->>>>>>> impte
       columnVisibility = savedPrefs.visibility || {};
       columnOrder = savedPrefs.order || [];
       columnWidths = savedWidths || {};
     };
 
     const savePreferences = () => {
-<<<<<<< HEAD
-      localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({
-        visibility: columnVisibility,
-        order: columnOrder
-      }));
-      localStorage.setItem(WIDTH_STORAGE_KEY, JSON.stringify(columnWidths));
-=======
       localStorage.setItem(getStorageKey(COLUMN_STORAGE_KEY_BASE), JSON.stringify({
         visibility: columnVisibility,
         order: columnOrder
@@ -997,7 +920,6 @@ const createGpsHistoryManager = ({
     const ensureDateDescendingSort = (keys = []) => {
       sortKey = getPreferredDateColumnKey(keys);
       sortDirection = 'desc';
->>>>>>> impte
     };
 
     const buildColumnsFromKeys = (keys = []) => {
@@ -1023,10 +945,7 @@ const createGpsHistoryManager = ({
           columnWidths[col.key] = '';
         }
       });
-<<<<<<< HEAD
-=======
       ensureDateDescendingSort(ordered);
->>>>>>> impte
       savePreferences();
     };
 
@@ -1045,13 +964,6 @@ const createGpsHistoryManager = ({
       .map((key) => gpsColumns.find((col) => col.key === key))
       .filter(Boolean);
 
-<<<<<<< HEAD
-    const formatValue = (key, value) => {
-      if (value === null || value === undefined || value === '') return '—';
-      const normalizedKey = key.toLowerCase();
-      if (key === 'PT-LastPing' || normalizedKey.includes('date') || normalizedKey.includes('time')) {
-        return safeFormatDateTime(value);
-=======
     const normalizeAddressToken = (value = '') => value
       .toLowerCase()
       .replace(/\./g, '')
@@ -1100,7 +1012,6 @@ const createGpsHistoryManager = ({
       }
       if (isAddressColumn(normalizedKey)) {
         return safeEscape(stripAddressCountrySuffix(value));
->>>>>>> impte
       }
       if (typeof value === 'object') {
         return safeEscape(JSON.stringify(value));
@@ -1108,8 +1019,6 @@ const createGpsHistoryManager = ({
       return safeEscape(`${value}`);
     };
 
-<<<<<<< HEAD
-=======
     const formatBadgeDate = (value) => {
       const timeMs = typeof value === 'number' ? value : Date.parse(value);
       if (!Number.isFinite(timeMs)) return '';
@@ -1178,7 +1087,6 @@ const createGpsHistoryManager = ({
       return rawValue;
     };
 
->>>>>>> impte
     const renderTableHead = () => {
       if (!historyHead) return;
       const visibleColumns = getVisibleColumns();
@@ -1196,19 +1104,12 @@ const createGpsHistoryManager = ({
             const width = columnWidths[col.key];
             const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
             return `
-<<<<<<< HEAD
-              <th class="py-2 pr-3 align-bottom" ${widthStyle}>
-=======
               <th class="py-2 pr-3 align-bottom gps-history-th-resizable" data-gps-col-header="${col.key}" draggable="true" ${widthStyle}>
->>>>>>> impte
                 <button type="button" class="group inline-flex items-center gap-1 text-left text-[10px] uppercase tracking-[0.08em] text-slate-400 hover:text-slate-200 transition-colors" data-gps-sort="${col.key}">
                   <span>${safeEscape(col.label)}</span>
                   <span class="text-[9px] text-slate-500 group-hover:text-slate-300">${sortKey === col.key ? (sortDirection === 'asc' ? '▲' : '▼') : ''}</span>
                 </button>
-<<<<<<< HEAD
-=======
                 <button type="button" class="gps-history-resize-handle" data-gps-resize="${col.key}" aria-label="Resize ${safeEscape(col.label)} column"></button>
->>>>>>> impte
               </th>
             `;
           }).join('')}
@@ -1225,23 +1126,6 @@ const createGpsHistoryManager = ({
     };
 
     const getSortedRecords = (records) => {
-<<<<<<< HEAD
-      if (!sortKey) return records;
-      const direction = sortDirection === 'asc' ? 1 : -1;
-      return [...records].sort((a, b) => {
-        const valueA = a?.[sortKey];
-        const valueB = b?.[sortKey];
-        if (valueA === valueB) return 0;
-        if (valueA === null || valueA === undefined || valueA === '') return 1 * direction;
-        if (valueB === null || valueB === undefined || valueB === '') return -1 * direction;
-        if (typeof valueA === 'number' && typeof valueB === 'number') {
-          return (valueA - valueB) * direction;
-        }
-        return `${valueA}`.localeCompare(`${valueB}`, undefined, { numeric: true, sensitivity: 'base' }) * direction;
-      });
-    };
-
-=======
       return [...records].sort((a, b) => {
         const timestampA = getRecordTimestampMs(a);
         const timestampB = getRecordTimestampMs(b);
@@ -1291,7 +1175,6 @@ const createGpsHistoryManager = ({
         });
     };
 
->>>>>>> impte
     const renderHistory = (records = []) => {
       if (!historyBody) return;
       gpsCache = records;
@@ -1299,14 +1182,6 @@ const createGpsHistoryManager = ({
       renderColumnsList();
       renderTableHead();
       const visibleColumns = getVisibleColumns();
-<<<<<<< HEAD
-      const filteredRecords = getSortedRecords(getFilteredRecords(records));
-      if (!filteredRecords.length) {
-        const colSpan = Math.max(visibleColumns.length, 1);
-        historyBody.innerHTML = `
-          <tr>
-            <td class="py-2 pr-3 text-slate-400" colspan="${colSpan}">No GPS history found.</td>
-=======
       const modeRecords = getModeFilteredRecords(records);
       const filteredRecords = getSortedRecords(getFilteredRecords(modeRecords));
       const configuredSerials = getVehicleConfiguredSerials(vehicle);
@@ -1342,22 +1217,10 @@ const createGpsHistoryManager = ({
         historyBody.innerHTML = `
           <tr>
             <td class="py-2 pr-3 text-slate-400" colspan="${colSpan}">${emptyMessage}</td>
->>>>>>> impte
           </tr>
         `;
         return;
       }
-<<<<<<< HEAD
-      historyBody.innerHTML = filteredRecords.map((record) => `
-        <tr>
-          ${visibleColumns.map((col) => {
-            const width = columnWidths[col.key];
-            const widthStyle = width ? `style="width:${width}px;min-width:${width}px"` : '';
-            return `<td class="py-2 pr-3 text-slate-300 align-top" ${widthStyle}>${formatValue(col.key, record?.[col.key])}</td>`;
-          }).join('')}
-        </tr>
-      `).join('');
-=======
       const colSpan = Math.max(visibleColumns.length, 1);
       historyBody.innerHTML = serialGroups.map((group) => {
         const serialLabel = group.serial === SERIAL_UNASSIGNED ? 'No serial' : group.serial;
@@ -1431,26 +1294,18 @@ const createGpsHistoryManager = ({
           ${rowsMarkup}
         `;
       }).join('');
->>>>>>> impte
     };
 
     const renderColumnsList = () => {
       if (!columnsList) return;
       if (!gpsColumns.length) {
         columnsList.innerHTML = '<p class="text-xs text-slate-400">No columns available.</p>';
-<<<<<<< HEAD
-=======
         syncWidthControls();
->>>>>>> impte
         return;
       }
       columnsList.innerHTML = columnOrder.map((key) => {
         const column = gpsColumns.find((col) => col.key === key);
         if (!column) return '';
-<<<<<<< HEAD
-        const widthValue = columnWidths[key] || '';
-=======
->>>>>>> impte
         return `
           <div class="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-950/70 px-2 py-1.5" draggable="true" data-gps-column="${column.key}">
             <span class="text-slate-500">⋮⋮</span>
@@ -1458,21 +1313,6 @@ const createGpsHistoryManager = ({
               <input type="checkbox" value="${column.key}" class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-950" ${columnVisibility[column.key] ? 'checked' : ''} />
               <span class="text-slate-200">${safeEscape(column.label)}</span>
             </label>
-<<<<<<< HEAD
-            <input
-              type="number"
-              min="60"
-              max="400"
-              step="10"
-              value="${widthValue}"
-              placeholder="Auto"
-              class="w-20 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-200"
-              data-gps-width="${column.key}"
-            />
-          </div>
-        `;
-      }).join('');
-=======
           </div>
         `;
       }).join('');
@@ -1641,7 +1481,6 @@ const createGpsHistoryManager = ({
       document.body.classList.add('gps-column-resizing');
       window.addEventListener('pointermove', handleColumnResizeMove);
       window.addEventListener('pointerup', handleColumnResizeEnd);
->>>>>>> impte
     };
 
     const updateColumnOrder = (dragKey, targetKey) => {
@@ -1659,8 +1498,6 @@ const createGpsHistoryManager = ({
       renderHistory(gpsCache);
     };
 
-<<<<<<< HEAD
-=======
     const clearHeaderDropTargets = () => {
       if (!historyHead) return;
       historyHead
@@ -1668,7 +1505,6 @@ const createGpsHistoryManager = ({
         .forEach((node) => node.classList.remove('gps-history-header-drop-target'));
     };
 
->>>>>>> impte
     const setConnectionStatus = (label, tone = 'neutral') => {
       if (!connectionStatus) return;
       connectionStatus.textContent = label;
@@ -1693,19 +1529,10 @@ const createGpsHistoryManager = ({
     };
 
     const finalizeRender = (records, error) => {
-<<<<<<< HEAD
-      renderHistory(records);
-      if (statusText) {
-        statusText.textContent = error
-          ? 'Unable to load GPS history.'
-          : `${records.length} record${records.length === 1 ? '' : 's'} loaded.`;
-      }
-=======
       winnerSerial = resolveWinnerSerial(vehicle, records);
       syncViewControls();
       renderHistory(records);
       if (statusText && error) statusText.textContent = 'Unable to load GPS history.';
->>>>>>> impte
       if (error) {
         setConnectionStatus('Connection failed', 'error');
       } else {
@@ -1715,25 +1542,6 @@ const createGpsHistoryManager = ({
 
     const loadColumnMetadata = async () => {
       if (!supabaseClient) return;
-<<<<<<< HEAD
-      const rawTable = (tableName || 'PT-LastPing').replace(/"/g, '');
-      const tableKey = rawTable.includes('.') ? rawTable.split('.').pop() : rawTable;
-      try {
-        await ensureSupabaseSession?.();
-        const { data, error } = await runWithTimeout(
-          supabaseClient
-            .from('information_schema.columns')
-            .select('column_name,ordinal_position')
-            .eq('table_name', tableKey)
-            .order('ordinal_position', { ascending: true }),
-          timeoutMs,
-          'GPS history column request timed out.'
-        );
-        if (error) throw error;
-        availableColumnKeys = (data || [])
-          .map((row) => row?.column_name)
-          .filter(Boolean);
-=======
       const sourceTable = tableName || 'PT-LastPing';
       try {
         await ensureSupabaseSession?.();
@@ -1751,7 +1559,6 @@ const createGpsHistoryManager = ({
         if (error) throw error;
         const firstRow = Array.isArray(data) ? data[0] : null;
         availableColumnKeys = firstRow ? Object.keys(firstRow) : [];
->>>>>>> impte
         if (availableColumnKeys.length) {
           buildColumnsFromKeys(availableColumnKeys);
           renderColumnsList();
@@ -1763,11 +1570,8 @@ const createGpsHistoryManager = ({
     };
 
     loadPreferences();
-<<<<<<< HEAD
-=======
     resolvePreferenceScope();
     syncViewControls();
->>>>>>> impte
     if (statusText) statusText.textContent = 'Loading GPS history...';
     loadColumnMetadata();
     if (!VIN && !vehicleId) {
@@ -1776,11 +1580,7 @@ const createGpsHistoryManager = ({
       setConnectionStatus('Vehicle missing', 'warning');
     } else if (!supabaseClient) {
       renderHistory([]);
-<<<<<<< HEAD
-      if (statusText) statusText.textContent = 'Supabase connection not available.';
-=======
       if (statusText) statusText.textContent = 'Database connection not available.';
->>>>>>> impte
       setConnectionStatus('Disconnected', 'error');
     } else if (Array.isArray(preloadedRecords)) {
       finalizeRender(preloadedRecords, preloadedError);
@@ -1797,8 +1597,6 @@ const createGpsHistoryManager = ({
       }, { signal });
     }
 
-<<<<<<< HEAD
-=======
     if (viewWinnerButton) {
       viewWinnerButton.addEventListener('click', () => {
         setViewMode('winner');
@@ -1811,7 +1609,6 @@ const createGpsHistoryManager = ({
       }, { signal });
     }
 
->>>>>>> impte
     if (columnsList) {
       columnsList.addEventListener('change', (event) => {
         const input = event.target;
@@ -1824,19 +1621,6 @@ const createGpsHistoryManager = ({
         }
       }, { signal });
 
-<<<<<<< HEAD
-      columnsList.addEventListener('input', (event) => {
-        const input = event.target;
-        if (!input || input.tagName !== 'INPUT' || input.type !== 'number') return;
-        const key = input.dataset.gpsWidth;
-        columnWidths[key] = input.value;
-        savePreferences();
-        renderTableHead();
-        renderHistory(gpsCache);
-      }, { signal });
-
-=======
->>>>>>> impte
       let draggedKey = null;
       columnsList.addEventListener('dragstart', (event) => {
         const row = event.target.closest('[data-gps-column]');
@@ -1868,10 +1652,6 @@ const createGpsHistoryManager = ({
       }, { signal });
     }
 
-<<<<<<< HEAD
-    if (historyHead) {
-      historyHead.addEventListener('click', (event) => {
-=======
     if (widthColumnSelect && widthValueInput && widthApplyButton && widthAutoButton) {
       widthColumnSelect.addEventListener('change', () => {
         const key = widthColumnSelect.value || '';
@@ -1971,28 +1751,16 @@ const createGpsHistoryManager = ({
 
       historyHead.addEventListener('click', (event) => {
         if (Date.now() < suppressSortUntil) return;
->>>>>>> impte
         const button = event.target.closest('[data-gps-sort]');
         if (!button) return;
         const nextSortKey = button.dataset.gpsSort;
         if (!nextSortKey) return;
-<<<<<<< HEAD
-        if (sortKey === nextSortKey) {
-          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-        } else {
-          sortKey = nextSortKey;
-          sortDirection = 'asc';
-        }
-=======
         if (!sortKey || nextSortKey !== sortKey) return;
         sortDirection = 'desc';
->>>>>>> impte
         renderHistory(gpsCache);
       }, { signal });
     }
 
-<<<<<<< HEAD
-=======
     if (historyBody) {
       historyBody.addEventListener('click', (event) => {
         const toggle = event.target.closest('[data-gps-serial-toggle]');
@@ -2009,7 +1777,6 @@ const createGpsHistoryManager = ({
       stopColumnResize();
     }, { once: true });
 
->>>>>>> impte
     if (searchInput) {
       searchInput.addEventListener('input', (event) => {
         searchQuery = event.target.value || '';
@@ -2021,12 +1788,9 @@ const createGpsHistoryManager = ({
   return {
     getVehicleId,
     getVehicleVin,
-<<<<<<< HEAD
-=======
     getVehicleWinnerSerial,
     resolveVehicleWinnerSerialFromRecords: resolveWinnerSerial,
     getRecordSerial,
->>>>>>> impte
     fetchGpsHistory,
     setupGpsHistoryUI
   };

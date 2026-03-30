@@ -4,11 +4,8 @@ export const initializeControlMapRealtime = ({
   supabaseClient,
   tables,
   onVehiclesChange,
-<<<<<<< HEAD
-=======
   onDealsChange,
   onInvoicesChange,
->>>>>>> impte
   onHotspotsChange,
   onBlacklistChange,
   onServicesChange
@@ -17,22 +14,6 @@ export const initializeControlMapRealtime = ({
     return { stop: () => {} };
   }
 
-<<<<<<< HEAD
-  const channel = supabaseClient
-    .channel(CONTROL_MAP_CHANNEL)
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.vehicles }, (payload) => {
-      onVehiclesChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.hotspots }, (payload) => {
-      onHotspotsChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.blacklist }, (payload) => {
-      onBlacklistChange?.(payload);
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: tables.services }, (payload) => {
-      onServicesChange?.(payload);
-    });
-=======
   let channel = supabaseClient.channel(CONTROL_MAP_CHANNEL);
 
   const bindTable = (table, handler) => {
@@ -52,7 +33,6 @@ export const initializeControlMapRealtime = ({
   bindTable(tables?.hotspots, onHotspotsChange);
   bindTable(tables?.blacklist, onBlacklistChange);
   bindTable(tables?.services, onServicesChange);
->>>>>>> impte
 
   channel.subscribe();
 

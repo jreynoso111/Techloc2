@@ -1,18 +1,10 @@
 /* Global darker tone for TechLoc pages */
 :root {
-<<<<<<< HEAD
-  --page-bg: #030712;
-  --page-bg-secondary: radial-gradient(circle at 20% 20%, rgba(37, 99, 235, 0.08), transparent 35%),
-    radial-gradient(circle at 80% 0%, rgba(14, 116, 144, 0.08), transparent 30%),
-    #030712;
-  --card-surface: rgba(15, 23, 42, 0.7);
-=======
   --page-bg: #000000;
   --page-bg-secondary: radial-gradient(circle at 18% 18%, rgba(56, 189, 248, 0.04), transparent 34%),
     radial-gradient(circle at 82% 0%, rgba(148, 163, 184, 0.04), transparent 30%),
     #000000;
   --card-surface: rgba(0, 0, 0, 0.76);
->>>>>>> impte
   --card-border: rgba(255, 255, 255, 0.06);
   --muted-foreground: #94a3b8;
   color-scheme: dark;
@@ -20,10 +12,7 @@
 
 body {
   background: var(--page-bg-secondary);
-<<<<<<< HEAD
-=======
   background-color: #000000;
->>>>>>> impte
   color: #e2e8f0;
 }
 
@@ -42,11 +31,6 @@ body {
 }
 
 .dark-panel {
-<<<<<<< HEAD
-  background: rgba(2, 6, 23, 0.65) !important;
-  border-color: rgba(255, 255, 255, 0.04) !important;
-}
-=======
   background: rgba(0, 0, 0, 0.72) !important;
   border-color: rgba(255, 255, 255, 0.04) !important;
 }
@@ -234,4 +218,3 @@ body {
     padding-top: 0 !important;
   }
 }
->>>>>>> impte

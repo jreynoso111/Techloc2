@@ -22,15 +22,9 @@ export const createConstellationBackground = (canvasId = 'constellation-canvas')
         y: Math.random() * height,
         vx: (Math.random() - 0.5) * 0.35,
         vy: (Math.random() - 0.5) * 0.35,
-<<<<<<< HEAD
-        r: Math.random() * 1.8 + 0.7,
-        alpha: Math.random() * 0.5 + 0.2,
-        targetAlpha: Math.random() * 0.6 + 0.2,
-=======
         r: Math.random() * 2.1 + 0.95,
         alpha: Math.random() * 0.58 + 0.28,
         targetAlpha: Math.random() * 0.68 + 0.26,
->>>>>>> impte
         pulse: Math.random() * Math.PI * 2,
       });
     }
@@ -63,12 +57,6 @@ export const createConstellationBackground = (canvasId = 'constellation-canvas')
     for (let i = 0; i < particles.length; i += 1) {
       const p = particles[i];
       const flicker = 0.35 + 0.65 * Math.sin(p.pulse);
-<<<<<<< HEAD
-      ctx.beginPath();
-      ctx.fillStyle = `rgba(99, 102, 241, ${p.alpha * flicker})`;
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-=======
       ctx.shadowBlur = 10;
       ctx.shadowColor = 'rgba(125, 211, 252, 0.35)';
       ctx.beginPath();
@@ -76,7 +64,6 @@ export const createConstellationBackground = (canvasId = 'constellation-canvas')
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
->>>>>>> impte
 
       for (let j = i + 1; j < particles.length; j += 1) {
         const q = particles[j];
@@ -86,25 +73,16 @@ export const createConstellationBackground = (canvasId = 'constellation-canvas')
 
         const maxDist = 180;
         if (dist < maxDist) {
-<<<<<<< HEAD
-          const lineAlpha = ((1 - dist / maxDist) ** 2) * 0.35 * (0.35 + 0.65 * Math.sin((p.pulse + q.pulse) * 0.5));
-          ctx.strokeStyle = `rgba(56, 189, 248, ${lineAlpha})`;
-          ctx.lineWidth = 1;
-=======
           const lineAlpha = ((1 - dist / maxDist) ** 2) * 0.5 * (0.42 + 0.68 * Math.sin((p.pulse + q.pulse) * 0.5));
           ctx.strokeStyle = `rgba(125, 211, 252, ${lineAlpha.toFixed(3)})`;
           ctx.lineWidth = 1.2;
           ctx.shadowBlur = 6;
           ctx.shadowColor = `rgba(56, 189, 248, ${(lineAlpha * 0.45).toFixed(3)})`;
->>>>>>> impte
           ctx.beginPath();
           ctx.moveTo(p.x, p.y);
           ctx.lineTo(q.x, q.y);
           ctx.stroke();
-<<<<<<< HEAD
-=======
           ctx.shadowBlur = 0;
->>>>>>> impte
         }
       }
     }

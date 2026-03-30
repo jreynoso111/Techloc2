@@ -43,11 +43,7 @@
 
       <div class="space-y-2">
         <h2 class="text-2xl font-bold text-white">Access your dashboard</h2>
-<<<<<<< HEAD
-        <p class="text-sm text-slate-300">Use your administrator credentials to authenticate. After signing in you'll return to the homepage with secure access to admin tools.</p>
-=======
         <p class="text-sm text-slate-300">Use your administrator credentials to authenticate. After signing in you'll open the Control Map with secure access to admin tools.</p>
->>>>>>> impte
       </div>
 
       <form id="login-form" class="space-y-4">
@@ -63,14 +59,11 @@
           <span>Login</span>
         </button>
       </form>
-<<<<<<< HEAD
-=======
       <div class="flex justify-end">
         <button id="reset-password-btn" type="button" class="text-xs font-semibold text-blue-200 underline-offset-4 hover:text-white hover:underline">
           Forgot password?
         </button>
       </div>
->>>>>>> impte
 
       <div id="status" class="text-sm text-slate-400">Use your administrator credentials.</div>
     </div>
@@ -80,22 +73,16 @@
     import { setupBackgroundManager } from '../assets/scripts/backgroundManager.js';
     import { supabase as supabaseClient } from '../assets/js/supabaseClient.js';
     import { logAdminEvent } from '../assets/scripts/adminAudit.js';
-<<<<<<< HEAD
-=======
     import { clearWebAdminSession } from '../assets/scripts/web-admin-session.js';
->>>>>>> impte
 
     const loginForm = document.getElementById('login-form');
     const emailInput = document.getElementById('email');
     const passwordInput = document.getElementById('password');
     const submitButton = loginForm.querySelector('button[type="submit"]');
     const submitLabel = submitButton.querySelector('span');
-<<<<<<< HEAD
-=======
     const statusLabel = document.getElementById('status');
     const resetPasswordButton = document.getElementById('reset-password-btn');
     const redirectToControlMap = () => window.location.replace('./control-map.html');
->>>>>>> impte
 
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -103,16 +90,6 @@
       submitButton.disabled = true;
       const originalText = submitLabel.textContent;
       submitLabel.textContent = 'Verifying...';
-<<<<<<< HEAD
-
-      const email = emailInput.value.trim();
-      const password = passwordInput.value;
-
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-      if (error) {
-        alert(error.message);
-=======
       statusLabel.textContent = 'Validating credentials...';
 
       const email = emailInput.value.trim();
@@ -131,16 +108,12 @@
       if (error) {
         clearWebAdminSession();
         statusLabel.textContent = error.message || 'Unable to sign in. Please try again.';
->>>>>>> impte
         submitButton.disabled = false;
         submitLabel.textContent = originalText;
         return;
       }
 
-<<<<<<< HEAD
-=======
       clearWebAdminSession();
->>>>>>> impte
       await logAdminEvent({
         client: supabaseClient,
         action: 'login',
@@ -150,10 +123,6 @@
         actor: data?.user?.email || email,
       });
 
-<<<<<<< HEAD
-      const basePath = window.location.hostname.includes('github.io') ? '/Techloc' : '';
-      window.location.replace(basePath + '/index.html');
-=======
       statusLabel.textContent = 'Login successful. Redirecting to Control Map...';
       redirectToControlMap();
     });
@@ -178,7 +147,6 @@
       }
 
       statusLabel.textContent = `Password reset email sent to ${email}. Check inbox/spam and open the link.`;
->>>>>>> impte
     });
 
     document.addEventListener('DOMContentLoaded', () => {

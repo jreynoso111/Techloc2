@@ -9,14 +9,6 @@ export const SERVICE_CATEGORY_HINTS = {
 export const TABLES = {
   services: SERVICE_TABLE,
   vehicles: 'vehicles',
-<<<<<<< HEAD
-  vehiclesUpdates: 'vehicles_updates',
-  deals: 'DealsJP1',
-  hotspots: 'Hotspots',
-  blacklist: 'Services_Blacklist',
-  repairHistory: 'services_request',
-  gpsHistory: '"PT-LastPing"'
-=======
   deals: 'DealsJP1',
   invoices: 'NS-Invoices&pays',
   hotspots: 'Hotspots',
@@ -24,20 +16,11 @@ export const TABLES = {
   gpsDeviceBlacklist: 'gps_blacklist',
   repairHistory: 'repair_history',
   gpsHistory: 'PT-LastPing'
->>>>>>> impte
 };
 
 export const SUPABASE_TIMEOUT_MS = 10000;
 
 export const ensureSupabaseSession = async (supabaseClient) => {
-<<<<<<< HEAD
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error || !data?.session) {
-    const { data: refreshed, error: refreshError } = await supabaseClient.auth.refreshSession();
-    if (refreshError || !refreshed?.session) {
-      throw refreshError || new Error('Supabase session unavailable');
-    }
-=======
   if (!supabaseClient?.auth?.getSession) return false;
 
   const isMissingAuthSessionError = (error) => {
@@ -69,6 +52,5 @@ export const ensureSupabaseSession = async (supabaseClient) => {
   } catch (error) {
     if (!isMissingAuthSessionError(error)) throw error;
     return false;
->>>>>>> impte
   }
 };

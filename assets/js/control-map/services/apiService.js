@@ -35,11 +35,8 @@ export const createControlMapApiService = ({
   const bus = createEventBus();
   const handlerMap = new Map([
     ['vehicles', handlers.vehicles],
-<<<<<<< HEAD
-=======
     ['deals', handlers.deals],
     ['invoices', handlers.invoices],
->>>>>>> impte
     ['hotspots', handlers.hotspots],
     ['blacklist', handlers.blacklist],
     ['services', handlers.services]
@@ -55,11 +52,8 @@ export const createControlMapApiService = ({
     supabaseClient,
     tables,
     onVehiclesChange: handleEvent('vehicles'),
-<<<<<<< HEAD
-=======
     onDealsChange: handleEvent('deals'),
     onInvoicesChange: handleEvent('invoices'),
->>>>>>> impte
     onHotspotsChange: handleEvent('hotspots'),
     onBlacklistChange: handleEvent('blacklist'),
     onServicesChange: handleEvent('services')

@@ -10,26 +10,13 @@ const buildRepairSnapshot = (vehicle, getRepairVehicleVin) => ({
   pt_status: vehicle?.pt_status ?? vehicle?.ptStatus,
   pt_serial: vehicle?.pt_serial ?? vehicle?.ptSerial,
   encore_serial: vehicle?.encore_serial ?? vehicle?.encoreSerial,
-<<<<<<< HEAD
-  moving: vehicle?.moving,
-  pt_last_read: vehicle?.pt_last_read ?? vehicle?.lastRead,
-  lat: vehicle?.lat,
-  long: vehicle?.long ?? vehicle?.lng,
-=======
->>>>>>> impte
   phys_loc: vehicle?.phys_loc ?? vehicle?.lastLocation,
   VIN: getRepairVehicleVin(vehicle),
   vehicle_status: vehicle?.vehicle_status ?? vehicle?.status,
   open_balance: vehicle?.open_balance ?? vehicle?.openBalance,
   days_stationary: vehicle?.days_stationary ?? vehicle?.daysStationary,
   short_location: vehicle?.short_location ?? vehicle?.shortLocation ?? vehicle?.city,
-<<<<<<< HEAD
-  current_stock_no: vehicle?.details?.['Current Stock No'] ?? vehicle?.current_stock_no,
-  gps_fix: vehicle?.gps_fix ?? vehicle?.gpsFix,
-  gps_fix_reason: vehicle?.gps_fix_reason ?? vehicle?.gpsReason
-=======
   current_stock_no: vehicle?.details?.['Current Stock No'] ?? vehicle?.current_stock_no
->>>>>>> impte
 });
 
 const getDefaultHelpers = () => ({
@@ -37,8 +24,6 @@ const getDefaultHelpers = () => ({
   formatDateTime: (value) => value,
 });
 
-<<<<<<< HEAD
-=======
 const toText = (value) => {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
@@ -60,7 +45,6 @@ const toDateInputValue = (value) => {
   return parsed.toISOString().slice(0, 10);
 };
 
->>>>>>> impte
 const getRepairVehicleVin = (vehicle) => {
   const vin = vehicle?.VIN ?? vehicle?.vin ?? vehicle?.details?.VIN ?? '';
   return typeof vin === 'string' ? vin.trim().toUpperCase() : '';
@@ -79,10 +63,6 @@ const getRepairVehicleShortVin = (vehicle) => {
 const createRepairHistoryManager = ({
   supabaseClient,
   startLoading,
-<<<<<<< HEAD
-  ensureSupabaseSession,
-=======
->>>>>>> impte
   runWithTimeout,
   timeoutMs = 10000,
   tableName,
@@ -93,25 +73,6 @@ const createRepairHistoryManager = ({
   const safeEscape = escapeHTML || helpers.escapeHTML;
   const safeFormatDateTime = formatDateTime || helpers.formatDateTime;
 
-<<<<<<< HEAD
-  const fetchRepairs = async (vin) => {
-    const normalizedVin = typeof vin === 'string' ? vin.trim().toUpperCase() : '';
-    if (!supabaseClient || !normalizedVin) {
-      return { data: [], error: new Error('Missing Supabase client or VIN.') };
-    }
-    try {
-      await ensureSupabaseSession?.();
-      const { data, error } = await runWithTimeout(
-        supabaseClient
-          .from(tableName)
-          .select('*')
-          .ilike('shortvin', normalizedShortVin)
-          .order('request date', { ascending: false }),
-        timeoutMs,
-        'Repair history request timed out.'
-      );
-      if (error) throw error;
-=======
   const getAccessToken = async () => {
     if (!supabaseClient?.auth?.getSession) {
       throw new Error('Authentication session is unavailable.');
@@ -155,7 +116,6 @@ const createRepairHistoryManager = ({
     try {
       const params = new URLSearchParams({ vin: normalizedVin });
       const data = await requestRepairHistory(`/api/repair-history?${params.toString()}`);
->>>>>>> impte
       return { data: data || [], error: null };
     } catch (error) {
       console.error('Failed to load repair history:', error);
@@ -165,13 +125,6 @@ const createRepairHistoryManager = ({
 
   const saveRepair = async (vehicle, formData, editId) => {
     try {
-<<<<<<< HEAD
-      if (!supabaseClient) {
-        throw new Error('Supabase unavailable');
-      }
-      await ensureSupabaseSession?.();
-=======
->>>>>>> impte
       const cleanPrice = Number.parseFloat(`${formData.get('repair_price') || '0'}`.replace(/[$,]/g, '')) || 0;
       const payload = {
         ...buildRepairSnapshot(vehicle, getRepairVehicleVin),
@@ -189,27 +142,9 @@ const createRepairHistoryManager = ({
         repair_price: cleanPrice,
         repair_notes: formData.get('repair_notes') || null
       };
-<<<<<<< HEAD
-
-      const query = supabaseClient.from(tableName);
-      const { data, error } = editId
-        ? await runWithTimeout(
-          query.update(payload).eq('id', editId).select('*'),
-          timeoutMs,
-          'Repair update request timed out.'
-        )
-        : await runWithTimeout(
-          query.insert(payload).select('*'),
-          timeoutMs,
-          'Repair create request timed out.'
-        );
-      if (error) throw error;
-      return data || [];
-=======
       const path = editId ? `/api/repair-history/${encodeURIComponent(editId)}` : '/api/repair-history';
       const method = editId ? 'PATCH' : 'POST';
       return await requestRepairHistory(path, { method, payload });
->>>>>>> impte
     } catch (error) {
       console.error('Failed to save repair entry:', error);
       throw error;
@@ -242,22 +177,12 @@ const createRepairHistoryManager = ({
 
     const DEFAULT_REPAIR_COLUMNS = [
       { key: 'status', label: 'Status' },
-<<<<<<< HEAD
-      { key: 'request date', label: 'Request Date' },
-      { key: 'workdate', label: 'Work Date' },
-      { key: 'shipping date', label: 'Shipping Date' },
-      { key: 'company_name', label: 'Company Name' },
-      { key: 'shortvin', label: 'Short VIN' },
-      { key: 'Service_category', label: 'Service Category' },
-      { key: 'Notes', label: 'Notes' }
-=======
       { key: 'cs_contact_date', label: 'Request Date' },
       { key: 'shipping_date', label: 'Shipping Date' },
       { key: 'installation_company', label: 'Company Name' },
       { key: 'shortvin', label: 'Short VIN' },
       { key: 'repair_price', label: 'Cost' },
       { key: 'repair_notes', label: 'Notes' }
->>>>>>> impte
     ];
 
     const formatRepairValue = (key, value) => {
@@ -293,13 +218,8 @@ const createRepairHistoryManager = ({
       if (columnKey === 'status') {
         return renderStatusBadge(repair?.[columnKey]);
       }
-<<<<<<< HEAD
-      if (columnKey === 'Notes') {
-        return renderNotesCell(repair?.[columnKey]);
-=======
       if (columnKey === 'repair_notes') {
         return renderNotesCell(repair?.repair_notes);
->>>>>>> impte
       }
       return safeEscape(formatRepairValue(columnKey, repair?.[columnKey]));
     };
@@ -308,11 +228,7 @@ const createRepairHistoryManager = ({
       .replace(/_/g, ' ')
       .replace(/\b\w/g, (match) => match.toUpperCase());
 
-<<<<<<< HEAD
-    const CRITICAL_REPAIR_COLUMNS = new Set(['status', 'request date', 'Notes']);
-=======
     const CRITICAL_REPAIR_COLUMNS = new Set(['status', 'cs_contact_date', 'repair_notes']);
->>>>>>> impte
     const TECHNICAL_REPAIR_COLUMNS = new Set([
       'id',
       'created_at',
@@ -423,16 +339,10 @@ const createRepairHistoryManager = ({
       if (!query) return repairs;
       return repairs.filter((repair) => {
         const status = `${repair?.status || ''}`.toLowerCase();
-<<<<<<< HEAD
-        const notes = `${repair?.Notes || ''}`.toLowerCase();
-        const company = `${repair?.company_name || ''}`.toLowerCase();
-        return status.includes(query) || notes.includes(query) || company.includes(query);
-=======
         const notes = `${repair?.repair_notes || ''}`.toLowerCase();
         const company = `${repair?.installation_company || ''}`.toLowerCase();
         const vin = `${repair?.shortvin || repair?.VIN || ''}`.toLowerCase();
         return status.includes(query) || notes.includes(query) || company.includes(query) || vin.includes(query);
->>>>>>> impte
       });
     };
 
@@ -485,26 +395,12 @@ const createRepairHistoryManager = ({
     };
 
     const deleteRepair = async (repairId) => {
-<<<<<<< HEAD
-      if (!supabaseClient) {
-        throw new Error('Supabase unavailable');
-      }
-      if (!repairId) return;
-      const confirmed = window.confirm('Are you sure you want to delete this repair entry?');
-      if (!confirmed) return;
-      const { error } = await supabaseClient
-        .from(tableName)
-        .delete()
-        .eq('id', repairId);
-      if (error) throw error;
-=======
       if (!repairId) return;
       const confirmed = window.confirm('Are you sure you want to delete this repair entry?');
       if (!confirmed) return;
       await requestRepairHistory(`/api/repair-history/${encodeURIComponent(repairId)}`, {
         method: 'DELETE',
       });
->>>>>>> impte
       await loadRepairs({ showLoading: false });
     };
 
@@ -539,16 +435,10 @@ const createRepairHistoryManager = ({
       updateConnectionStatus({ state: 'connecting…' });
       const { data, error } = await fetchRepairs(VIN);
       if (error) {
-<<<<<<< HEAD
-        updateConnectionStatus({
-          state: 'error',
-          detail: error?.message || 'Unable to load service history.',
-=======
         const message = toText(error?.message || 'Unable to load repair history.');
         updateConnectionStatus({
           state: 'error',
           detail: message,
->>>>>>> impte
           isError: true
         });
       } else {
@@ -629,18 +519,6 @@ const createRepairHistoryManager = ({
           const installationPlaceInput = form.querySelector('[name="installation_place"]');
           const repairPriceInput = form.querySelector('[name="repair_price"]');
           const repairNotesInput = form.querySelector('[name="repair_notes"]');
-<<<<<<< HEAD
-          if (csContactInput) csContactInput.value = repair?.cs_contact_date || '';
-          if (statusInput) statusInput.value = repair?.status || '';
-          if (docInput) docInput.value = repair?.doc || '';
-          if (shippingDateInput) shippingDateInput.value = repair?.shipping_date || '';
-          if (pocNameInput) pocNameInput.value = repair?.poc_name || '';
-          if (pocPhoneInput) pocPhoneInput.value = repair?.poc_phone || '';
-          if (customerAvailabilityInput) customerAvailabilityInput.value = repair?.customer_availability || '';
-          if (installerRequestInput) installerRequestInput.value = repair?.installer_request_date || '';
-          if (installationCompanyInput) installationCompanyInput.value = repair?.installation_company || '';
-          if (technicianAvailabilityInput) technicianAvailabilityInput.value = repair?.technician_availability_date || '';
-=======
           if (csContactInput) csContactInput.value = toDateInputValue(repair?.cs_contact_date);
           if (statusInput) statusInput.value = repair?.status || '';
           if (docInput) docInput.value = repair?.doc || '';
@@ -651,7 +529,6 @@ const createRepairHistoryManager = ({
           if (installerRequestInput) installerRequestInput.value = toDateInputValue(repair?.installer_request_date);
           if (installationCompanyInput) installationCompanyInput.value = repair?.installation_company || '';
           if (technicianAvailabilityInput) technicianAvailabilityInput.value = toDateInputValue(repair?.technician_availability_date);
->>>>>>> impte
           if (installationPlaceInput) installationPlaceInput.value = repair?.installation_place || '';
           if (repairPriceInput) repairPriceInput.value = repair?.repair_price ?? '';
           if (repairNotesInput) repairNotesInput.value = repair?.repair_notes || '';

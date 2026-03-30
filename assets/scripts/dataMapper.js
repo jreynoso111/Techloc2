@@ -71,10 +71,7 @@ const normalizeInstaller = (row, idx = 0, { getField: fieldGetter, toStateCode, 
     city: city || '',
     state: stateCode,
     zip: zip || '',
-<<<<<<< HEAD
-=======
     note: field(row, 'notes', 'note', 'Notes', 'Note') || '',
->>>>>>> impte
     lat: coords.lat,
     lng: coords.lng,
     locationAccuracy: accuracy,
@@ -90,10 +87,7 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
   const stateCode = toState(field(row, 'state', 'region', 'State', 'Region', 'state_code')) || 'US';
   const city = field(row, 'city', 'City');
   const zip = field(row, 'zip', 'Zip', 'zipcode', 'postal_code');
-<<<<<<< HEAD
-=======
   const note = field(row, 'notes', 'note', 'Notes', 'Note');
->>>>>>> impte
   const { coords, accuracy } = resolve(row, { zip, city, stateCode, seed: idx, getField: field });
   const { display: phone, tel: phoneDial } = formatPhoneNumber(field(row, 'phone', 'Phone'));
   return {
@@ -106,12 +100,8 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
     contact: field(row, 'contact', 'Contact', 'contact_name'),
     availability: field(row, 'availability', 'tier', 'Availability'),
     authorization: field(row, 'authorization', 'Authorization'),
-<<<<<<< HEAD
-    notes: field(row, 'notes', 'Notes'),
-=======
     notes: note || '',
     note: note || '',
->>>>>>> impte
     city: city || '',
     state: stateCode,
     zip: zip || '',
@@ -126,31 +116,12 @@ const normalizePartner = (row, type = 'tech', idx = 0, { getField: fieldGetter, 
 const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, resolveCoords } = {}) => {
   const field = fieldGetter || getField;
   const toState = toStateCode || ((value = '') => `${value}`.slice(0, 2).toUpperCase());
-<<<<<<< HEAD
-  const resolve = resolveCoords || defaultResolveCoords;
-=======
->>>>>>> impte
   const stateCode = toState(field(row, 'State Loc', 'State', 'state', 'state_code'));
   const rawLat = parseFloat(field(row, 'Lat', 'lat'));
   const rawLng = parseFloat(field(row, 'Long', 'Lng', 'long', 'lng'));
   const hasExactCoords = Number.isFinite(rawLat) && Number.isFinite(rawLng) && rawLat !== 0 && rawLng !== 0;
   const zip = field(row, 'PT ZipCode', 'Zip', 'zip');
   const city = field(row, 'PT City', 'City', 'city');
-<<<<<<< HEAD
-  const { coords, accuracy } = resolve(row, {
-    zip,
-    city,
-    stateCode,
-    seed: idx,
-    fallbackLatLng: hasExactCoords ? { lat: rawLat, lng: rawLng } : null,
-    getField: field
-  });
-  const dealCompletion = field(row, 'Deal Completion', 'Deal completion', 'Deal completition', 'Remaining');
-  const v = {
-    id: row?.id ?? idx,
-    status: field(row, 'Deal Status', 'status') || 'ACTIVE',
-    invPrepStatus: field(row, 'INV Prep Stat', 'Inv. Prep. Stat.', 'Inv Prep Stat'),
-=======
   const coords = hasExactCoords ? { lat: rawLat, lng: rawLng } : { lat: 0, lng: 0 };
   const accuracy = hasExactCoords ? 'exact' : 'missing';
   const dealCompletion = field(row, 'Deal Completion', 'Deal completion', 'Deal completition', 'Remaining');
@@ -176,16 +147,12 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     vehicleStatus: vehicleStatus || '',
     invPrepStatus: field(row, 'INV Prep Stat', 'Inv. Prep. Stat.', 'Inv Prep Stat'),
     physicalLocation: physicalLocation || '',
->>>>>>> impte
     dealCompletion,
     type: field(row, 'Unit Type', 'type') || 'Vehicle',
     year: field(row, 'Model Year', 'year'),
     model: field(row, 'Model', 'model') || 'Vehicle',
     vin: field(row, 'VIN', 'vin', 'ShortVIN') || 'N/A',
-<<<<<<< HEAD
-=======
     shortVin: field(row, 'ShortVIN', 'shortvin', 'Short Vin'),
->>>>>>> impte
     gpsFix: field(row, 'GPS Fix', 'gps_fix'),
     gpsReason: field(row, 'GPS Fix Reason', 'gps_fix_reason'),
     gpsMoving: field(row, 'GPS Moving', 'gps_moving'),
@@ -193,13 +160,6 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     movingCalc: field(row, 'Moving (Calc)', 'moving_calc'),
     ptStatus: field(row, 'PT Status', 'pt_status'),
     ptSerial: field(row, 'PT Serial ', 'PT Serial', 'pt_serial'),
-<<<<<<< HEAD
-    encoreSerial: field(row, 'Encore Serial', 'encore_serial'),
-    lastRead: field(row, 'PT Last Read', 'pt_last_read'),
-    daysStationary: field(row, 'days_stationary', 'Days Stationary', 'Days stationary', 'Days Stationary (Calc)', 'Days Parked'),
-    stockNo: field(row, 'Current Stock No', 'current_stock_no', 'Stock No', 'Stock'),
-    openBalance: field(row, 'Open Balance', 'open_balance'),
-=======
     winnerSerial: field(
       row,
       'Winner Serial',
@@ -242,7 +202,6 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     stockNo: field(row, 'Current Stock No', 'current_stock_no', 'Stock No', 'Stock'),
     openBalance: field(row, 'Open Balance', 'open_balance'),
     shortLocation: shortLocation || '',
->>>>>>> impte
     state: stateCode,
     city: city || '',
     zipcode: zip || '',
@@ -250,10 +209,7 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     lng: coords.lng,
     locationAccuracy: accuracy,
     customerId: field(row, 'Customer ID', 'Customer', 'customer_id'),
-<<<<<<< HEAD
-=======
     customerName: customerName || '',
->>>>>>> impte
     customer: field(row, 'PT City', 'City', 'city')
       ? `${field(row, 'PT City', 'City', 'city')}, ${stateCode || 'US'}`
       : stateCode || 'Unknown area',
@@ -262,15 +218,11 @@ const normalizeVehicle = (row, idx = 0, { getField: fieldGetter, toStateCode, re
     details: row,
   };
 
-<<<<<<< HEAD
-  v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.customerId} ${v.customer}`.toLowerCase();
-=======
   const normalizedId = `${v.id ?? ''}`.trim();
   const normalizedVin = `${v.vin ?? ''}`.trim().toUpperCase();
   const normalizedStock = `${v.stockNo ?? ''}`.trim().toUpperCase();
   v.uiKey = [normalizedId, normalizedVin, normalizedStock, `${idx}`].join('::');
   v._searchBlob = `${v.model} ${v.vin} ${v.lastLocation} ${v.shortLocation} ${v.physicalLocation} ${v.customerId} ${v.customerName} ${v.customer}`.toLowerCase();
->>>>>>> impte
 
   return v;
 };

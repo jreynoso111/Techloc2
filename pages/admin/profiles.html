@@ -25,16 +25,6 @@
   <link rel="stylesheet" href="../../assets/visuals/theme.css" />
 </head>
 <body class="min-h-screen bg-slate-950 text-slate-50 relative" data-page-title="Profiles Admin" data-active-nav="dashboard">
-<<<<<<< HEAD
-  <div class="sticky top-0 z-50 space-y-px">
-    <div data-shared-header></div>
-    <div data-admin-nav data-admin-nav="profiles"></div>
-  </div>
-
-  <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen"></canvas>
-
-  <main class="w-full px-6 py-8 lg:px-10 space-y-8">
-=======
   <div data-auth-loading class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950">
     <div class="flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-900 px-5 py-3 shadow-xl shadow-slate-900/60">
       <span class="h-3 w-3 animate-pulse rounded-full bg-blue-400"></span>
@@ -51,18 +41,13 @@
     <canvas id="constellation-canvas" class="pointer-events-none fixed inset-0 -z-10 opacity-70 mix-blend-screen"></canvas>
 
     <main data-profiles-admin-root class="hidden w-full px-6 py-8 lg:px-10 space-y-8">
->>>>>>> impte
       <section class="space-y-8">
         <header class="rounded-3xl border border-slate-900 bg-slate-900/70 p-6 shadow-xl shadow-blue-900/30">
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Identity controls</p>
           <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 class="text-3xl font-black text-white">Profile Directory</h1>
-<<<<<<< HEAD
-              <p class="text-sm text-slate-300">Create, review and manage roles from a single workspace.</p>
-=======
               <p class="text-sm text-slate-300">Review existing accounts and manage roles from a single workspace.</p>
->>>>>>> impte
             </div>
             <div class="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-200">
               <span class="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -109,20 +94,13 @@
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-200">Manage profile</p>
-<<<<<<< HEAD
-                  <h3 class="text-lg font-bold text-white">Quick actions</h3>
-=======
                   <h3 class="text-lg font-bold text-white">Edit existing profile</h3>
->>>>>>> impte
                 </div>
                 <div class="rounded-full bg-slate-800/80 p-2">
                   <i data-lucide="user-cog" class="h-5 w-5 text-blue-200"></i>
                 </div>
               </div>
-<<<<<<< HEAD
-=======
               <p class="text-xs text-slate-400">Account creation and deletion are disabled here because authentication is managed in Supabase Auth, not only in `profiles`.</p>
->>>>>>> impte
               
               <form id="profile-form" class="space-y-3">
                 <input type="hidden" id="profile-id" value="">
@@ -157,15 +135,9 @@
                 <div class="flex gap-2">
                   <button type="submit" id="btn-save" class="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:bg-blue-500">
                     <i data-lucide="save" class="h-4 w-4"></i>
-<<<<<<< HEAD
-                    <span id="btn-text">Save profile</span>
-                  </button>
-                  <button type="button" id="btn-cancel" onclick="resetForm()" class="hidden rounded-lg border border-slate-700 px-3 py-2 text-slate-300 hover:bg-slate-800 hover:text-white">
-=======
                     <span id="btn-text">Update profile</span>
                   </button>
                   <button type="button" id="btn-cancel" class="hidden rounded-lg border border-slate-700 px-3 py-2 text-slate-300 hover:bg-slate-800 hover:text-white">
->>>>>>> impte
                     <i data-lucide="x" class="h-4 w-4"></i>
                   </button>
                 </div>
@@ -174,12 +146,8 @@
           </div>
         </section>
       </section>
-<<<<<<< HEAD
-  </main>
-=======
     </main>
   </div>
->>>>>>> impte
 
   <script type="module">
     import { setupBackgroundManager } from '../../assets/scripts/backgroundManager.js';
@@ -188,19 +156,13 @@
       persistBackgroundMode,
     } from '../../assets/scripts/backgroundPreference.js';
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
-<<<<<<< HEAD
-=======
     import { requireSession, redirectToAdminHome } from '../../assets/scripts/admin-auth.js';
->>>>>>> impte
     import { logAdminEvent } from '../../assets/scripts/adminAudit.js';
 
     const supabase = supabaseClient;
     let profiles = [];
-<<<<<<< HEAD
-=======
     let hasAdministratorAccess = false;
     const adminRoot = document.querySelector('[data-profiles-admin-root]');
->>>>>>> impte
     const recordAudit = (details = {}) =>
       logAdminEvent({
         client: supabase,
@@ -220,8 +182,6 @@
       moderator: 'key-round',
       user: 'user'
     };
-<<<<<<< HEAD
-=======
     const actionHandlers = {
       edit: (id) => window.editProfile(id),
       reset: (id) => window.resetProfilePassword(id),
@@ -260,7 +220,6 @@
       if (hasAdministratorAccess) return true;
       return ensureAdministratorAccess();
     };
->>>>>>> impte
 
     const formatLastConnection = (value) => {
       if (!value) return '—';
@@ -286,39 +245,11 @@
       profiles.forEach((profile) => {
         const row = document.createElement('tr');
         row.className = 'text-sm text-slate-200';
-<<<<<<< HEAD
-        
-        // Default a 'active' si no hay status (ya no usamos pending)
-=======
 
->>>>>>> impte
         const safeStatus = (profile.status || 'active').toLowerCase();
         const styleClass = statusStyles[safeStatus] || statusStyles['active'];
         const safeRole = (profile.role || 'user').toLowerCase();
 
-<<<<<<< HEAD
-        row.innerHTML = `
-          <td class="px-4 py-3 font-semibold text-white capitalize">${profile.name}</td>
-          <td class="px-4 py-3 text-slate-300">${profile.email}</td>
-          <td class="px-4 py-3">
-            <span class="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900 px-3 py-1 text-xs font-semibold capitalize">
-              <i data-lucide="${roleIcons[safeRole] || 'user'}" class="h-4 w-4"></i>
-              ${safeRole}
-            </span>
-          </td>
-          <td class="px-4 py-3">
-            <span class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${styleClass}">
-              ${safeStatus}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-slate-300">${formatLastConnection(profile.lastConnection)}</td>
-          <td class="px-4 py-3 text-right flex justify-end gap-2">
-            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-blue-200 transition hover:border-blue-500 hover:text-white" onclick="editProfile('${profile.id}')">Edit</button>
-            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-white" onclick="promoteProfile('${profile.id}')">Promote</button>
-            <button class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-500 hover:text-white" onclick="removeProfile('${profile.id}')">Remove</button>
-          </td>
-        `;
-=======
         const nameCell = document.createElement('td');
         nameCell.className = 'px-4 py-3 font-semibold text-white capitalize';
         nameCell.textContent = profile.name;
@@ -368,7 +299,6 @@
         );
 
         row.append(nameCell, emailCell, roleCell, statusCell, lastConnectionCell, actionsCell);
->>>>>>> impte
         body.appendChild(row);
       });
 
@@ -433,21 +363,13 @@
     window.resetForm = () => {
       document.getElementById('profile-form').reset();
       document.getElementById('profile-id').value = '';
-<<<<<<< HEAD
-      document.getElementById('btn-text').textContent = 'Save profile';
-=======
       document.getElementById('btn-text').textContent = 'Update profile';
->>>>>>> impte
       const btnSave = document.getElementById('btn-save');
       btnSave.classList.remove('bg-emerald-600');
       btnSave.classList.add('bg-blue-600');
       document.getElementById('btn-cancel').classList.add('hidden');
     }
 
-<<<<<<< HEAD
-    document.getElementById('profile-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-=======
     document.getElementById('btn-cancel').addEventListener('click', () => {
       window.resetForm();
     });
@@ -463,7 +385,6 @@
     document.getElementById('profile-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!(await requireAdministratorAccess())) return;
->>>>>>> impte
       
       const id = document.getElementById('profile-id').value;
       const name = document.getElementById('profile-name').value.trim();
@@ -472,64 +393,6 @@
       const status = document.getElementById('profile-status').value;
 
       if (!email) return;
-<<<<<<< HEAD
-
-      if (id) {
-        // UPDATE: Incluye name
-        const { error } = await supabase
-          .from('profiles')
-          .update({ 
-            name: name,
-            email, 
-            role, 
-            status
-          })
-          .eq('id', id);
-
-        if (error) { 
-          console.error('Error updating', error); 
-          alert('Error: ' + error.message); 
-          return; 
-        }
-
-        const index = profiles.findIndex(p => p.id === id);
-        if (index !== -1) {
-          profiles[index] = { ...profiles[index], name, email, role, status };
-        }
-        await recordAudit({
-          action: 'edit',
-          summary: `Updated profile for ${email}`,
-          recordId: id,
-          newValue: JSON.stringify({ role, status, name }),
-        });
-      } else {
-        // INSERT: Incluye name
-        const { data, error } = await supabase
-          .from('profiles')
-          .insert([{ 
-            name: name,
-            email, 
-            role, 
-            status,
-            created_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
-
-        if (error) { 
-          console.error('Error creating', error); 
-          alert('Error: ' + error.message); 
-          return; 
-        }
-        profiles.unshift(normalizeProfile(data));
-        await recordAudit({
-          action: 'insert',
-          summary: `Created profile for ${email}`,
-          recordId: data?.id ?? null,
-        });
-      }
-
-=======
       if (!id) {
         alert('Creating accounts is disabled here. Create the user in Supabase Auth first, then edit the matching profile.');
         return;
@@ -562,16 +425,12 @@
         newValue: JSON.stringify({ role, status, name }),
       });
 
->>>>>>> impte
       resetForm();
       renderProfiles();
     });
 
     window.promoteProfile = async (id) => {
-<<<<<<< HEAD
-=======
       if (!(await requireAdministratorAccess())) return;
->>>>>>> impte
       const profile = profiles.find((p) => p.id === id);
       if (!profile) return;
       
@@ -598,23 +457,6 @@
       renderProfiles();
     };
 
-<<<<<<< HEAD
-    window.removeProfile = async (id) => {
-      if(!confirm("Are you sure?")) return;
-      const index = profiles.findIndex((p) => p.id === id);
-      if (index === -1) return;
-      const profile = profiles[index];
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) { console.error('Error deleting', error); return; }
-      await recordAudit({
-        action: 'delete',
-        summary: `Removed profile for ${profile?.email || 'user'}`,
-        recordId: id,
-        previousValue: profile ? JSON.stringify(profile) : null,
-      });
-      profiles.splice(index, 1);
-      renderProfiles();
-=======
     window.resetProfilePassword = async (id) => {
       if (!(await requireAdministratorAccess())) return;
       const profile = profiles.find((p) => p.id === id);
@@ -671,7 +513,6 @@
         console.error('Password reset failed', error);
         alert(error?.message || 'Could not trigger password reset.');
       }
->>>>>>> impte
     };
 
     function normalizeProfile(record) {
@@ -725,9 +566,6 @@
       initBackground().catch((error) =>
         console.error('Unable to initialize background manager', error)
       );
-<<<<<<< HEAD
-      fetchProfiles();
-=======
       ensureAdministratorAccess()
         .then((allowed) => {
           if (!allowed) return;
@@ -737,21 +575,16 @@
           console.error('Could not validate administrator access', error);
           redirectToAdminHome();
         });
->>>>>>> impte
     });
   </script>
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     const redirectToLogin = async () => {
-<<<<<<< HEAD
-      if (!supabaseClient?.auth?.getSession) return;
-=======
       if (!supabaseClient?.auth?.getSession) {
         window.location.href = '../login.html';
         return;
       }
->>>>>>> impte
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';

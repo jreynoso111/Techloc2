@@ -1,8 +1,5 @@
 import { setupBackgroundManager } from './backgroundManager.js';
-<<<<<<< HEAD
-=======
 import { SUPABASE_KEY as SUPABASE_ANON_KEY, SUPABASE_URL } from './env.js';
->>>>>>> impte
 setupBackgroundManager();
 
 import {
@@ -36,10 +33,7 @@ import {
   getSupabaseClient,
   hydrateVehiclesFromSupabase,
   initializeSupabaseRealtime,
-<<<<<<< HEAD
-=======
   fetchAllRowsFromTable,
->>>>>>> impte
 } from './api/supabase.js';
 import { getVehicles } from './services/fleetService.js';
 
@@ -82,15 +76,8 @@ const updateLucideIcon = (icon, name) => {
 initializeLucideIcons();
 
 const PILL_CLASSES = 'rounded-xl border border-slate-700 bg-slate-950/60 px-2 py-1 text-[10px] hover:bg-slate-900/60';
-<<<<<<< HEAD
-// ✅ Fallback: pega tus credenciales si tu módulo no exporta bien.
-//    (Anon key es pública, pero igual cuida RLS.)
-const SUPABASE_URL = '';       // <-- pega aquí
-const SUPABASE_ANON_KEY = '';  // <-- pega aquí
-=======
 // Use the single source of truth from env.js so inventory-control always
 // connects to the approved Supabase project.
->>>>>>> impte
 
 const showDebug = (title, detail, obj) => {
   const banner = document.getElementById('debug-banner');
@@ -357,14 +344,6 @@ const insertAlertsLastClickHistory = async (vin, clickedAtIso) => {
 const getGpsOfflineCount = () => {
   const cutoff = Date.now() - (10 * 24 * 60 * 60 * 1000);
   const rows = DashboardState.derived.filtered || [];
-<<<<<<< HEAD
-  return rows.filter((row) => {
-    const vin = row?.vin || row?.VIN || getField(row, 'VIN');
-    if (!vin) return false;
-    const dealStatus = String(getField(row, 'Deal Status', 'dealStatus') || '').trim().toUpperCase();
-    if (dealStatus !== 'ACTIVE') return false;
-    const lastPingValue = getField(row, 'Last Ping', 'last_ping', 'LastPing');
-=======
   const hasAnyPingValue = rows.some((row) => {
     const pingValue = getField(
       row,
@@ -393,7 +372,6 @@ const getGpsOfflineCount = () => {
       'pt_last_read',
       'pt last read'
     );
->>>>>>> impte
     const lastPingString = String(lastPingValue ?? '').trim();
     if (!lastPingString) return true;
     const parsed = new Date(lastPingString);
@@ -417,27 +395,6 @@ const fetchAlertsDealCount = async () => {
     updateAlertsDealsList();
     return;
   }
-<<<<<<< HEAD
-  const { data, error } = await supabaseClient
-    .from('DealsJP1')
-    .select('*');
-  if (error || !Array.isArray(data)) {
-    return;
-  }
-  const onlineRows = data.filter((row) => {
-    if (!row?.VIN) return false;
-    const status = String(row['Vehicle Status'] || '').trim().toUpperCase();
-    if (!['ACTIVE', 'STOCK', 'STOLEN'].includes(status)) return false;
-    const prepStatus = String(row['Inventory Preparation Status'] || '').trim().toLowerCase();
-    return [
-      'out for repo',
-      'stolen',
-      'accidented',
-      'accident',
-      'stolen vehicle',
-      'third party repair shop',
-    ].includes(prepStatus);
-=======
   let sourceRows = getCurrentDataset();
   if (!Array.isArray(sourceRows) || !sourceRows.length) {
     const { data, error } = await fetchAllRowsFromTable({
@@ -464,18 +421,13 @@ const fetchAlertsDealCount = async () => {
     if (!isLastDeal) return false;
     const status = String(getField(row, 'Vehicle Status') || '').trim().toUpperCase();
     return status === 'ACTIVE';
->>>>>>> impte
   });
   setAlertsDealCount(onlineRows.length);
   alertsDealsRows = onlineRows;
   alertsDealsFilterOptions = Array.from(
     new Set(
       onlineRows
-<<<<<<< HEAD
-        .map((row) => String(row['Inventory Preparation Status'] || '').trim().toLowerCase())
-=======
         .map((row) => String(getField(row, 'Inventory Preparation Status') || '').trim().toLowerCase())
->>>>>>> impte
         .filter(Boolean),
     ),
   ).sort();
@@ -558,12 +510,6 @@ const LOCATION_FILTER_VALUES = [
 ];
 const LOCATION_FILTER_SET = new Set(LOCATION_FILTER_VALUES.map((value) => value.toLowerCase()));
 const STATUS_FILTER_SET = new Set(['active', 'stock', 'stolen']);
-<<<<<<< HEAD
-const getField = (row, ...keys) => {
-  for (const key of keys) {
-    const value = row?.[key];
-    if (value !== undefined && value !== null && value !== '') return value;
-=======
 const normalizeLookupKey = (value) => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 const getField = (row, ...keys) => {
   if (!row || typeof row !== 'object') return '';
@@ -576,7 +522,6 @@ const getField = (row, ...keys) => {
     if (value !== undefined && value !== null && value !== '') return value;
     const normalizedValue = normalizedEntries.get(normalizeLookupKey(key));
     if (normalizedValue !== undefined && normalizedValue !== null && normalizedValue !== '') return normalizedValue;
->>>>>>> impte
   }
   return '';
 };
@@ -586,55 +531,33 @@ const normalizeVehicle = (vehicle) => {
   const dateValue = getField(vehicle, 'Date') || updatedAt || createdAt;
   const vin = getField(vehicle, 'VIN');
   const uniqueId = vehicle.id || getField(vehicle, 'Current Stock No') || vin;
-<<<<<<< HEAD
-  const physicalLocation = getField(vehicle, 'Physical Location');
-=======
   const physicalLocation = getField(vehicle, 'Physical Location', 'phys_loc', 'physical_location');
->>>>>>> impte
   const normalizedPhysicalLocation = normalizePhysicalLocation(physicalLocation);
   return {
     ...vehicle,
     id: uniqueId || null,
-<<<<<<< HEAD
-    stockNo: getField(vehicle, 'Current Stock No'),
-    vin,
-    status: normalizeStatus(getField(vehicle, 'Vehicle Status')),
-    hold: normalizeBoolean(getField(vehicle, 'HOLD')),
-=======
     stockNo: getField(vehicle, 'Current Stock No', 'current_stock_no'),
     vin,
     status: normalizeStatus(getField(vehicle, 'Vehicle Status', 'vehicle status')),
     hold: normalizeBoolean(getField(vehicle, 'HOLD', 'hold')),
->>>>>>> impte
     isLastDeal: normalizeBoolean(getField(vehicle, 'Last Deal', 'last_deal')),
     brand: getField(vehicle, 'Brand'),
     model: getField(vehicle, 'Model'),
     modelYear: getField(vehicle, 'Model Year'),
-<<<<<<< HEAD
-    dealStatus: getField(vehicle, 'Deal Status'),
-=======
     dealStatus: getField(vehicle, 'Deal Status', 'deal status'),
->>>>>>> impte
     gpsStatus: getField(vehicle, 'gps_status'),
     gpsFlag: getField(vehicle, 'gps_review_flag'),
     completion: getField(vehicle, 'Deal Completion'),
     psrCategory: getField(vehicle, 'PSR Category'),
-<<<<<<< HEAD
-    prepStatus: getField(vehicle, 'Inventory Preparation Status'),
-=======
     prepStatus: getField(vehicle, 'Inventory Preparation Status', 'inv. prep. stat.'),
->>>>>>> impte
     createdAt: createdAt ? String(createdAt).slice(0, 10) : '',
     updatedAt: updatedAt ? String(updatedAt).slice(0, 10) : '',
     date: dateValue ? String(dateValue).slice(0, 10) : '',
     lastEventAt: vehicle.lastEventAt || (updatedAt ? new Date(updatedAt).getTime() : null),
-<<<<<<< HEAD
-=======
     'Vehicle Status': getField(vehicle, 'Vehicle Status', 'vehicle status'),
     'Deal Status': getField(vehicle, 'Deal Status', 'deal status'),
     'Current Stock No': getField(vehicle, 'Current Stock No', 'current_stock_no'),
     'Inventory Preparation Status': getField(vehicle, 'Inventory Preparation Status', 'inv. prep. stat.'),
->>>>>>> impte
     'Physical Location': normalizedPhysicalLocation,
   };
 };
@@ -813,13 +736,6 @@ const loadDashboardPreferences = async () => {
   }
 };
 
-<<<<<<< HEAD
-const applyLayoutPreferencesToDom = () => {
-  const alertsPanel = document.getElementById('alerts-panel');
-  const dealPanel = document.getElementById('deal-status-panel');
-  const primaryChart = document.getElementById('status-primary-card');
-  const secondaryChart = document.getElementById('status-secondary-card');
-=======
 const DESKTOP_BREAKPOINT = 1024;
 const MIN_PANEL_SIZE = 220;
 const MIN_CHART_HEIGHT = 220;
@@ -847,7 +763,6 @@ const applyLayoutPreferencesToDom = () => {
   const secondaryChart = document.getElementById('status-secondary-card');
   const chartsLayout = document.getElementById('deal-charts-layout');
   const chartResizer = document.getElementById('chart-resizer');
->>>>>>> impte
   const tertiaryChartsLayout = document.getElementById('status-tertiary-layout');
   const tertiaryChartResizer = document.getElementById('tertiary-chart-resizer');
   const tertiaryChart = document.getElementById('status-tertiary-card');
@@ -857,24 +772,6 @@ const applyLayoutPreferencesToDom = () => {
   const fullWidthChartToggles = document.querySelectorAll('[data-full-chart-toggle]');
   const fullWidthChartHandles = document.querySelectorAll('[data-full-chart-resizer]');
   if (!alertsPanel || !dealPanel) return;
-<<<<<<< HEAD
-  if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= 1024) {
-    alertsPanel.style.flex = `0 0 ${DashboardState.layout.alertsPanelWidth}px`;
-    dealPanel.style.flex = '1 1 auto';
-  }
-  if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= 1024 && primaryChart && secondaryChart) {
-    primaryChart.style.flex = `0 0 ${DashboardState.layout.chartSplitWidth}px`;
-    secondaryChart.style.flex = '1 1 auto';
-  }
-  if (tertiaryChartsLayout && tertiaryChartResizer && tertiaryChart && tertiarySecondaryChart) {
-    if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= 1024) {
-      tertiaryChart.style.flex = `0 0 ${DashboardState.layout.tertiarySplitWidth}px`;
-      tertiarySecondaryChart.style.flex = '1 1 auto';
-    }
-  }
-  if (fullWidthCharts.length && fullWidthChartBodies.length && fullWidthChartToggles.length) {
-    const fullChartMinHeight = '220px';
-=======
 
   if (isDesktop && typeof DashboardState.layout.alertsPanelWidth === 'number' && dealAlertsLayout) {
     const maxAlertsWidth = getMaxSplitWidth(dealAlertsLayout, panelResizer);
@@ -908,7 +805,6 @@ const applyLayoutPreferencesToDom = () => {
   if (fullWidthCharts.length && fullWidthChartBodies.length && fullWidthChartToggles.length) {
     const fullChartMinHeight = `${MIN_CHART_HEIGHT}px`;
     const maxDesktopChartHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.72));
->>>>>>> impte
     const isCollapsed = Boolean(DashboardState.layout.fullChartCollapsed);
     fullWidthCharts.forEach((chart) => {
       chart.dataset.collapsed = String(isCollapsed);
@@ -929,10 +825,6 @@ const applyLayoutPreferencesToDom = () => {
     if (!isCollapsed) {
       fullWidthCharts.forEach((chart) => {
         chart.style.minHeight = fullChartMinHeight;
-<<<<<<< HEAD
-        if (typeof DashboardState.layout.fullChartHeight === 'number') {
-          chart.style.height = `${DashboardState.layout.fullChartHeight}px`;
-=======
         if (!isDesktop) {
           chart.style.height = '';
           return;
@@ -946,32 +838,23 @@ const applyLayoutPreferencesToDom = () => {
           chart.style.height = `${safeHeight}px`;
         } else {
           chart.style.height = '';
->>>>>>> impte
         }
       });
     }
   }
-<<<<<<< HEAD
-  if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= 1024) {
-    const heightValue = `${DashboardState.layout.dealPanelHeight}px`;
-=======
   if (isDesktop && typeof DashboardState.layout.dealPanelHeight === 'number') {
     const maxPanelHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.78));
     const safePanelHeight = clampNumber(DashboardState.layout.dealPanelHeight, MIN_CHART_HEIGHT, maxPanelHeight);
     const heightValue = `${safePanelHeight}px`;
->>>>>>> impte
     dealPanel.style.height = heightValue;
     alertsPanel.style.height = heightValue;
     if (primaryChart) primaryChart.style.height = heightValue;
     if (secondaryChart) secondaryChart.style.height = heightValue;
-<<<<<<< HEAD
-=======
   } else {
     dealPanel.style.height = '';
     alertsPanel.style.height = '';
     if (primaryChart) primaryChart.style.height = '';
     if (secondaryChart) secondaryChart.style.height = '';
->>>>>>> impte
   }
 };
 
@@ -1024,10 +907,6 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
   if (!preserveSelections) {
     DashboardState.filters.categoryFilters = {};
     DashboardState.filters.columnFilters = {};
-<<<<<<< HEAD
-    DashboardState.filters.unitTypeSelection = [];
-    DashboardState.filters.vehicleStatusSelection = [];
-=======
     DashboardState.filters.chartFilters = {};
     DashboardState.filters.salesChannels = [];
     DashboardState.filters.lastLeadSelection = true;
@@ -1035,7 +914,6 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
     DashboardState.filters.unitTypeSelection = [];
     DashboardState.filters.vehicleStatusSelection = [];
     DashboardState.filters.locationFocusActive = false;
->>>>>>> impte
   }
 
   DashboardState.filters.dateKey = dateKey;
@@ -1084,14 +962,7 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
       .sort();
 
     if (dateValues.length && !preserveSelections) {
-<<<<<<< HEAD
-      const latest = new Date(dateValues[dateValues.length - 1]);
-      const startDate = new Date(latest);
-      startDate.setDate(startDate.getDate() - 29);
-      DashboardState.filters.dateRange = { start: startDate.toISOString().slice(0, 10), end: '' };
-=======
       DashboardState.filters.dateRange = { start: '', end: '' };
->>>>>>> impte
     } else if (!dateValues.length) {
       DashboardState.filters.dateRange = { start: '', end: '' };
     } else {
@@ -1111,26 +982,11 @@ const setupFilters = ({ preserveSelections = false } = {}) => {
   if (salesChannelOptions && salesChannelSummary) {
     if (salesChannelKey) {
       const channelValues = getUniqueValues(dataset, salesChannelKey);
-<<<<<<< HEAD
-      const preferredValues = ['Finance-EX', 'Finance-EXT', 'Finance-ext', 'Finance-Ext'];
-      const existingSelections = DashboardState.filters.salesChannels.filter((value) => channelValues.includes(value));
-      if (!preserveSelections || !existingSelections.length) {
-        const selections = preferredValues.filter((value) => channelValues.includes(value));
-        if (selections.length) {
-          DashboardState.filters.salesChannels = selections;
-        } else {
-          const nonFinance = channelValues.find((value) => value.toUpperCase() !== 'FINANCE');
-          DashboardState.filters.salesChannels = nonFinance ? [nonFinance] : [...channelValues];
-        }
-      } else {
-        DashboardState.filters.salesChannels = existingSelections;
-=======
       const existingSelections = DashboardState.filters.salesChannels.filter((value) => channelValues.includes(value));
       if (preserveSelections && existingSelections.length) {
         DashboardState.filters.salesChannels = existingSelections;
       } else {
         DashboardState.filters.salesChannels = [];
->>>>>>> impte
       }
       salesChannelOptions.innerHTML = (channelValues.length ? channelValues : [''])
         .map((value) => `
@@ -1206,28 +1062,14 @@ const applyFilters = ({ ignoreChartFilter = false, ignoreChartId = null } = {}) 
       return String(item[key] ?? '') === value;
     });
 
-<<<<<<< HEAD
-    const salesChannelMatch = !filters.salesChannelKey || !filters.salesChannels.length
-      || filters.salesChannels.includes(String(item[filters.salesChannelKey] ?? ''));
-=======
     const salesChannelMatch = true;
->>>>>>> impte
 
     const unitTypeSelections = Array.isArray(filters.unitTypeSelection) ? filters.unitTypeSelection : [];
     const unitTypeMatch = !filters.unitTypeKey
       || !unitTypeSelections.length
       || unitTypeSelections.includes(String(item[filters.unitTypeKey] ?? ''));
 
-<<<<<<< HEAD
-    const vehicleStatusSelections = Array.isArray(filters.vehicleStatusSelection)
-      ? filters.vehicleStatusSelection
-      : [];
-    const vehicleStatusMatch = !filters.vehicleStatusKey
-      || !vehicleStatusSelections.length
-      || vehicleStatusSelections.includes(String(item[filters.vehicleStatusKey] ?? ''));
-=======
     const vehicleStatusMatch = true;
->>>>>>> impte
     const locationValue = String(item['Physical Location'] ?? '').trim().toLowerCase();
     const isCopartLike = locationValue.includes('co part') || locationValue.includes('copart');
     const locationMatch = !filters.locationFocusActive
@@ -2219,24 +2061,15 @@ const initializeResizablePanels = () => {
     schedulePersistPreferences();
   };
 
-<<<<<<< HEAD
-  if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= 1024) {
-    alertsPanel.style.flex = `0 0 ${DashboardState.layout.alertsPanelWidth}px`;
-=======
   if (typeof DashboardState.layout.alertsPanelWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
     const maxAlertsWidth = getMaxSplitWidth(container, handle);
     const safeAlertsWidth = clampNumber(DashboardState.layout.alertsPanelWidth, MIN_PANEL_SIZE, maxAlertsWidth);
     alertsPanel.style.flex = `0 0 ${safeAlertsWidth}px`;
->>>>>>> impte
     dealPanel.style.flex = '1 1 auto';
   }
 
   handle.addEventListener('pointerdown', (event) => {
-<<<<<<< HEAD
-    if (window.innerWidth < 1024) return;
-=======
     if (window.innerWidth < DESKTOP_BREAKPOINT) return;
->>>>>>> impte
     isDragging = true;
     startX = event.clientX;
     startAlertsWidth = alertsPanel.getBoundingClientRect().width;
@@ -2272,24 +2105,15 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-<<<<<<< HEAD
-    if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= 1024) {
-      primaryChart.style.flex = `0 0 ${DashboardState.layout.chartSplitWidth}px`;
-=======
     if (typeof DashboardState.layout.chartSplitWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
       const maxPrimaryWidth = getMaxSplitWidth(chartsLayout, chartHandle);
       const safePrimaryWidth = clampNumber(DashboardState.layout.chartSplitWidth, MIN_PANEL_SIZE, maxPrimaryWidth);
       primaryChart.style.flex = `0 0 ${safePrimaryWidth}px`;
->>>>>>> impte
       secondaryChart.style.flex = '1 1 auto';
     }
 
     chartHandle.addEventListener('pointerdown', (event) => {
-<<<<<<< HEAD
-      if (window.innerWidth < 1024) return;
-=======
       if (window.innerWidth < DESKTOP_BREAKPOINT) return;
->>>>>>> impte
       isChartDragging = true;
       chartStartX = event.clientX;
       startPrimaryWidth = primaryChart.getBoundingClientRect().width;
@@ -2326,24 +2150,15 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-<<<<<<< HEAD
-    if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= 1024) {
-      tertiaryChart.style.flex = `0 0 ${DashboardState.layout.tertiarySplitWidth}px`;
-=======
     if (typeof DashboardState.layout.tertiarySplitWidth === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
       const maxTertiaryWidth = getMaxSplitWidth(tertiaryChartsLayout, tertiaryChartHandle);
       const safeTertiaryWidth = clampNumber(DashboardState.layout.tertiarySplitWidth, MIN_PANEL_SIZE, maxTertiaryWidth);
       tertiaryChart.style.flex = `0 0 ${safeTertiaryWidth}px`;
->>>>>>> impte
       tertiarySecondaryChart.style.flex = '1 1 auto';
     }
 
     tertiaryChartHandle.addEventListener('pointerdown', (event) => {
-<<<<<<< HEAD
-      if (window.innerWidth < 1024) return;
-=======
       if (window.innerWidth < DESKTOP_BREAKPOINT) return;
->>>>>>> impte
       isChartDragging = true;
       chartStartX = event.clientX;
       startPrimaryWidth = tertiaryChart.getBoundingClientRect().width;
@@ -2380,15 +2195,10 @@ const initializeResizablePanels = () => {
       schedulePersistPreferences();
     };
 
-<<<<<<< HEAD
-    if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= 1024) {
-      const heightValue = `${DashboardState.layout.dealPanelHeight}px`;
-=======
     if (typeof DashboardState.layout.dealPanelHeight === 'number' && window.innerWidth >= DESKTOP_BREAKPOINT) {
       const maxPanelHeight = Math.max(MIN_CHART_HEIGHT, Math.floor(window.innerHeight * 0.78));
       const safePanelHeight = clampNumber(DashboardState.layout.dealPanelHeight, MIN_CHART_HEIGHT, maxPanelHeight);
       const heightValue = `${safePanelHeight}px`;
->>>>>>> impte
       dealPanel.style.height = heightValue;
       alertsPanel.style.height = heightValue;
       if (primaryChart) primaryChart.style.height = heightValue;
@@ -2396,11 +2206,7 @@ const initializeResizablePanels = () => {
     }
 
     heightHandle.addEventListener('pointerdown', (event) => {
-<<<<<<< HEAD
-      if (window.innerWidth < 1024) return;
-=======
       if (window.innerWidth < DESKTOP_BREAKPOINT) return;
->>>>>>> impte
       isHeightDragging = true;
       heightStartY = event.clientY;
       startHeight = dealPanel.getBoundingClientRect().height;
@@ -2446,11 +2252,7 @@ const initializeResizablePanels = () => {
       };
 
       handle.addEventListener('pointerdown', (event) => {
-<<<<<<< HEAD
-        if (window.innerWidth < 1024) return;
-=======
         if (window.innerWidth < DESKTOP_BREAKPOINT) return;
->>>>>>> impte
         if (chart.dataset.collapsed === 'true') return;
         isFullDragging = true;
         fullStartY = event.clientY;
@@ -2571,8 +2373,6 @@ renderDashboard = () => {
 bindFilterEvents();
 initializeResizablePanels();
 
-<<<<<<< HEAD
-=======
 let layoutResizeRaf = null;
 window.addEventListener('resize', () => {
   if (layoutResizeRaf) window.cancelAnimationFrame(layoutResizeRaf);
@@ -2582,7 +2382,6 @@ window.addEventListener('resize', () => {
   });
 });
 
->>>>>>> impte
 // Mobile nav
 const mobileToggle = document.getElementById('mobile-menu-toggle');
 const primaryNav = document.getElementById('primary-nav');

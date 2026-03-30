@@ -85,11 +85,8 @@
             </button>
           </div>
         </div>
-<<<<<<< HEAD
-=======
         <div id="analytics-issues" class="hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100"></div>
         <p id="last-sync" class="text-[11px] text-slate-500">Last sync: pending</p>
->>>>>>> impte
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div class="relative overflow-hidden rounded-2xl border frosted-card p-5 transition hover:border-white/10">
@@ -307,12 +304,6 @@
       detailModalContent: document.getElementById('detail-modal-content'),
       detailModalClose: document.getElementById('detail-modal-close'),
       status: document.getElementById('dataset-status'),
-<<<<<<< HEAD
-      changeLogBody: document.getElementById('change-log-body')
-    };
-
-    // --- HELPERS ---
-=======
       changeLogBody: document.getElementById('change-log-body'),
       analyticsIssues: document.getElementById('analytics-issues'),
       lastSync: document.getElementById('last-sync'),
@@ -361,7 +352,6 @@
       return element;
     };
 
->>>>>>> impte
     const formatCategory = (str) => {
         if (!str) return 'Uncategorized';
         const clean = String(str).trim().toLowerCase();
@@ -488,23 +478,6 @@
         sortedCats.forEach(([cat, count]) => {
             const pct = serviceRows.length ? ((count / serviceRows.length) * 100).toFixed(1) : '0.0';
             const color = getCategoryColor(cat);
-<<<<<<< HEAD
-            const html = `
-                <div class="group">
-                    <div class="flex justify-between mb-1 items-end">
-                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">${cat}</span>
-                        <div class="text-right">
-                             <span class="text-xs font-bold text-white">${count}</span>
-                             <span class="text-[9px] font-mono text-slate-500 ml-1">${pct}%</span>
-                        </div>
-                    </div>
-                    <div class="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div class="h-full ${color} w-0 transition-all duration-1000 ease-out shadow-[0_0_10px_currentColor]" style="width: 0%" data-width="${pct}%"></div>
-                    </div>
-                </div>
-            `;
-            els.categoryBars.insertAdjacentHTML('beforeend', html);
-=======
             const group = document.createElement('div');
             group.className = 'group';
             const header = document.createElement('div');
@@ -525,7 +498,6 @@
             barOuter.appendChild(barInner);
             group.append(header, barOuter);
             els.categoryBars.appendChild(group);
->>>>>>> impte
         });
 
         // 2. SERVICES: Top Regions
@@ -536,15 +508,6 @@
         
         topRegions.forEach(([state, count]) => {
              const intensity = count > 10 ? 'border-amber-500/30 bg-amber-500/10' : 'border-white/5 bg-white/5';
-<<<<<<< HEAD
-             els.topRegions.insertAdjacentHTML('beforeend', `
-                <div class="p-2 rounded border ${intensity} text-center hover:scale-105 transition-transform">
-                    <div class="text-[10px] font-mono text-slate-500 uppercase">State</div>
-                    <div class="text-lg font-bold text-white leading-none my-0.5">${state}</div>
-                    <div class="text-[9px] text-amber-400 font-bold">${count}</div>
-                </div>
-             `);
-=======
              const card = document.createElement('div');
              card.className = `p-2 rounded border ${intensity} text-center hover:scale-105 transition-transform`;
              card.append(
@@ -553,7 +516,6 @@
                createTextElement('div', 'text-[9px] text-amber-400 font-bold', count),
              );
              els.topRegions.appendChild(card);
->>>>>>> impte
         });
 
         // 3. VEHICLES: Charts
@@ -572,14 +534,6 @@
         els.unitTypesList.innerHTML = '';
         Object.entries(unitTypes).forEach(([type, count]) => {
              const pct = ((count / vehicleRows.length) * 100).toFixed(0);
-<<<<<<< HEAD
-             els.unitTypesList.insertAdjacentHTML('beforeend', `
-                <div class="flex items-center justify-between text-[10px]">
-                    <span class="text-slate-300 font-medium">${type}</span>
-                    <span class="text-slate-500 font-mono">${count} (${pct}%)</span>
-                </div>
-             `);
-=======
              const row = document.createElement('div');
              row.className = 'flex items-center justify-between text-[10px]';
              row.append(
@@ -587,7 +541,6 @@
                createTextElement('span', 'text-slate-500 font-mono', `${count} (${pct}%)`),
              );
              els.unitTypesList.appendChild(row);
->>>>>>> impte
         });
 
         // 4. KPIS
@@ -610,11 +563,8 @@
       rows.forEach((row) => {
         const ts = row.created_at ? new Date(row.created_at).toLocaleString() : '—';
         const user = row.user_email || row.user_id || row.actor || row.author || 'System';
-<<<<<<< HEAD
-=======
         const role = String(row.profile_role || 'unknown').toUpperCase();
         const status = String(row.profile_status || 'unknown').toUpperCase();
->>>>>>> impte
         const avatarChar = String(user).charAt(0).toUpperCase();
         const action = String(row.action || 'edit').toLowerCase();
         const actionLabel = action.replace(/_/g, ' ').toUpperCase();
@@ -629,32 +579,6 @@
         };
         const badgeClass = badgeByAction[action] || badgeByAction.edit;
         const summary = row.summary || row.description || `Admin ${action} recorded`;
-<<<<<<< HEAD
-
-        els.changeLogBody.insertAdjacentHTML('beforeend', `
-          <tr class="border-b border-white/5 hover:bg-white/5 transition-colors group">
-            <td class="px-4 py-3">
-               <div class="flex items-center gap-3">
-                  <div class="h-8 w-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-[10px] font-bold text-white shadow-sm ring-2 ring-transparent group-hover:ring-blue-500/20 transition-all">
-                    ${avatarChar}
-                  </div>
-                  <div class="flex flex-col">
-                      <span class="text-xs text-slate-200 font-semibold truncate max-w-[150px]">${user}</span>
-                      <span class="text-[9px] text-slate-500 uppercase tracking-wide">Admin</span>
-                  </div>
-               </div>
-            </td>
-            <td class="px-4 py-3 text-sm text-slate-400 font-mono text-xs">${row.table_name || row.table || '—'}</td>
-            <td class="px-4 py-3 text-sm">
-              <span class="rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${badgeClass}">
-                ${actionLabel}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-xs text-slate-300">${summary}</td>
-            <td class="px-4 py-3 text-right text-[11px] text-slate-500 font-mono">${ts}</td>
-          </tr>
-        `);
-=======
         const tr = document.createElement('tr');
         tr.className = 'border-b border-white/5 hover:bg-white/5 transition-colors group';
 
@@ -688,22 +612,11 @@
 
         tr.append(userCell, tableCell, actionCell, summaryCell, timeCell);
         els.changeLogBody.appendChild(tr);
->>>>>>> impte
       });
     };
 
     // --- LOAD DATA ---
     const loadData = async () => {
-<<<<<<< HEAD
-        try {
-            const { data: sData } = await supabaseClient.from(TABLE_SERVICES).select('*');
-            const { data: vData } = await supabaseClient.from(TABLE_VEHICLES).select('*');
-            const services = (sData || []).map(r => normalizeRow(r, 'service'));
-            const vehicles = (vData || []).map(r => normalizeRow(r, 'vehicle'));
-            renderDashboard(services, vehicles);
-            els.status.textContent = `LIVE • ${services.length + vehicles.length} RECORDS`;
-        } catch (err) { console.error(err); }
-=======
         const issues = [];
         const [servicesResult, vehiclesResult] = await Promise.allSettled([
           supabaseClient.from(TABLE_SERVICES).select('*'),
@@ -739,15 +652,11 @@
           ? `PARTIAL • ${total} RECORDS`
           : `LIVE • ${total} RECORDS`;
         setLastSync(issues.length ? 'partial' : 'ok');
->>>>>>> impte
         lucide.createIcons();
     };
 
     const loadChangeLog = async () => {
-<<<<<<< HEAD
-=======
       const issues = [];
->>>>>>> impte
       try {
         const { data, error } = await supabaseClient
           .from(TABLE_CHANGE_LOG)
@@ -756,12 +665,6 @@
           .limit(50);
 
         if (error) throw error;
-<<<<<<< HEAD
-        renderChangeLog(data || []);
-      } catch (err) {
-        console.error('Error fetching change log', err);
-        renderChangeLog(); 
-=======
         setIssues('changelog', []);
         renderChangeLog(data || []);
       } catch (err) {
@@ -769,7 +672,6 @@
         renderChangeLog();
         issues.push(`Change log unavailable (admin_change_log): ${err?.message || err}`);
         setIssues('changelog', issues);
->>>>>>> impte
       }
     };
 
@@ -777,12 +679,6 @@
        els.detailModal.classList.remove('hidden');
        els.detailModal.classList.add('flex');
        els.detailModalTitle.textContent = "Record Details";
-<<<<<<< HEAD
-       els.detailModalContent.innerHTML = `<p class="text-xs font-mono text-emerald-400">ID: ${id}</p>`;
-    };
-    els.detailModalClose.onclick = () => els.detailModal.classList.add('hidden');
-
-=======
        els.detailModalContent.textContent = '';
        els.detailModalContent.appendChild(
          createTextElement('p', 'text-xs font-mono text-emerald-400', `ID: ${id}`)
@@ -814,7 +710,6 @@
       refreshAll().catch((error) => console.error('Refresh failed', error));
     });
 
->>>>>>> impte
     (async () => {
         try {
           const initialMode = await loadPreferredBackgroundMode();
@@ -827,26 +722,17 @@
           console.error('Unable to initialize background manager', error);
         }
 
-<<<<<<< HEAD
-        await loadData();
-        await loadChangeLog();
-=======
         await refreshAll();
->>>>>>> impte
     })();
   </script>
   <script type="module">
     import { supabase as supabaseClient } from '../../assets/js/supabaseClient.js';
 
     const redirectToLogin = async () => {
-<<<<<<< HEAD
-      if (!supabaseClient?.auth?.getSession) return;
-=======
       if (!supabaseClient?.auth?.getSession) {
         window.location.href = '../login.html';
         return;
       }
->>>>>>> impte
       const { data } = await supabaseClient.auth.getSession();
       if (!data?.session) {
         window.location.href = '../login.html';

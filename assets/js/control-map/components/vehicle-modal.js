@@ -1,6 +1,4 @@
 export const VEHICLE_HEADER_LABELS = {
-<<<<<<< HEAD
-=======
   'gps fix': 'GPS Fix',
   gps_fix: 'GPS Fix',
   'gps fix reason': 'GPS Fix Reason',
@@ -10,7 +8,6 @@ export const VEHICLE_HEADER_LABELS = {
   pt_last_read: 'PT Last Read',
   lat: 'Lat',
   long: 'Long',
->>>>>>> impte
   days_stationary: 'Days Parked',
   short_location: 'GPS City'
 };

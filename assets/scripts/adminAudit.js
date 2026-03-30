@@ -12,14 +12,11 @@ const normalizeValue = (value) => {
   if (typeof value === 'object') return JSON.stringify(value);
   return value;
 };
-<<<<<<< HEAD
-=======
 const normalizeDetails = (value) => {
   if (!value) return {};
   if (typeof value === 'object') return value;
   return { value: String(value) };
 };
->>>>>>> impte
 
 const resolveActor = async (client, explicitActor) => {
   if (explicitActor) return explicitActor;
@@ -29,16 +26,6 @@ const resolveActor = async (client, explicitActor) => {
   }
 
   try {
-<<<<<<< HEAD
-    const { data } = await client.auth.getUser();
-    const actor = data?.user?.email || data?.user?.id || 'anon';
-    cachedActor = { value: actor, expiresAt: now() + CACHE_TTL_MS };
-    return actor;
-  } catch (error) {
-    console.warn('Admin audit: unable to resolve actor', error?.message || error);
-    return 'anon';
-  }
-=======
     if (client?.auth && typeof client.auth.getUser === 'function') {
       const { data } = await client.auth.getUser();
       const actor = data?.user?.email || data?.user?.id || null;
@@ -71,7 +58,6 @@ const resolveProfile = () => {
     status: String(status || 'unknown').toLowerCase(),
     pagePath: typeof window !== 'undefined' ? window.location.pathname : null,
   };
->>>>>>> impte
 };
 
 export const logAdminEvent = async ({
@@ -84,15 +70,12 @@ export const logAdminEvent = async ({
   previousValue = null,
   newValue = null,
   actor = null,
-<<<<<<< HEAD
-=======
   profileEmail = null,
   profileRole = null,
   profileStatus = null,
   pagePath = null,
   source = 'web',
   details = {},
->>>>>>> impte
 } = {}) => {
   const supabaseClient =
     client ||
@@ -102,10 +85,7 @@ export const logAdminEvent = async ({
   if (!supabaseClient) return false;
 
   try {
-<<<<<<< HEAD
-=======
     const profile = resolveProfile();
->>>>>>> impte
     const actorName = await resolveActor(supabaseClient, actor);
     const normalizedAction = String(action || 'edit').toLowerCase();
     const fallbackSummary = `Admin ${normalizedAction} on ${tableName}`;
@@ -120,15 +100,12 @@ export const logAdminEvent = async ({
         column_name: columnName ?? null,
         previous_value: normalizeValue(previousValue),
         new_value: normalizeValue(newValue),
-<<<<<<< HEAD
-=======
         profile_email: profileEmail || profile.email || actorName || null,
         profile_role: profileRole || profile.role || 'guest',
         profile_status: profileStatus || profile.status || 'unknown',
         page_path: pagePath || profile.pagePath || null,
         source: String(source || 'web').toLowerCase(),
         details: normalizeDetails(details),
->>>>>>> impte
         created_at: new Date().toISOString(),
       },
     ]);

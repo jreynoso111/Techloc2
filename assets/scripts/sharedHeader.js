@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-const headerSlot = document.querySelector('[data-shared-header]');
-=======
 import { initGlobalAlerts } from './globalAlerts.js';
 import { initGlobalActivityTracker } from './globalActivityTracker.js';
 
@@ -29,7 +26,6 @@ const headerSlot = document.querySelector('[data-shared-header]');
 const HEADER_TEMPLATE_CACHE_KEY = 'techloc:shared-header-template:v1';
 const HEADER_TEMPLATE_CACHE_TS_KEY = `${HEADER_TEMPLATE_CACHE_KEY}:ts`;
 const HEADER_TEMPLATE_CACHE_TTL_MS = 15 * 60 * 1000;
->>>>>>> impte
 
 const getBasePath = () => {
   const bodyBase = document.body?.dataset.basePath;
@@ -114,8 +110,6 @@ const setupContactDropdown = (container) => {
   });
 };
 
-<<<<<<< HEAD
-=======
 const readCachedHeaderTemplate = () => {
   try {
     const template = window.sessionStorage?.getItem(HEADER_TEMPLATE_CACHE_KEY) || '';
@@ -151,14 +145,11 @@ const renderHeaderTemplate = (template, { basePath, pageTitle, activeNav }) => {
   window.dispatchEvent(new CustomEvent('shared-header:ready'));
 };
 
->>>>>>> impte
 const hydrateHeader = async () => {
   if (!headerSlot) return;
   const basePath = getBasePath();
   const pageTitle = document.body?.dataset.pageTitle || document.title;
   const activeNav = document.body?.dataset.activeNav || '';
-<<<<<<< HEAD
-=======
   const renderContext = { basePath, pageTitle, activeNav };
 
   const { template: cachedTemplate, isFresh } = readCachedHeaderTemplate();
@@ -166,25 +157,13 @@ const hydrateHeader = async () => {
     renderHeaderTemplate(cachedTemplate, renderContext);
     if (isFresh) return;
   }
->>>>>>> impte
 
   try {
     const response = await fetch(`${basePath}assets/templates/site-header.html`);
     if (!response.ok) throw new Error(`Header template not found (${response.status})`);
     const template = await response.text();
-<<<<<<< HEAD
-    const rendered = template
-      .replaceAll('{{BASE}}', basePath)
-      .replace('{{PAGE_TITLE}}', pageTitle);
-
-    headerSlot.innerHTML = rendered;
-    setActiveNav(headerSlot, activeNav);
-    setupMobileMenu(headerSlot);
-    setupContactDropdown(headerSlot);
-=======
     writeCachedHeaderTemplate(template);
     renderHeaderTemplate(template, renderContext);
->>>>>>> impte
   } catch (error) {
     console.error('Shared header failed to load:', error);
   }

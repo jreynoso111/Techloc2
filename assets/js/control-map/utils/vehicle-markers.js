@@ -1,10 +1,3 @@
-<<<<<<< HEAD
-export const createVehicleMarkerIcon = (markerColor, borderColor, isStopped) => L.divIcon({
-  className: 'vehicle-marker-wrapper',
-  html: `<div class="vehicle-marker-icon"><span class="vehicle-marker-dot" style="background:${markerColor}; border-color:${borderColor}"></span>${isStopped ? '<span class="vehicle-cross-badge">✕</span>' : ''}</div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9]
-=======
 const buildVehicleTruckSvg = () => `
   <svg class="vehicle-marker-truck" viewBox="0 0 28 20" aria-hidden="true" focusable="false">
     <ellipse class="vehicle-marker-shadow" cx="13.8" cy="16.9" rx="9.8" ry="1.6"></ellipse>
@@ -43,7 +36,6 @@ export const createVehicleMarkerIcon = (
   html: `<div class="vehicle-marker-icon${isStopped ? ' is-stopped' : ''}" style="--vehicle-marker-fill:${markerColor}; --vehicle-marker-stroke:${borderColor}; opacity:${Math.max(0.2, Math.min(1, Number(opacity) || 1)).toFixed(2)}"><span class="vehicle-marker-truck-wrap" style="display:inline-flex;${buildMarkerRotationStyle(rotationDegrees)}transform-origin:center center;">${buildVehicleTruckSvg()}</span>${isStopped ? '<span class="vehicle-marker-overlay"><span class="vehicle-cross-badge vehicle-marker-cross">✕</span></span>' : ''}</div>`,
   iconSize: [28, 20],
   iconAnchor: [14, 10]
->>>>>>> impte
 });
 
 export const syncVehicleMarkers = ({
@@ -51,18 +43,12 @@ export const syncVehicleMarkers = ({
   vehicleLayer,
   vehicleMarkers,
   visible,
-<<<<<<< HEAD
-  getVehicleMarkerColor,
-  getVehicleMarkerBorderColor,
-  isVehicleNotMoving
-=======
   getVehicleMarkerKey,
   getVehicleMarkerColor,
   getVehicleMarkerBorderColor,
   isVehicleNotMoving,
   getVehicleMarkerOpacity,
   getVehicleMarkerHeading
->>>>>>> impte
 }) => {
   if (!vehicleLayer) return;
 
@@ -72,12 +58,6 @@ export const syncVehicleMarkers = ({
     return;
   }
 
-<<<<<<< HEAD
-  const activeIds = new Set();
-
-  vehiclesWithCoords.forEach(({ vehicle, coords, focusHandler }) => {
-    if (!coords) return;
-=======
   const previousMarkerStates = new Map(vehicleMarkers);
   const nextMarkerKeys = new Set();
 
@@ -87,45 +67,10 @@ export const syncVehicleMarkers = ({
       ? getVehicleMarkerKey(vehicle)
       : `${vehicle?.id ?? ''}`;
     if (!markerKey) return;
->>>>>>> impte
 
     const markerColor = getVehicleMarkerColor(vehicle);
     const borderColor = getVehicleMarkerBorderColor(markerColor);
     const isStopped = isVehicleNotMoving(vehicle);
-<<<<<<< HEAD
-    const icon = createVehicleMarkerIcon(markerColor, borderColor, isStopped);
-
-    const stored = vehicleMarkers.get(vehicle.id);
-    let marker = stored?.marker;
-
-    if (marker) {
-      marker.setLatLng([coords.lat, coords.lng]);
-      marker.setIcon(icon);
-      marker.setZIndexOffset(isStopped ? 500 : 0);
-      marker.options.vehicleData = vehicle;
-      marker.options.markerColor = markerColor;
-      marker.options.isStopped = isStopped;
-    } else {
-      marker = L.marker(
-        [coords.lat, coords.lng],
-        { icon, zIndexOffset: isStopped ? 500 : 0, vehicleData: vehicle, markerColor, isStopped }
-      ).addTo(vehicleLayer);
-      marker.on('click', (event) => {
-        event.originalEvent.handledByMarker = true;
-        focusHandler();
-      });
-    }
-
-    vehicleMarkers.set(vehicle.id, { marker });
-    activeIds.add(vehicle.id);
-  });
-
-  [...vehicleMarkers.keys()].forEach((id) => {
-    if (activeIds.has(id)) return;
-    const stored = vehicleMarkers.get(id);
-    if (stored?.marker) vehicleLayer.removeLayer(stored.marker);
-    vehicleMarkers.delete(id);
-=======
     const markerOpacity = typeof getVehicleMarkerOpacity === 'function'
       ? getVehicleMarkerOpacity(vehicle)
       : 1;
@@ -197,6 +142,5 @@ export const syncVehicleMarkers = ({
       vehicleLayer.removeLayer(marker);
     }
     vehicleMarkers.delete(markerKey);
->>>>>>> impte
   });
 };
