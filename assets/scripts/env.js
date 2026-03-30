@@ -1,4 +1,4 @@
-const DEFAULT_SUPABASE_PROJECT_REF = 'lnfmogsjvdkqgwprlmtn';
+const DEFAULT_SUPABASE_PROJECT_REF = '';
 
 const getRuntimeConfig = () => {
   const browserConfig = (
