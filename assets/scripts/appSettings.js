@@ -2,7 +2,9 @@ export const APP_SETTINGS_STORAGE_KEY = 'techlocAppSettings:v1';
 
 export const DEFAULT_APP_SETTINGS = Object.freeze({
   vehicleMarkerStalePingDays: 3,
-  vehicleMarkerStaleOpacity: 0.55
+  vehicleMarkerStaleOpacity: 0.55,
+  truckTrailerMovementThresholdMeters: 25000,
+  otherUnitMovementThresholdMeters: 1000
 });
 
 const clampNumber = (value, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY, fallback = 0 } = {}) => {
@@ -25,8 +27,35 @@ export const normalizeAppSettings = (input = {}) => {
       min: 0.2,
       max: 1,
       fallback: DEFAULT_APP_SETTINGS.vehicleMarkerStaleOpacity
+    }),
+    truckTrailerMovementThresholdMeters: Math.round(
+      clampNumber(source.truckTrailerMovementThresholdMeters, {
+        min: 1,
+        max: 100000,
+        fallback: DEFAULT_APP_SETTINGS.truckTrailerMovementThresholdMeters
+      })
+    ),
+    otherUnitMovementThresholdMeters: Math.round(
+      clampNumber(source.otherUnitMovementThresholdMeters, {
+        min: 0,
+        max: 100000,
+        fallback: DEFAULT_APP_SETTINGS.otherUnitMovementThresholdMeters
+      })
     })
   };
+};
+
+export const isTruckOrTrailerUnitType = (value = '') => {
+  const unitType = String(value || '').trim().toLowerCase();
+  if (!unitType) return false;
+  return unitType.includes('truck') || unitType.includes('trailer');
+};
+
+export const getVehicleMovementThresholdMeters = (settings = {}, unitType = '') => {
+  const normalized = normalizeAppSettings(settings);
+  return isTruckOrTrailerUnitType(unitType)
+    ? normalized.truckTrailerMovementThresholdMeters
+    : normalized.otherUnitMovementThresholdMeters;
 };
 
 const safeLocalStorage = () => {
@@ -60,4 +89,3 @@ export const updateAppSettings = (partial = {}) => {
   const merged = { ...getAppSettings(), ...(partial || {}) };
   return saveAppSettings(merged);
 };
-

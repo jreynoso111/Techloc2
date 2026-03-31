@@ -74,6 +74,7 @@
               step="1"
               class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
             />
+            <p class="text-xs text-slate-300">Current value: <strong id="setting-stale-days-value">3 days</strong></p>
             <p class="text-xs text-slate-400">If vehicle ping age is equal or greater than this value, marker becomes transparent.</p>
           </label>
 
@@ -88,6 +89,48 @@
               class="w-full accent-cyan-400"
             />
             <p class="text-xs text-slate-300">Current value: <strong id="setting-stale-opacity-value">55%</strong></p>
+          </label>
+        </div>
+      </section>
+
+      <section class="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-inner shadow-slate-900/50">
+        <div class="mb-5 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-200">Movement rules</p>
+            <h2 class="text-xl font-bold text-white">Same-location movement threshold</h2>
+          </div>
+          <span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+            GPS History
+          </span>
+        </div>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <label class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Truck / Trailer threshold (meters)</span>
+            <input
+              id="setting-movement-threshold-truck-trailer"
+              type="number"
+              min="1"
+              max="100000"
+              step="1"
+              class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+            />
+            <p class="text-xs text-slate-300">Current value: <strong id="setting-movement-threshold-truck-trailer-value">25000 m</strong></p>
+            <p class="text-xs text-slate-400">Applies to unit types containing <strong>truck</strong> or <strong>trailer</strong>.</p>
+          </label>
+
+          <label class="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">All other unit types threshold (meters)</span>
+            <input
+              id="setting-movement-threshold-other"
+              type="number"
+              min="0"
+              max="100000"
+              step="1"
+              class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400"
+            />
+            <p class="text-xs text-slate-300">Current value: <strong id="setting-movement-threshold-other-value">1000 m</strong></p>
+            <p class="text-xs text-slate-400">Cars, SUVs and every other `Unit Type` use this threshold.</p>
           </label>
         </div>
       </section>

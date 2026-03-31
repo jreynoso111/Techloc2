@@ -9,8 +9,13 @@ import { supabase as supabaseClient } from '../js/supabaseClient.js';
 import { requireSession } from './admin-auth.js';
 
 const thresholdInput = document.getElementById('setting-stale-days');
+const thresholdValue = document.getElementById('setting-stale-days-value');
 const opacityInput = document.getElementById('setting-stale-opacity');
 const opacityValue = document.getElementById('setting-stale-opacity-value');
+const truckTrailerMovementThresholdInput = document.getElementById('setting-movement-threshold-truck-trailer');
+const otherMovementThresholdInput = document.getElementById('setting-movement-threshold-other');
+const truckTrailerMovementThresholdValue = document.getElementById('setting-movement-threshold-truck-trailer-value');
+const otherMovementThresholdValue = document.getElementById('setting-movement-threshold-other-value');
 const settingsForm = document.getElementById('admin-settings-form');
 const resetButton = document.getElementById('settings-reset');
 const statusLabel = document.getElementById('settings-status');
@@ -54,17 +59,52 @@ const renderOpacityValue = (value) => {
   opacityValue.textContent = `${pct}%`;
 };
 
+const renderThresholdValue = (value) => {
+  if (!thresholdValue) return;
+  const numeric = Number(value);
+  const days = Number.isFinite(numeric)
+    ? Math.round(numeric)
+    : DEFAULT_APP_SETTINGS.vehicleMarkerStalePingDays;
+  thresholdValue.textContent = `${days} day${days === 1 ? '' : 's'}`;
+};
+
+const renderMovementThresholdValue = (element, value, fallback) => {
+  if (!element) return;
+  const numeric = Number(value);
+  const meters = Number.isFinite(numeric) ? Math.round(numeric) : fallback;
+  element.textContent = `${meters} m`;
+};
+
 const renderForm = (settings = {}) => {
   const normalized = normalizeAppSettings(settings);
   if (thresholdInput) thresholdInput.value = String(normalized.vehicleMarkerStalePingDays);
   if (opacityInput) opacityInput.value = String(normalized.vehicleMarkerStaleOpacity);
+  if (truckTrailerMovementThresholdInput) {
+    truckTrailerMovementThresholdInput.value = String(normalized.truckTrailerMovementThresholdMeters);
+  }
+  if (otherMovementThresholdInput) {
+    otherMovementThresholdInput.value = String(normalized.otherUnitMovementThresholdMeters);
+  }
+  renderThresholdValue(normalized.vehicleMarkerStalePingDays);
   renderOpacityValue(normalized.vehicleMarkerStaleOpacity);
+  renderMovementThresholdValue(
+    truckTrailerMovementThresholdValue,
+    normalized.truckTrailerMovementThresholdMeters,
+    DEFAULT_APP_SETTINGS.truckTrailerMovementThresholdMeters
+  );
+  renderMovementThresholdValue(
+    otherMovementThresholdValue,
+    normalized.otherUnitMovementThresholdMeters,
+    DEFAULT_APP_SETTINGS.otherUnitMovementThresholdMeters
+  );
 };
 
 const readForm = () => {
   const raw = {
     vehicleMarkerStalePingDays: thresholdInput?.value,
-    vehicleMarkerStaleOpacity: opacityInput?.value
+    vehicleMarkerStaleOpacity: opacityInput?.value,
+    truckTrailerMovementThresholdMeters: truckTrailerMovementThresholdInput?.value,
+    otherUnitMovementThresholdMeters: otherMovementThresholdInput?.value
   };
   return normalizeAppSettings({ ...getAppSettings(), ...raw });
 };
@@ -119,6 +159,32 @@ const saveRemoteSettings = async (settings = {}) => {
 if (opacityInput) {
   opacityInput.addEventListener('input', () => {
     renderOpacityValue(opacityInput.value);
+  });
+}
+
+if (thresholdInput) {
+  thresholdInput.addEventListener('input', () => {
+    renderThresholdValue(thresholdInput.value);
+  });
+}
+
+if (truckTrailerMovementThresholdInput) {
+  truckTrailerMovementThresholdInput.addEventListener('input', () => {
+    renderMovementThresholdValue(
+      truckTrailerMovementThresholdValue,
+      truckTrailerMovementThresholdInput.value,
+      DEFAULT_APP_SETTINGS.truckTrailerMovementThresholdMeters
+    );
+  });
+}
+
+if (otherMovementThresholdInput) {
+  otherMovementThresholdInput.addEventListener('input', () => {
+    renderMovementThresholdValue(
+      otherMovementThresholdValue,
+      otherMovementThresholdInput.value,
+      DEFAULT_APP_SETTINGS.otherUnitMovementThresholdMeters
+    );
   });
 }
 

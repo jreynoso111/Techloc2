@@ -1,6 +1,13 @@
 import '../../scripts/authManager.js';
 import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
-    import { APP_SETTINGS_STORAGE_KEY, getAppSettings, normalizeAppSettings, saveAppSettings } from '../../scripts/appSettings.js';
+    import {
+      APP_SETTINGS_STORAGE_KEY,
+      getAppSettings,
+      getVehicleMovementThresholdMeters,
+      isTruckOrTrailerUnitType,
+      normalizeAppSettings,
+      saveAppSettings
+    } from '../../scripts/appSettings.js';
     import { supabase as supabaseClient } from '../supabaseClient.js';
     import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
     import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js';
@@ -126,6 +133,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     let vehicleFiltersCollapsed = false;
     let mapAppSettings = getAppSettings();
     const STALE_PING_DAY_MS = 24 * 60 * 60 * 1000;
+    const CONTROL_MAP_BOOT_VEHICLE_TIMEOUT_MS = 12000;
     const APP_SETTINGS_TABLE = 'app_settings';
     const APP_SETTINGS_KEY = 'control_map';
     let mapRemoteSettingsAvailable = true;
@@ -2563,8 +2571,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_MOVING_MOVING_TOTAL_DISTANCE_METERS = 1300;
     const GPS_MOVING_MOVING_NET_DISTANCE_METERS = 420;
     const GPS_MOVING_MOVING_MAX_SEGMENT_METERS = 320;
-    const GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 25000;
-    const GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS = 1000;
     const GPS_HISTORY_HOTSPOT_MAX = 6;
     const GPS_HISTORY_HOTSPOT_CLUSTER_RADIUS_METERS = 260;
     const GPS_HISTORY_HOTSPOT_CONCURRENT_PING_WINDOW_MS = 20 * 60 * 1000;
@@ -2573,7 +2579,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     const GPS_MOVING_MILES_TRUCK_SEGMENT_THRESHOLD_METERS = 800;
     const GPS_MOVING_MILES_DAY_THRESHOLD_METERS = 800;
     const GPS_MOVING_MILES_TRUCK_DAY_THRESHOLD_METERS = 3200;
-    const GPS_DAILY_PARKED_MOVEMENT_THRESHOLD_METERS = 25 * 1609.344;
     const GPS_HISTORY_HOTSPOT_MIN_CONSECUTIVE_DAYS = 2;
     const GPS_HISTORY_HOTSPOT_MIN_MULTIDAY_STAYS = 1;
     const GPS_HISTORY_HOTSPOT_COLOR = '#1e3a8a';
@@ -2817,8 +2822,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return Array.isArray(movementSourceRecords) && movementSourceRecords.length <= 1 ? 'unknown' : '';
     };
 
-    const buildDailyMovementBucketsFromPoints = (points = []) => {
+    const buildDailyMovementBucketsFromPoints = (points = [], { vehicle = null } = {}) => {
       if (!Array.isArray(points) || !points.length) return [];
+      const stoppedDistanceThresholdMeters = getStoppedDistanceThresholdForVehicle(vehicle);
 
       const ordered = [...points]
         .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng) && point.lat !== 0 && point.lng !== 0)
@@ -2884,7 +2890,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return [...dayBuckets.values()]
         .sort((a, b) => a.dayStartMs - b.dayStartMs)
         .map((bucket) => {
-          const isMoving = bucket.movingEvidence || bucket.distanceMeters >= GPS_DAILY_PARKED_MOVEMENT_THRESHOLD_METERS;
+          const isMoving = bucket.movingEvidence || bucket.distanceMeters >= stoppedDistanceThresholdMeters;
           if (isMoving) {
             stationaryStartDayMs = null;
             stationaryStartTimeMs = null;
@@ -2908,7 +2914,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         });
     };
 
-    const buildDailyMovementBucketsFromRecords = (records = []) => {
+    const buildDailyMovementBucketsFromRecords = (records = [], { vehicle = null } = {}) => {
       if (!Array.isArray(records) || !records.length) return [];
       const points = records
         .map((record) => {
@@ -2921,7 +2927,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           };
         })
         .filter(Boolean);
-      return buildDailyMovementBucketsFromPoints(points);
+      return buildDailyMovementBucketsFromPoints(points, { vehicle });
     };
 
     const inferStationaryDaysFromRecords = (records = [], { vehicle = null } = {}) => {
@@ -3649,18 +3655,14 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       return '';
     };
 
-    const isTruckOrTrailerUnit = (vehicle = {}) => {
-      const unitType = `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`
-        .trim()
-        .toLowerCase();
-      if (!unitType) return false;
-      return unitType.includes('truck') || unitType.includes('trailer');
-    };
+    const getVehicleUnitType = (vehicle = {}) => (
+      `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`.trim()
+    );
+
+    const isTruckOrTrailerUnit = (vehicle = {}) => isTruckOrTrailerUnitType(getVehicleUnitType(vehicle));
 
     const getStoppedDistanceThresholdForVehicle = (vehicle = {}) => (
-      isTruckOrTrailerUnit(vehicle)
-        ? GPS_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
-        : GPS_NON_TRUCK_TRAILER_STOPPED_DISTANCE_THRESHOLD_METERS
+      getVehicleMovementThresholdMeters(mapAppSettings || refreshMapAppSettings(), getVehicleUnitType(vehicle))
     );
 
     const getGpsPointDistanceMeters = (fromPoint, toPoint) => {
@@ -5348,7 +5350,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       const newestLabelTextRgb = parseTrailColorToRgb('#dcfce7');
       const pointStepDenominator = Math.max(1, points.length - 1);
       const segmentStepDenominator = Math.max(1, points.length - 1);
-      const dailyMovementBuckets = buildDailyMovementBucketsFromPoints(points);
+      const dailyMovementBuckets = buildDailyMovementBucketsFromPoints(points, { vehicle });
       const movementStatusByDay = new Map(
         dailyMovementBuckets.map((bucket) => [bucket.dayStartMs, bucket.status])
       );
@@ -10481,7 +10483,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           updateServiceVisibilityUI();
           await hydrateMapSettingsFromSupabase();
           await clearStoredVehicleFilterPrefs();
-          await loadVehicles();
+          const initialVehicleLoad = loadVehicles().catch((error) => {
+            console.warn('Initial vehicle load warning: ' + (error?.message || error));
+          });
+          await Promise.race([
+            initialVehicleLoad,
+            new Promise((resolve) => {
+              window.setTimeout(resolve, CONTROL_MAP_BOOT_VEHICLE_TIMEOUT_MS);
+            })
+          ]);
 
           const loadNonCriticalData = async () => {
             const backgroundTasks = [

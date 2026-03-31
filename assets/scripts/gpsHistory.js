@@ -1,3 +1,5 @@
+import { getAppSettings, getVehicleMovementThresholdMeters, isTruckOrTrailerUnitType } from './appSettings.js';
+
 const getDefaultHelpers = () => ({
   escapeHTML: (value = '') => `${value}`,
   formatDateTime: (value) => value
@@ -129,10 +131,7 @@ const getRecordSerial = (record = {}) => {
 const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 const GPS_HISTORY_NO_PING_THRESHOLD_MS = 2 * GPS_HISTORY_DAY_MS;
 const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
-const GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 25000;
-const GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS = 1000;
 const GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS = 220;
-const GPS_DAILY_MOVEMENT_PARKED_THRESHOLD_METERS = 25 * 1609.344;
 
 const parseCoordinate = (record = {}, key = 'lat') => {
   const candidates = key === 'lat'
@@ -189,7 +188,7 @@ const getLocalDayKeyFromMs = (timeMs) => {
   return `${year}-${month}-${day}`;
 };
 
-const resolveSerialMovementStateForDayPoints = (points = []) => {
+const resolveSerialMovementStateForDayPoints = (points = [], { movementThresholdMeters = GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS } = {}) => {
   if (!Array.isArray(points) || points.length < 2) return 'unknown';
   const ordered = [...points].sort((a, b) => a.timestamp - b.timestamp);
   const first = ordered[0];
@@ -206,16 +205,16 @@ const resolveSerialMovementStateForDayPoints = (points = []) => {
 
   const netDistanceMeters = getPointDistanceMeters(first, last);
   const moved = (
-    maxSegmentMeters > GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS
-    || netDistanceMeters > GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS
-    || totalDistanceMeters > (GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS * 1.2)
+    maxSegmentMeters > movementThresholdMeters
+    || netDistanceMeters > movementThresholdMeters
+    || totalDistanceMeters > (movementThresholdMeters * 1.2)
   );
   return moved ? 'moving' : 'stopped';
 };
 
 const detectWirelessSerialMovementAlarms = (
   records = [],
-  { isSerialBlacklisted = null } = {}
+  { isSerialBlacklisted = null, movementThresholdMeters = GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS } = {}
 ) => {
   if (!Array.isArray(records) || !records.length) return new Set();
   const isBlacklisted = (serial, timestampMs, record) => (
@@ -247,7 +246,7 @@ const detectWirelessSerialMovementAlarms = (
     const wirelessStoppedSerials = [];
 
     serialMap.forEach((points, serial) => {
-      const movementState = resolveSerialMovementStateForDayPoints(points);
+      const movementState = resolveSerialMovementStateForDayPoints(points, { movementThresholdMeters });
       if (movementState === 'moving' && isWiredSerial(serial)) {
         hasWiredMoving = true;
       }
@@ -290,18 +289,14 @@ const getPointDistanceMeters = (fromPoint, toPoint) => {
   return earthRadiusMeters * c;
 };
 
-const isTruckOrTrailerUnit = (vehicle = {}) => {
-  const unitType = `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`
-    .trim()
-    .toLowerCase();
-  if (!unitType) return false;
-  return unitType.includes('truck') || unitType.includes('trailer');
-};
+const getVehicleUnitType = (vehicle = {}) => (
+  `${vehicle?.type || vehicle?.unit_type || vehicle?.details?.['Unit Type'] || ''}`.trim()
+);
+
+const isTruckOrTrailerUnit = (vehicle = {}) => isTruckOrTrailerUnitType(getVehicleUnitType(vehicle));
 
 const getStationaryClusterRadiusMetersForVehicle = (vehicle = {}) => (
-  isTruckOrTrailerUnit(vehicle)
-    ? GPS_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS
-    : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS
+  getVehicleMovementThresholdMeters(getAppSettings(), getVehicleUnitType(vehicle))
 );
 
 const parseRecordMovementState = (record = {}) => {
@@ -338,7 +333,7 @@ const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusM
 
   const threshold = Number.isFinite(stationaryClusterRadiusMeters) && stationaryClusterRadiusMeters > 0
     ? stationaryClusterRadiusMeters
-    : GPS_NON_TRUCK_TRAILER_STATIONARY_CLUSTER_RADIUS_METERS;
+    : getVehicleMovementThresholdMeters(getAppSettings(), '');
 
   const ordered = [...entries].filter((entry) => hasValidCoordinatePair(entry.lat, entry.lng)).sort((a, b) => {
     if (a.timestamp === b.timestamp) return a.index - b.index;
@@ -397,7 +392,7 @@ const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusM
   [...dayBuckets.values()]
     .sort((a, b) => a.dayStartMs - b.dayStartMs)
     .forEach((bucket) => {
-      const isMoving = bucket.movingEvidence || bucket.distanceMeters >= GPS_DAILY_MOVEMENT_PARKED_THRESHOLD_METERS;
+      const isMoving = bucket.movingEvidence || bucket.distanceMeters >= threshold;
       if (isMoving) {
         stationaryStartDayMs = null;
       } else if (!Number.isFinite(stationaryStartDayMs)) {
@@ -1190,7 +1185,8 @@ const createGpsHistoryManager = ({
         : configuredSerials;
       const serialGroups = buildSerialGroups(filteredRecords, visibleConfiguredSerials);
       const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {
-        isSerialBlacklisted: serialIsBlacklisted
+        isSerialBlacklisted: serialIsBlacklisted,
+        movementThresholdMeters: getStationaryClusterRadiusMetersForVehicle(vehicle)
       });
       const configuredWithoutHistoryCount = visibleConfiguredSerials.filter((serial) => (
         !modeRecords.some((record) => getRecordSerial(record) === serial)
