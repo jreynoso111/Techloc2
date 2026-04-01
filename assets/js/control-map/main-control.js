@@ -1,5 +1,5 @@
-import '../../scripts/authManager.js';
-import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
+import '../../scripts/authManager.js?v=movement-v2-20250403-1';
+import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=movement-v2-20250403-1';
     import {
       APP_SETTINGS_STORAGE_KEY,
       getAppSettings,
@@ -7,12 +7,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       isTruckOrTrailerUnitType,
       normalizeAppSettings,
       saveAppSettings
-    } from '../../scripts/appSettings.js';
-    import { supabase as supabaseClient } from '../supabaseClient.js';
-    import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js';
-    import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js';
-    import { createGpsHistoryManager } from '../../scripts/gpsHistory.js';
-    import { createRepairHistoryManager } from '../../scripts/repairHistory.js';
+    } from '../../scripts/appSettings.js?v=movement-v2-20250403-1';
+    import { supabase as supabaseClient } from '../supabaseClient.js?v=movement-v2-20250403-1';
+    import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js?v=movement-v2-20250403-1';
+    import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js?v=movement-v2-20250403-1';
+    import { createGpsHistoryManager } from '../../scripts/gpsHistory.js?v=movement-v2-20250403-1';
+    import { createRepairHistoryManager } from '../../scripts/repairHistory.js?v=movement-v2-20250403-1';
     import { createPartnerClusterGroup } from './utils/cluster.js';
     import { attachDistances, debounce, debounceAsync, getOriginKey, runWithTimeout } from './utils/helpers.js';
     import { startLoading } from './utils/loading.js';
@@ -32,15 +32,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       parsePtLastReadDate,
       parseDealCompletion,
       toStateCode
-    } from '../utils/formatters.js';
-    import { ensureSupabaseSession as ensureSupabaseSessionBase, SERVICE_CATEGORY_HINTS, SERVICE_TABLE, SUPABASE_TIMEOUT_MS, TABLES } from './services/supabase.js';
-    import { createControlMapApiService } from './services/apiService.js';
-    import { startSupabaseKeepAlive } from './services/realtime.js';
-    import { createVehicleService } from './services/vehicleService.js';
-    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js';
-    import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js';
-    import { createLayerToggle } from './utils/layer-toggles.js';
-    import { syncVehicleMarkers } from './utils/vehicle-markers.js';
+    } from '../utils/formatters.js?v=movement-v2-20250403-1';
+    import { ensureSupabaseSession as ensureSupabaseSessionBase, SERVICE_CATEGORY_HINTS, SERVICE_TABLE, SUPABASE_TIMEOUT_MS, TABLES } from './services/supabase.js?v=movement-v2-20250403-1';
+    import { createControlMapApiService } from './services/apiService.js?v=movement-v2-20250403-1';
+    import { startSupabaseKeepAlive } from './services/realtime.js?v=movement-v2-20250403-1';
+    import { createVehicleService } from './services/vehicleService.js?v=movement-v2-20250403-1';
+    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js?v=movement-v2-20250403-1';
+    import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js?v=movement-v2-20250403-1';
+    import { createLayerToggle } from './utils/layer-toggles.js?v=movement-v2-20250403-1';
+    import { syncVehicleMarkers } from './utils/vehicle-markers.js?v=movement-v2-20250403-1';
     import {
       bindNavigationStorageListener,
       getSelectedVehicle,
@@ -48,7 +48,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
       setSelectedVehicle,
       subscribeSelectedVehicle,
       subscribeServiceFilterIds,
-    } from '../shared/navigationStore.js';
+    } from '../shared/navigationStore.js?v=movement-v2-20250403-1';
     
     // --- Base Config ---
 
@@ -342,34 +342,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         vehicle.avgMovingMilesPerDay = previousAvgMovingMiles;
         if (vehicle?.details && typeof vehicle.details === 'object') {
           vehicle.details.avgMovingMilesPerDay = previousAvgMovingMiles;
-        }
-      }
-
-      const previousLastPingMs = getVehicleLastPingTimestampMs(previousVehicle);
-      const currentLastPingMs = getVehicleLastPingTimestampMs(vehicle);
-      const snapshotDidAdvanceLastPing = (
-        Number.isFinite(previousLastPingMs)
-        && Number.isFinite(currentLastPingMs)
-        && currentLastPingMs > previousLastPingMs
-      );
-
-      if (!snapshotDidAdvanceLastPing) {
-        const previousMovingOverride = `${previousVehicle?.historyMovingOverride || previousVehicle?.details?.historyMovingOverride || ''}`.trim().toLowerCase();
-        if (previousMovingOverride) {
-          vehicle.historyMovingOverride = previousMovingOverride;
-          if (vehicle?.details && typeof vehicle.details === 'object') {
-            vehicle.details.historyMovingOverride = previousMovingOverride;
-          }
-        }
-
-        const previousDaysOverrideRaw = previousVehicle?.historyDaysStationaryOverride
-          ?? previousVehicle?.details?.historyDaysStationaryOverride;
-        const previousDaysOverride = Number(previousDaysOverrideRaw);
-        if (Number.isFinite(previousDaysOverride) && previousDaysOverride >= 0) {
-          vehicle.historyDaysStationaryOverride = previousDaysOverride;
-          if (vehicle?.details && typeof vehicle.details === 'object') {
-            vehicle.details.historyDaysStationaryOverride = previousDaysOverride;
-          }
         }
       }
 
@@ -3167,21 +3139,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
           winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
           blacklistedWirelessSerials
         });
-        const parkingSourceRecords = selectParkingSpotRecordsByDay(records, {
-          getRecordSerial,
-          winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
-          blacklistedWirelessSerials
-        });
-        const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records, {
-          movementSourceRecords: metricSourceRecords,
-          stationarySourceRecords: parkingSourceRecords,
-          winnerSerial: resolvedWinnerSerial || configuredWinnerSerial,
-          getRecordSerial
-        });
         const changed = applyVehicleAverageMovingMilesPerDayFromGpsHistory(vehicle, metricSourceRecords);
-        if (movingOverrideChanged) {
-          renderVehicles({ preserveScrollTop: true });
-        }
         syncVehicleAverageMovingMilesDayField(vehicle);
         return changed;
       })().finally(() => {
@@ -6042,17 +6000,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         winnerSerial: normalizedWinnerSerial,
         blacklistedWirelessSerials
       });
-      const parkingSourceRecords = selectParkingSpotRecordsByDay(records, {
-        getRecordSerial,
-        winnerSerial: normalizedWinnerSerial,
-        blacklistedWirelessSerials
-      });
-      const movingOverrideChanged = applyVehicleMovingOverrideFromGpsHistory(vehicle, records, {
-        movementSourceRecords: metricSourceRecords,
-        stationarySourceRecords: parkingSourceRecords,
-        winnerSerial: normalizedWinnerSerial,
-        getRecordSerial
-      });
       const avgMovingMilesChanged = applyVehicleAverageMovingMilesPerDayFromGpsHistory(vehicle, metricSourceRecords);
 
       const serialCountsBySerial = countGpsHistoryRecordsBySerial(records, getRecordSerial);
@@ -6073,9 +6020,6 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
         resolveVehicleMarkerHeadingFromTrail(trailPoints, latestRecords)
       );
 
-      if (movingOverrideChanged || headingChanged) {
-        renderVehicles({ preserveScrollTop: true });
-      }
       if (avgMovingMilesChanged) {
         syncVehicleAverageMovingMilesDayField(vehicle);
       }
@@ -8247,11 +8191,11 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js';
     }
 
     function getDaysParkedValue(vehicle) {
-      const historyOverride = parseDaysParkedCandidate(
-        vehicle?.historyDaysStationaryOverride
-        ?? vehicle?.details?.historyDaysStationaryOverride
+      const movementDaysV2 = parseDaysParkedCandidate(
+        vehicle?.movementDaysStationaryV2
+        ?? vehicle?.details?.movement_days_stationary_v2
       );
-      if (Number.isFinite(historyOverride)) return historyOverride;
+      if (Number.isFinite(movementDaysV2)) return movementDaysV2;
 
       const raw = vehicle?.daysStationary
         ?? vehicle?.details?.days_stationary

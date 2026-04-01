@@ -185,6 +185,8 @@ const parseStationaryDays = (...candidates) => {
 
 export const getMovingStatus = (vehicle = {}) => {
   const stationaryDays = parseStationaryDays(
+    vehicle?.movementDaysStationaryV2,
+    vehicle?.details?.movement_days_stationary_v2,
     vehicle?.daysStationary,
     vehicle?.details?.days_stationary,
     vehicle?.details?.['Days Stationary'],
@@ -193,8 +195,8 @@ export const getMovingStatus = (vehicle = {}) => {
   );
 
   const explicitStatus = parseMovingIndicator(
-    vehicle?.historyMovingOverride,
-    vehicle?.details?.historyMovingOverride,
+    vehicle?.movementStatusV2,
+    vehicle?.details?.movement_status_v2,
     vehicle?.moving,
     vehicle?.movingCalc,
     vehicle?.gpsMoving,

@@ -396,13 +396,17 @@
 
     const normalizeRow = (row, type) => {
         if (type === 'vehicle') {
+            const movementStatusV2 = String(row['movement_status_v2'] || '').trim().toLowerCase();
+            const isMoving = movementStatusV2
+              ? movementStatusV2 === 'moving'
+              : String(row['moving']) === '1';
             return {
                 id: row['Customer ID'] || row.id,
                 name: `${row['model year'] || ''} ${row['model'] || 'Vehicle'}`,
                 category: row['unit type'] || 'Vehicle',
                 state: row['state loc'] || row.state,
                 city: row['pt city'],
-                moving: String(row['moving']) === '1', 
+                moving: isMoving,
                 completion: parseFloat(row['deal completion']) || 0,
                 ptStatus: row['pt status'],
                 source: 'Fleet DB',

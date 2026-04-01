@@ -58,6 +58,7 @@ const getVehicleWinnerSerial = (vehicle = {}) => {
     vehicle?.ptSerial,
     details?.['PT Serial'],
     details?.['PT Serial '],
+    details?.['pt serial'],
     details?.pt_serial,
     details?.['PassTime Serial No'],
     details?.['PassTime Serial Number'],
@@ -72,6 +73,37 @@ const getVehicleWinnerSerial = (vehicle = {}) => {
     if (normalized) return normalized;
   }
   return '';
+};
+
+const getVehicleCanonicalMovementStatus = (vehicle = {}) => {
+  const candidates = [
+    vehicle?.movementStatusV2,
+    vehicle?.details?.movement_status_v2,
+    vehicle?.moving,
+    vehicle?.details?.moving
+  ];
+  for (const candidate of candidates) {
+    const normalized = String(candidate ?? '').trim().toLowerCase();
+    if (!normalized) continue;
+    if (normalized === 'moving' || normalized === 'stopped' || normalized === 'unknown') return normalized;
+    if (normalized === '1') return 'moving';
+    if (normalized === '-1' || normalized === '0') return 'stopped';
+  }
+  return '';
+};
+
+const getVehicleCanonicalDaysParked = (vehicle = {}) => {
+  const candidates = [
+    vehicle?.movementDaysStationaryV2,
+    vehicle?.details?.movement_days_stationary_v2,
+    vehicle?.daysStationary,
+    vehicle?.details?.days_stationary
+  ];
+  for (const candidate of candidates) {
+    const parsed = Number.parseInt(`${candidate ?? ''}`.trim(), 10);
+    if (Number.isFinite(parsed)) return Math.max(0, parsed);
+  }
+  return null;
 };
 
 const getVehicleConfiguredSerials = (vehicle = {}) => {
@@ -529,8 +561,6 @@ const getMostRecentSerialFromRecords = (
   return selectedSerial;
 };
 
-const GPS_WINNER_STICKY_WINDOW_MS = 2 * 60 * 60 * 1000;
-
 const resolveVehicleWinnerSerialFromRecords = (
   vehicle = {},
   records = [],
@@ -544,78 +574,55 @@ const resolveVehicleWinnerSerialFromRecords = (
   const isBlocked = (serial, timestampMs, record) => (
     resolveSerialBlacklistState(isSerialBlacklisted, serial, timestampMs, record)
   );
-  const isAllowedNow = (serial) => serial && !isBlocked(serial, nowMs);
-  const recentWindowStart = nowMs - GPS_WINNER_RECENCY_WINDOW_MS;
-  const { start: todayStart, end: todayEnd } = getLocalDayBoundsMs(nowMs);
+  const settings = getAppSettings();
+  const staleDays = Math.max(0, Number(settings?.vehicleMarkerStalePingDays) || 0);
+  const activeWindowStart = nowMs - (staleDays * GPS_HISTORY_DAY_MS);
+  const isAllowedWirelessNow = (serial) => (
+    serial
+    && isWirelessSerial(serial)
+    && !isBlocked(serial, nowMs)
+  );
 
   const serialStats = new Map();
   records.forEach((record) => {
     const serial = getRecordSerial(record);
     if (!serial) return;
-    // Winner selection must ignore serials blacklisted as of "now",
-    // even if some of their older readings are before effective_from.
-    if (!isAllowedNow(serial)) return;
     const timestamp = getRecordTimestampMs(record);
     if (!Number.isFinite(timestamp)) return;
     const existing = serialStats.get(serial) || {
-      latestTimestamp: Number.NEGATIVE_INFINITY,
-      hasReadingToday: false,
-      hasRecentReading: false
+      latestTimestamp: Number.NEGATIVE_INFINITY
     };
     if (timestamp >= existing.latestTimestamp) {
       existing.latestTimestamp = timestamp;
     }
-    if (timestamp >= todayStart && timestamp < todayEnd) {
-      existing.hasReadingToday = true;
-    }
-    if (timestamp >= recentWindowStart) {
-      existing.hasRecentReading = true;
-    }
     serialStats.set(serial, existing);
   });
 
-  const freshestAllowedSerial = [...serialStats.entries()]
+  const freshestActiveWiredSerial = [...serialStats.entries()]
+    .filter(([serial, stats]) => isWiredSerial(serial) && stats.latestTimestamp >= activeWindowStart)
     .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
     .map(([serial]) => serial)[0] || '';
-  const freshestAllowedTodaySerial = [...serialStats.entries()]
-    .filter(([, stats]) => stats.hasReadingToday)
+  if (freshestActiveWiredSerial) return freshestActiveWiredSerial;
+
+  const freshestActiveWirelessSerial = [...serialStats.entries()]
+    .filter(([serial, stats]) => isAllowedWirelessNow(serial) && stats.latestTimestamp >= activeWindowStart)
     .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
     .map(([serial]) => serial)[0] || '';
+  if (freshestActiveWirelessSerial) return freshestActiveWirelessSerial;
 
-  if (configuredWinnerSerial && isAllowedNow(configuredWinnerSerial)) {
-    const configuredStats = serialStats.get(configuredWinnerSerial);
-    if (configuredStats?.hasReadingToday) {
-      return configuredWinnerSerial;
-    }
+  const freshestAnyWiredSerial = [...serialStats.entries()]
+    .filter(([serial]) => isWiredSerial(serial))
+    .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
+    .map(([serial]) => serial)[0] || '';
+  if (freshestAnyWiredSerial) return freshestAnyWiredSerial;
 
-    // If configured serial has no reading today, prefer the freshest serial from today.
-    if (freshestAllowedTodaySerial && freshestAllowedTodaySerial !== configuredWinnerSerial) {
-      return freshestAllowedTodaySerial;
-    }
+  const freshestAnyWirelessSerial = [...serialStats.entries()]
+    .filter(([serial]) => isAllowedWirelessNow(serial))
+    .sort((a, b) => b[1].latestTimestamp - a[1].latestTimestamp)
+    .map(([serial]) => serial)[0] || '';
+  if (freshestAnyWirelessSerial) return freshestAnyWirelessSerial;
 
-    if (configuredStats?.hasRecentReading && freshestAllowedSerial) {
-      const freshestStats = serialStats.get(freshestAllowedSerial);
-      if (!freshestStats || freshestAllowedSerial === configuredWinnerSerial) {
-        return configuredWinnerSerial;
-      }
-
-      const freshnessGap = freshestStats.latestTimestamp - configuredStats.latestTimestamp;
-      // Avoid flapping when both serials are effectively tied in recency.
-      if (freshnessGap <= GPS_WINNER_STICKY_WINDOW_MS) {
-        return configuredWinnerSerial;
-      }
-    }
-  }
-
-  if (freshestAllowedTodaySerial) return freshestAllowedTodaySerial;
-  if (freshestAllowedSerial) return freshestAllowedSerial;
-
-  const fallbackSerial = getMostRecentSerialFromRecords(records, {
-    isSerialAllowed: (serial) => isAllowedNow(serial)
-  });
-  if (fallbackSerial) return fallbackSerial;
-
-  return getMostRecentSerialFromRecords(records);
+  return configuredWinnerSerial || getMostRecentSerialFromRecords(records);
 };
 
 const createGpsHistoryManager = ({
@@ -844,8 +851,17 @@ const createGpsHistoryManager = ({
       applyViewButtonState(viewAllButton, viewMode === 'all');
 
       if (winnerInfo) {
+        const canonicalStatus = getVehicleCanonicalMovementStatus(vehicle);
+        const canonicalDays = getVehicleCanonicalDaysParked(vehicle);
+        const statusSuffix = canonicalStatus === 'stopped'
+          ? ` · Parked${Number.isFinite(canonicalDays) ? ` ${canonicalDays} day${canonicalDays === 1 ? '' : 's'}` : ''}`
+          : canonicalStatus === 'moving'
+            ? ' · Moving'
+            : canonicalStatus === 'unknown'
+              ? ' · Status unknown'
+              : '';
         winnerInfo.textContent = winnerEnabled
-          ? `Winner serial: ${winnerSerial}`
+          ? `Winner serial: ${winnerSerial}${statusSuffix}`
           : 'Winner serial not available for this vehicle.';
       }
     };
@@ -1235,17 +1251,33 @@ const createGpsHistoryManager = ({
         const oldestLabel = hasHistory ? getDateDisplayFromRecord(group.records[group.records.length - 1]) : 'No history';
         const latestMovementDisplay = latestRecord ? getRecordMovementDisplay(latestRecord) : '';
         const latestDaysParked = latestRecord ? getRecordDaysParkedValue(latestRecord) : null;
-        const latestDaysParkedLabel = Number.isFinite(latestDaysParked)
-          ? `${latestDaysParked} parked day${latestDaysParked === 1 ? '' : 's'}`
+        const canonicalMovementStatus = isWinnerSerial
+          ? getVehicleCanonicalMovementStatus(vehicle)
+          : '';
+        const canonicalDaysParked = isWinnerSerial
+          ? getVehicleCanonicalDaysParked(vehicle)
+          : null;
+        const resolvedMovementDisplay = canonicalMovementStatus === 'stopped'
+          ? 'Parked'
+          : canonicalMovementStatus === 'moving'
+            ? 'Moving'
+            : canonicalMovementStatus === 'unknown'
+              ? ''
+              : latestMovementDisplay;
+        const resolvedDaysParked = Number.isFinite(canonicalDaysParked)
+          ? canonicalDaysParked
+          : latestDaysParked;
+        const latestDaysParkedLabel = Number.isFinite(resolvedDaysParked)
+          ? `${resolvedDaysParked} parked day${resolvedDaysParked === 1 ? '' : 's'}`
           : 'Parked days: —';
-        const centerStatusTone = latestMovementDisplay === 'Parked'
+        const centerStatusTone = resolvedMovementDisplay === 'Parked'
           ? 'parked'
-          : (latestMovementDisplay === 'Moving' ? 'moving' : 'unknown');
+          : (resolvedMovementDisplay === 'Moving' ? 'moving' : 'unknown');
         const centerStatusLabel = !hasHistory
           ? 'NO HISTORY'
-          : latestMovementDisplay === 'Parked'
-            ? `PARKED${Number.isFinite(latestDaysParked) ? ` · ${latestDaysParked} DAY${latestDaysParked === 1 ? '' : 'S'}` : ''}`
-            : latestMovementDisplay === 'Moving'
+          : resolvedMovementDisplay === 'Parked'
+            ? `PARKED${Number.isFinite(resolvedDaysParked) ? ` · ${resolvedDaysParked} DAY${resolvedDaysParked === 1 ? '' : 'S'}` : ''}`
+            : resolvedMovementDisplay === 'Moving'
               ? 'MOVING'
               : 'STATUS UNKNOWN';
         const rowsMarkup = expanded
