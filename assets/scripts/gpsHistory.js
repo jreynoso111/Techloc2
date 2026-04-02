@@ -161,7 +161,6 @@ const getRecordSerial = (record = {}) => {
 };
 
 const GPS_HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
-const GPS_HISTORY_NO_PING_THRESHOLD_MS = 2 * GPS_HISTORY_DAY_MS;
 const GPS_WINNER_RECENCY_WINDOW_MS = 14 * GPS_HISTORY_DAY_MS;
 const GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS = 220;
 
@@ -192,7 +191,7 @@ const hasValidGpsHistoryCoordinates = (record = {}) => (
   )
 );
 
-const isWiredSerial = (serial = '') => /^[0-7]/.test(normalizeSerial(serial));
+const isWiredSerial = (serial = '') => /^6/.test(normalizeSerial(serial));
 
 const isWirelessSerial = (serial = '') => /^8/.test(normalizeSerial(serial));
 
@@ -218,6 +217,12 @@ const getLocalDayKeyFromMs = (timeMs) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const getGpsHistoryStaleThresholdMs = () => {
+  const settings = getAppSettings();
+  const staleDays = Math.max(0, Number(settings?.vehicleMarkerStalePingDays) || 0);
+  return staleDays * GPS_HISTORY_DAY_MS;
 };
 
 const resolveSerialMovementStateForDayPoints = (points = [], { movementThresholdMeters = GPS_SERIAL_ALARM_MOVEMENT_DISTANCE_METERS } = {}) => {
@@ -333,6 +338,8 @@ const getStationaryClusterRadiusMetersForVehicle = (vehicle = {}) => (
 
 const parseRecordMovementState = (record = {}) => {
   const candidates = [
+    record?.moved_v2,
+    record?.['Moved V2'],
     record?.moved,
     record?.Moved,
     record?.moving,
@@ -444,6 +451,67 @@ const applyDisplayOverridesToEntries = (entries = [], { stationaryClusterRadiusM
   return ordered;
 };
 
+const applyDistanceFromPreviousPoint = (records = []) => {
+  if (!Array.isArray(records) || !records.length) return records;
+
+  const entriesBySerial = new Map();
+  records.forEach((record, index) => {
+    const serial = getRecordSerial(record) || '__UNASSIGNED_SERIAL__';
+    const bucket = entriesBySerial.get(serial) || [];
+    bucket.push({
+      record,
+      index,
+      timestamp: getRecordTimestampMs(record),
+      lat: parseCoordinate(record, 'lat'),
+      lng: parseCoordinate(record, 'long')
+    });
+    entriesBySerial.set(serial, bucket);
+  });
+
+  const byRecord = new Map();
+  entriesBySerial.forEach((entries) => {
+    const ordered = [...entries].sort((a, b) => {
+      if (a.timestamp === b.timestamp) return a.index - b.index;
+      return a.timestamp - b.timestamp;
+    });
+
+    let previous = null;
+    ordered.forEach((entry) => {
+      let distanceMeters = null;
+      if (
+        previous
+        && hasValidCoordinatePair(previous.lat, previous.lng)
+        && hasValidCoordinatePair(entry.lat, entry.lng)
+      ) {
+        const nextDistance = getPointDistanceMeters(
+          { lat: previous.lat, lng: previous.lng },
+          { lat: entry.lat, lng: entry.lng }
+        );
+        if (Number.isFinite(nextDistance)) {
+          distanceMeters = nextDistance;
+        }
+      }
+
+      byRecord.set(entry.record, {
+        distanceFromPrevMeters: distanceMeters,
+        distanceFromPrevMiles: Number.isFinite(distanceMeters) ? (distanceMeters / 1609.344) : null
+      });
+      previous = entry;
+    });
+  });
+
+  return records.map((record) => {
+    const metrics = byRecord.get(record);
+    if (!metrics) return record;
+    return {
+      ...record,
+      __distanceFromPrevMeters: metrics.distanceFromPrevMeters,
+      __distanceFromPrevMiles: metrics.distanceFromPrevMiles,
+      distance_from_prev_miles: metrics.distanceFromPrevMiles
+    };
+  });
+};
+
 const applyDisplayOverrides = (records = [], { vehicle = null } = {}) => {
   if (!Array.isArray(records) || !records.length) return records;
 
@@ -474,7 +542,7 @@ const applyDisplayOverrides = (records = [], { vehicle = null } = {}) => {
     normalized.forEach((entry) => byRecord.set(entry.record, entry));
   });
 
-  return records.map((record) => {
+  const derivedRecords = records.map((record) => {
     const entry = byRecord.get(record);
     if (!entry) return record;
     return {
@@ -483,6 +551,8 @@ const applyDisplayOverrides = (records = [], { vehicle = null } = {}) => {
       __derivedDaysStationary: entry.derivedDaysStationary
     };
   });
+
+  return applyDistanceFromPreviousPoint(derivedRecords);
 };
 
 const getRecordTimestampMs = (record = {}) => {
@@ -729,11 +799,6 @@ const createGpsHistoryManager = ({
       if (!records.length && lastError) throw lastError;
 
       records.sort((a, b) => {
-        const idA = a?.id;
-        const idB = b?.id;
-        if (idA != null && idB != null) {
-          return (Number(idB) || 0) - (Number(idA) || 0);
-        }
         const dateCandidates = ['Date', 'created_at', 'gps_time', 'PT-LastPing'];
         const dateValue = (record) => {
           for (const key of dateCandidates) {
@@ -744,10 +809,14 @@ const createGpsHistoryManager = ({
         };
         const timeA = dateValue(a);
         const timeB = dateValue(b);
-        if (Number.isNaN(timeA) && Number.isNaN(timeB)) return 0;
-        if (Number.isNaN(timeA)) return 1;
-        if (Number.isNaN(timeB)) return -1;
-        return timeB - timeA;
+        if (Number.isFinite(timeA) && Number.isFinite(timeB) && timeA !== timeB) {
+          return timeB - timeA;
+        }
+        if (Number.isFinite(timeA) && !Number.isFinite(timeB)) return -1;
+        if (!Number.isFinite(timeA) && Number.isFinite(timeB)) return 1;
+        const idA = Number(a?.id) || 0;
+        const idB = Number(b?.id) || 0;
+        return idB - idA;
       });
       records = records.filter((record) => hasValidGpsHistoryCoordinates(record));
       return { records, error: null };
@@ -808,6 +877,7 @@ const createGpsHistoryManager = ({
       'lat',
       'longitude',
       'long',
+      'distance_from_prev_miles',
       'lng',
       'speed',
       'heading',
@@ -964,6 +1034,15 @@ const createGpsHistoryManager = ({
       const columnKeys = new Set(availableColumnKeys);
       records.forEach((record) => {
         Object.keys(record || {}).forEach((key) => {
+          if (
+            key === '__derivedMoved'
+            || key === '__derivedDaysStationary'
+            || key === '__distanceFromPrevMeters'
+            || key === '__distanceFromPrevMiles'
+            || key === 'distance_from_prev_meters'
+          ) {
+            return;
+          }
           columnKeys.add(key);
         });
       });
@@ -1012,7 +1091,11 @@ const createGpsHistoryManager = ({
     const formatValue = (key, value) => {
       if (value === null || value === undefined || value === '') return '—';
       const normalizedKey = key.toLowerCase();
-      if (normalizedKey === 'moved') {
+      if (normalizedKey === 'distance_from_prev_miles') {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? safeEscape(`${numeric.toFixed(2)} mi`) : '—';
+      }
+      if (normalizedKey === 'moved' || normalizedKey === 'moved_v2') {
         const numeric = Number(value);
         if (numeric === 1) return 'Moving';
         if (numeric === -1) return 'Parked';
@@ -1050,6 +1133,8 @@ const createGpsHistoryManager = ({
       const loose = toLooseColumnKey(normalizedKey);
       return (
         loose === 'moved'
+        || loose === 'moved_v2'
+        || loose === 'movedv2'
         || loose === 'move'
         || loose === 'moving'
         || loose === 'moving_calc'
@@ -1060,35 +1145,48 @@ const createGpsHistoryManager = ({
     };
     const isDaysStationaryColumnKey = (normalizedKey = '') =>
       toLooseColumnKey(normalizedKey) === 'days_stationary'
+      || toLooseColumnKey(normalizedKey) === 'days_stationary_v2'
+      || toLooseColumnKey(normalizedKey) === 'daysstationaryv2'
       || toLooseColumnKey(normalizedKey) === 'days_parked'
       || toLooseColumnKey(normalizedKey) === 'days_stationary_calc'
       || toLooseColumnKey(normalizedKey) === 'daysstationary'
       || toLooseColumnKey(normalizedKey) === 'daysparked'
       || toLooseColumnKey(normalizedKey) === 'daysstationarycalc';
 
-    const getRecordDaysParkedValue = (record = {}) => {
-      if (Number.isFinite(record?.__derivedDaysStationary)) {
-        return record.__derivedDaysStationary;
-      }
-      const match = Object.entries(record || {}).find(([key]) => (
-        isDaysStationaryColumnKey(normalizeColumnKey(key))
-      ));
-      if (!match) return null;
-      const [, rawValue] = match;
-      const parsed = Number.parseInt(`${rawValue ?? ''}`.trim(), 10);
-      return Number.isFinite(parsed) ? parsed : null;
-    };
+const getRecordDaysParkedValue = (record = {}) => {
+  const explicitV2 = Number.parseInt(`${record?.days_stationary_v2 ?? ''}`.trim(), 10);
+  if (Number.isFinite(explicitV2)) return explicitV2;
+  const match = Object.entries(record || {}).find(([key]) => (
+    isDaysStationaryColumnKey(normalizeColumnKey(key))
+  ));
+  if (!match) return null;
+  const [, rawValue] = match;
+  const parsed = Number.parseInt(`${rawValue ?? ''}`.trim(), 10);
+  if (Number.isFinite(parsed)) return parsed;
+  if (Number.isFinite(record?.__derivedDaysStationary)) {
+    return record.__derivedDaysStationary;
+  }
+  return null;
+};
 
-    const getRecordMovementDisplay = (record = {}) => {
-      if (record?.__derivedMoved) return `${record.__derivedMoved}`.trim();
-      const parsedState = parseRecordMovementState(record);
-      if (parsedState === 'moving') return 'Moving';
-      if (parsedState === 'stopped') return 'Parked';
-      return '';
-    };
+const getRecordMovementDisplay = (record = {}) => {
+  const explicitV2 = Number.parseInt(`${record?.moved_v2 ?? ''}`.trim(), 10);
+  if (Number.isFinite(explicitV2)) {
+    if (explicitV2 === 1) return 'Moving';
+    if (explicitV2 === -1 || explicitV2 === 0) return 'Parked';
+  }
+  const parsedState = parseRecordMovementState(record);
+  if (parsedState === 'moving') return 'Moving';
+  if (parsedState === 'stopped') return 'Parked';
+  if (record?.__derivedMoved) return `${record.__derivedMoved}`.trim();
+  return '';
+};
 
     const getDisplayValue = (record, key, rawValue) => {
       const normalizedKey = normalizeColumnKey(key);
+      if (normalizedKey === 'distance_from_prev_miles' && Number.isFinite(record?.__distanceFromPrevMiles)) {
+        return record.__distanceFromPrevMiles;
+      }
       if (isMovedColumnKey(normalizedKey) && record?.__derivedMoved) {
         return record.__derivedMoved;
       }
@@ -1200,6 +1298,7 @@ const createGpsHistoryManager = ({
         ? [winnerSerial]
         : configuredSerials;
       const serialGroups = buildSerialGroups(filteredRecords, visibleConfiguredSerials);
+      const staleThresholdMs = getGpsHistoryStaleThresholdMs();
       const wirelessAlarmSerials = detectWirelessSerialMovementAlarms(modeRecords, {
         isSerialBlacklisted: serialIsBlacklisted,
         movementThresholdMeters: getStationaryClusterRadiusMetersForVehicle(vehicle)
@@ -1246,7 +1345,8 @@ const createGpsHistoryManager = ({
         const latestRecord = hasHistory ? group.records[0] : null;
         const latestTimestampMs = latestRecord ? getRecordTimestampMs(latestRecord) : Number.NEGATIVE_INFINITY;
         const isNoPingSerial = Number.isFinite(latestTimestampMs)
-          && ((Date.now() - latestTimestampMs) > GPS_HISTORY_NO_PING_THRESHOLD_MS);
+          && staleThresholdMs > 0
+          && ((Date.now() - latestTimestampMs) > staleThresholdMs);
         const latestLabel = latestRecord ? getDateDisplayFromRecord(latestRecord) : 'No history';
         const oldestLabel = hasHistory ? getDateDisplayFromRecord(group.records[group.records.length - 1]) : 'No history';
         const latestMovementDisplay = latestRecord ? getRecordMovementDisplay(latestRecord) : '';
@@ -1257,24 +1357,33 @@ const createGpsHistoryManager = ({
         const canonicalDaysParked = isWinnerSerial
           ? getVehicleCanonicalDaysParked(vehicle)
           : null;
-        const resolvedMovementDisplay = canonicalMovementStatus === 'stopped'
+        const staleOrUnknown = isNoPingSerial || canonicalMovementStatus === 'unknown';
+        const resolvedMovementDisplay = canonicalMovementStatus === 'stopped' && !isNoPingSerial
           ? 'Parked'
-          : canonicalMovementStatus === 'moving'
+          : canonicalMovementStatus === 'moving' && !isNoPingSerial
             ? 'Moving'
-            : canonicalMovementStatus === 'unknown'
+            : staleOrUnknown
               ? ''
               : latestMovementDisplay;
-        const resolvedDaysParked = Number.isFinite(canonicalDaysParked)
+        const resolvedDaysParked = (
+          canonicalMovementStatus === 'stopped'
+          && Number.isFinite(canonicalDaysParked)
+          && !isNoPingSerial
+        )
           ? canonicalDaysParked
-          : latestDaysParked;
+          : (staleOrUnknown ? null : latestDaysParked);
         const latestDaysParkedLabel = Number.isFinite(resolvedDaysParked)
           ? `${resolvedDaysParked} parked day${resolvedDaysParked === 1 ? '' : 's'}`
-          : 'Parked days: —';
-        const centerStatusTone = resolvedMovementDisplay === 'Parked'
+          : (staleOrUnknown ? 'Status unknown' : 'Parked days: —');
+        const centerStatusTone = staleOrUnknown
+          ? 'unknown'
+          : resolvedMovementDisplay === 'Parked'
           ? 'parked'
           : (resolvedMovementDisplay === 'Moving' ? 'moving' : 'unknown');
         const centerStatusLabel = !hasHistory
           ? 'NO HISTORY'
+          : staleOrUnknown
+            ? 'STATUS UNKNOWN'
           : resolvedMovementDisplay === 'Parked'
             ? `PARKED${Number.isFinite(resolvedDaysParked) ? ` · ${resolvedDaysParked} DAY${resolvedDaysParked === 1 ? '' : 'S'}` : ''}`
             : resolvedMovementDisplay === 'Moving'
@@ -1559,7 +1668,7 @@ const createGpsHistoryManager = ({
     const finalizeRender = (records, error) => {
       winnerSerial = resolveWinnerSerial(vehicle, records);
       syncViewControls();
-      renderHistory(records);
+      renderHistory(applyDisplayOverrides(records, { vehicle }));
       if (statusText && error) statusText.textContent = 'Unable to load GPS history.';
       if (error) {
         setConnectionStatus('Connection failed', 'error');

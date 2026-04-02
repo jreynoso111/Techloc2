@@ -600,6 +600,19 @@
       return normalized || '';
     };
 
+    const normalizeGpsSerialValue = (value) => normalizeUpperTrimmedValue(value);
+
+    const isWiredGpsSerialValue = (serial = '') => /^6/.test(normalizeGpsSerialValue(serial));
+
+    const isWirelessGpsSerialValue = (serial = '') => /^8/.test(normalizeGpsSerialValue(serial));
+
+    const parseBlacklistEffectiveFromTimestamp = (value) => {
+      if (value === null || value === undefined || `${value}`.trim() === '') return null;
+      const parsed = Date.parse(value);
+      if (!Number.isFinite(parsed)) return null;
+      return parsed;
+    };
+
     const hasValidPtCoordinates = (row = {}) => {
       const lat = toNumber(row?.['Lat'] ?? row?.Lat ?? row?.lat);
       const lng = toNumber(row?.['Long'] ?? row?.Long ?? row?.long ?? row?.lng);
@@ -1801,8 +1814,8 @@
         return str.slice(-6);
       };
 
-      const fetchDealsVinSet = async () => {
-        const set = new Set();
+      const fetchDealsVinMap = async () => {
+        const map = new Map();
         const pageSize = 1000;
         let from = 0;
         while (true) {
@@ -1814,12 +1827,46 @@
           if (error) throw error;
           (data || []).forEach((row) => {
             const last6 = normalizeVinLast6(row?.VIN);
-            if (last6) set.add(last6);
+            const normalizedVin = normalizeUpperTrimmedValue(row?.VIN);
+            if (last6 && normalizedVin) map.set(last6, normalizedVin);
           });
           if (!data || data.length < pageSize) break;
           from += pageSize;
         }
-        return set;
+        return map;
+      };
+
+      const fetchGpsBlacklistMap = async () => {
+        const blacklistMap = new Map();
+        const pageSize = 1000;
+        let from = 0;
+        while (true) {
+          const to = from + pageSize - 1;
+          const { data, error } = await supabaseClient
+            .from('gps_blacklist')
+            .select('serial,is_active,effective_from')
+            .range(from, to);
+          if (error) throw error;
+          (data || []).forEach((row) => {
+            if (row?.is_active === false) return;
+            const serial = normalizeGpsSerialValue(row?.serial);
+            if (!serial) return;
+            const effectiveFromTs = parseBlacklistEffectiveFromTimestamp(row?.effective_from);
+            const currentValue = blacklistMap.get(serial);
+            if (currentValue === undefined) {
+              blacklistMap.set(serial, effectiveFromTs);
+              return;
+            }
+            if (currentValue === null || effectiveFromTs === null) {
+              blacklistMap.set(serial, null);
+              return;
+            }
+            blacklistMap.set(serial, Math.min(currentValue, effectiveFromTs));
+          });
+          if (!data || data.length < pageSize) break;
+          from += pageSize;
+        }
+        return blacklistMap;
       };
 
       const submitBtn = document.getElementById('pt-ping-upload-button');
@@ -1842,6 +1889,7 @@
         skippedDeduplication: 0,
         skippedSupabaseDuplicates: 0,
         rejectedNoMatchVin: 0,
+        rejectedBlacklistedGps: 0,
       };
 
       const derivePtDayParts = (dateVal) => {
@@ -2039,16 +2087,18 @@
       }
 
       setStatus(`Validating ${cleanedRows.length} rows (Serial, Date, Lat and Long required)...`);
-      let dealsVinSet;
+      let dealsVinMap;
+      let gpsBlacklistMap;
       try {
         setStatus('Loading reference VINs...');
-        dealsVinSet = await fetchDealsVinSet();
+        dealsVinMap = await fetchDealsVinMap();
+        gpsBlacklistMap = await fetchGpsBlacklistMap();
       } catch (err) {
-        console.error('Failed to load Deals VINs', err);
-        showToast('Unable to load Deals VINs for validation.', 'error');
-        setStatus('VIN validation unavailable.');
+        console.error('Failed to load validation references', err);
+        showToast('Unable to load validation references for PT upload.', 'error');
+        setStatus('Validation references unavailable.');
         setProgress(0, 'Validation failed');
-        showPtError(err, 'Deals VIN fetch failed');
+        showPtError(err, 'PT upload validation reference fetch failed');
         return;
       }
 
@@ -2076,7 +2126,8 @@
           return;
         }
         const vinLast6 = normalizeVinLast6(row?.['VIN']);
-        if (!vinLast6 || !dealsVinSet.has(vinLast6)) {
+        const canonicalVin = vinLast6 ? dealsVinMap?.get(vinLast6) : '';
+        if (!vinLast6 || !canonicalVin) {
           aggregated.rejectedNoMatchVin += 1;
           const { __invalidDate, ...rest } = row;
           rejectedRows.push({ ...rest, error: 'VIN not in Deals (last 6 mismatch)' });
@@ -2088,7 +2139,21 @@
           rejectedRows.push({ ...rest, error: 'Missing Lat or Long' });
           return;
         }
+        const normalizedSerial = normalizeGpsSerialValue(serial);
+        const rowTimestamp = parsePtComparableTimestamp(date);
+        if (isWirelessGpsSerialValue(normalizedSerial) && gpsBlacklistMap instanceof Map && gpsBlacklistMap.has(normalizedSerial)) {
+          const effectiveFromTs = gpsBlacklistMap.get(normalizedSerial);
+          const shouldRejectForBlacklist = effectiveFromTs === null
+            || (Number.isFinite(rowTimestamp) && rowTimestamp >= effectiveFromTs);
+          if (shouldRejectForBlacklist) {
+            aggregated.rejectedBlacklistedGps += 1;
+            const { __invalidDate, ...rest } = row;
+            rejectedRows.push({ ...rest, error: 'Wireless serial blacklisted for this date' });
+            return;
+          }
+        }
         delete row.__invalidDate;
+        row['VIN'] = canonicalVin;
         validRows.push({ row, readDay, dayHalf });
       });
 
@@ -2143,7 +2208,96 @@
 
       const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+      const finalizePtPingUpload = async (vinValues = []) => {
+        const uniqueVins = Array.from(new Set(
+          (vinValues || []).map((vin) => normalizeUpperTrimmedValue(vin)).filter(Boolean)
+        ));
+        if (!uniqueVins.length) {
+          return { updatedRows: 0, processedVins: 0 };
+        }
+
+        let processedVins = 0;
+        let updatedRows = 0;
+        let vinChunkSize = 25;
+        let cursor = 0;
+
+        while (cursor < uniqueVins.length) {
+          const remaining = uniqueVins.length - cursor;
+          let currentChunkSize = Math.min(vinChunkSize, remaining);
+          let retryAttempt = 0;
+          let completed = false;
+
+          while (!completed) {
+            const vinChunk = uniqueVins.slice(cursor, cursor + currentChunkSize);
+            setStatus(
+              `Finalizing PT processing for ${Math.min(cursor + currentChunkSize, uniqueVins.length)} ` +
+              `of ${uniqueVins.length} VINs...`
+            );
+            setProgress(
+              94 + ((cursor / uniqueVins.length) * 6),
+              `Finalizing ${Math.min(cursor + currentChunkSize, uniqueVins.length)} of ${uniqueVins.length} VINs`
+            );
+
+            const { data, error } = await supabaseClient.rpc('finalize_pt_lastping_upload', {
+              p_vins: vinChunk
+            });
+
+            if (!error) {
+              processedVins += Number(data?.processed_vins || 0);
+              updatedRows += Number(data?.updated_rows || 0);
+              cursor += currentChunkSize;
+              completed = true;
+              if (vinChunkSize < 50) {
+                vinChunkSize = Math.min(50, Math.floor(vinChunkSize * 1.5));
+              }
+              continue;
+            }
+
+            if (isPtBatchRetryable(error) && currentChunkSize > 1) {
+              const nextChunkSize = Math.max(1, Math.floor(currentChunkSize / 2));
+              if (nextChunkSize < currentChunkSize) {
+                currentChunkSize = nextChunkSize;
+                vinChunkSize = nextChunkSize;
+                retryAttempt = 0;
+                setStatus(`Finalization timed out. Reducing VIN chunk size to ${currentChunkSize} and retrying...`);
+                await waitMs(PT_PING_RETRY_BASE_DELAY_MS);
+                continue;
+              }
+            }
+
+            if (isPtBatchRetryable(error) && retryAttempt < PT_PING_MAX_RETRIES_PER_BATCH) {
+              retryAttempt += 1;
+              const retryDelayMs = PT_PING_RETRY_BASE_DELAY_MS * retryAttempt;
+              setStatus(
+                `Temporary finalization error. Retrying VIN chunk in ${(retryDelayMs / 1000).toFixed(1)}s...`
+              );
+              await waitMs(retryDelayMs);
+              continue;
+            }
+
+            throw error;
+          }
+        }
+
+        return { updatedRows, processedVins };
+      };
+
       const dedupedRows = deduplicateValidRows(validRows);
+      dedupedRows.sort((left, right) => {
+        const leftVin = normalizeUpperTrimmedValue(left?.VIN);
+        const rightVin = normalizeUpperTrimmedValue(right?.VIN);
+        if (leftVin !== rightVin) return leftVin.localeCompare(rightVin);
+
+        const leftSerial = normalizeUpperTrimmedValue(left?.Serial);
+        const rightSerial = normalizeUpperTrimmedValue(right?.Serial);
+        if (leftSerial !== rightSerial) return leftSerial.localeCompare(rightSerial);
+
+        const leftTime = Date.parse(left?.Date || '');
+        const rightTime = Date.parse(right?.Date || '');
+        const normalizedLeftTime = Number.isFinite(leftTime) ? leftTime : Number.POSITIVE_INFINITY;
+        const normalizedRightTime = Number.isFinite(rightTime) ? rightTime : Number.POSITIVE_INFINITY;
+        return normalizedLeftTime - normalizedRightTime;
+      });
       let nextIndex = 0;
       let targetBatchSize = Math.min(PT_PING_INITIAL_BATCH_SIZE, dedupedRows.length);
       let ptConflictTarget = PT_PING_PRIMARY_CONFLICT_TARGET;
@@ -2175,7 +2329,6 @@
               .from('PT-LastPing')
               .upsert(batch, {
                 onConflict: ptConflictTarget,
-                ignoreDuplicates: true,
               });
 
             if (!error) {
@@ -2254,18 +2407,21 @@
           }
         }
 
-        setProgress(94, 'Synchronizing vehicles snapshot...');
-        let vehicleSyncResult = null;
+        setProgress(94, 'Finalizing PT calculations...');
+        let vehicleSyncResult = { updated: 0, skipped: 0, updatedRows: 0, mode: 'rpc_finalize' };
         try {
-          setStatus('Synchronizing vehicles snapshot from PT history...');
-          vehicleSyncResult = await syncVehiclesFromPtLastPing(
-            dedupedRows.map((row) => row?.VIN).filter(Boolean)
-          );
+          const finalizeResult = await finalizePtPingUpload(dedupedRows.map((row) => row?.VIN));
+          vehicleSyncResult = {
+            updated: finalizeResult.processedVins,
+            skipped: 0,
+            updatedRows: finalizeResult.updatedRows,
+            mode: 'rpc_finalize'
+          };
         } catch (error) {
-          console.error('PT vehicles sync warning:', error);
-          showPtError(error, 'PT upload vehicle snapshot sync failed');
+          console.error('PT finalization warning:', error);
+          showPtError(error, 'PT upload finalization failed');
           showToast(
-            'PT uploaded, but vehicles snapshot sync failed: ' + (error?.message || 'Unknown error'),
+            'PT rows uploaded, but finalization RPC failed: ' + (error?.message || 'Unknown error'),
             'error'
           );
         }
@@ -2277,7 +2433,8 @@
           '\nBatches: ' + aggregated.batches +
           '\nDeleted existing rows without coordinates: ' + aggregated.deletedMissingCoordinates +
           '\nSent to database: ' + aggregated.inserted +
-          '\nVehicles synced: ' + (vehicleSyncResult?.updated ?? 0) +
+          '\nRows finalized by RPC: ' + (vehicleSyncResult?.updatedRows ?? 0) +
+          '\nVehicles refreshed by RPC: ' + (vehicleSyncResult?.updated ?? 0) +
           '\nRejected (missing Serial/Date): ' + aggregated.rejectedMissingRequired +
           '\nRejected (missing Lat/Long): ' + aggregated.rejectedMissingCoordinates +
           '\nRejected (invalid Date): ' + aggregated.rejectedInvalidDate +
@@ -2288,7 +2445,8 @@
         setStatus(
           `Upload complete. Removed invalid existing rows: ${aggregated.deletedMissingCoordinates} ` +
           `Sent: ${aggregated.inserted} ` +
-          `Vehicles synced: ${vehicleSyncResult?.updated ?? 0} ` +
+          `Rows finalized: ${vehicleSyncResult?.updatedRows ?? 0} ` +
+          `Vehicles refreshed: ${vehicleSyncResult?.updated ?? 0} ` +
           `Skipped (client dedup): ${aggregated.skippedDeduplication} ` +
           `Rejected: ${aggregated.rejectedMissingRequired + aggregated.rejectedMissingCoordinates + aggregated.rejectedInvalidDate + aggregated.rejectedNoMatchVin}`
         );

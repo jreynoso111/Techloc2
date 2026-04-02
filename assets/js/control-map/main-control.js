@@ -1,5 +1,5 @@
-import '../../scripts/authManager.js?v=movement-v2-20250403-1';
-import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=movement-v2-20250403-1';
+import '../../scripts/authManager.js?v=movement-v2-20250403-11';
+import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=movement-v2-20250403-11';
     import {
       APP_SETTINGS_STORAGE_KEY,
       getAppSettings,
@@ -7,12 +7,12 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       isTruckOrTrailerUnitType,
       normalizeAppSettings,
       saveAppSettings
-    } from '../../scripts/appSettings.js?v=movement-v2-20250403-1';
-    import { supabase as supabaseClient } from '../supabaseClient.js?v=movement-v2-20250403-1';
-    import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js?v=movement-v2-20250403-1';
-    import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js?v=movement-v2-20250403-1';
-    import { createGpsHistoryManager } from '../../scripts/gpsHistory.js?v=movement-v2-20250403-1';
-    import { createRepairHistoryManager } from '../../scripts/repairHistory.js?v=movement-v2-20250403-1';
+    } from '../../scripts/appSettings.js?v=movement-v2-20250403-11';
+    import { supabase as supabaseClient } from '../supabaseClient.js?v=movement-v2-20250403-11';
+    import { getDistance, loadStateCenters, resolveCoords, MILES_TO_METERS, HOTSPOT_RADIUS_MILES } from '../../scripts/geoUtils.js?v=movement-v2-20250403-11';
+    import { getField, normalizeInstaller, normalizePartner, normalizeVehicle } from '../../scripts/dataMapper.js?v=movement-v2-20250403-11';
+    import { createGpsHistoryManager } from '../../scripts/gpsHistory.js?v=movement-v2-20250403-11';
+    import { createRepairHistoryManager } from '../../scripts/repairHistory.js?v=movement-v2-20250403-11';
     import { createPartnerClusterGroup } from './utils/cluster.js';
     import { attachDistances, debounce, debounceAsync, getOriginKey, runWithTimeout } from './utils/helpers.js';
     import { startLoading } from './utils/loading.js';
@@ -32,15 +32,15 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       parsePtLastReadDate,
       parseDealCompletion,
       toStateCode
-    } from '../utils/formatters.js?v=movement-v2-20250403-1';
-    import { ensureSupabaseSession as ensureSupabaseSessionBase, SERVICE_CATEGORY_HINTS, SERVICE_TABLE, SUPABASE_TIMEOUT_MS, TABLES } from './services/supabase.js?v=movement-v2-20250403-1';
-    import { createControlMapApiService } from './services/apiService.js?v=movement-v2-20250403-1';
-    import { startSupabaseKeepAlive } from './services/realtime.js?v=movement-v2-20250403-1';
-    import { createVehicleService } from './services/vehicleService.js?v=movement-v2-20250403-1';
-    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js?v=movement-v2-20250403-1';
-    import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js?v=movement-v2-20250403-1';
-    import { createLayerToggle } from './utils/layer-toggles.js?v=movement-v2-20250403-1';
-    import { syncVehicleMarkers } from './utils/vehicle-markers.js?v=movement-v2-20250403-1';
+    } from '../utils/formatters.js?v=movement-v2-20250403-11';
+    import { ensureSupabaseSession as ensureSupabaseSessionBase, SERVICE_CATEGORY_HINTS, SERVICE_TABLE, SUPABASE_TIMEOUT_MS, TABLES } from './services/supabase.js?v=movement-v2-20250403-11';
+    import { createControlMapApiService } from './services/apiService.js?v=movement-v2-20250403-11';
+    import { startSupabaseKeepAlive } from './services/realtime.js?v=movement-v2-20250403-11';
+    import { createVehicleService } from './services/vehicleService.js?v=movement-v2-20250403-11';
+    import { SERVICE_HEADER_LABELS, getServiceModalHeaders, loadServiceModalPrefs, renderServiceModalColumnsList, saveServiceModalPrefs } from './components/service-modal.js?v=movement-v2-20250403-11';
+    import { VEHICLE_HEADER_LABELS, getVehicleModalHeaders, loadVehicleModalPrefs, renderVehicleModalColumnsList, saveVehicleModalPrefs } from './components/vehicle-modal.js?v=movement-v2-20250403-11';
+    import { createLayerToggle } from './utils/layer-toggles.js?v=movement-v2-20250403-11';
+    import { syncVehicleMarkers } from './utils/vehicle-markers.js?v=movement-v2-20250403-11';
     import {
       bindNavigationStorageListener,
       getSelectedVehicle,
@@ -48,7 +48,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       setSelectedVehicle,
       subscribeSelectedVehicle,
       subscribeServiceFilterIds,
-    } from '../shared/navigationStore.js?v=movement-v2-20250403-1';
+    } from '../shared/navigationStore.js?v=movement-v2-20250403-11';
     
     // --- Base Config ---
 
@@ -2580,6 +2580,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
     const vehicleHistoryHotspotCache = new Map();
     const vehicleHistoryHotspotPendingRequests = new Map();
     const vehicleAvgMovingMilesPendingRequests = new Map();
+    const vehiclePtSnapshotPendingRequests = new Map();
     let activeVehicleHistoryHotspots = [];
     const activeVehicleHistoryHotspotLayersByKey = new Map();
     const relatedHotspotVehiclesCache = new Map();
@@ -3150,6 +3151,71 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       return request;
     };
 
+    const hydrateVehiclePtSnapshotFromGpsHistory = async (
+      vehicle,
+      { force = false } = {}
+    ) => {
+      if (!vehicle || !gpsHistoryManager || typeof gpsHistoryManager.fetchGpsHistory !== 'function') return false;
+
+      const hasPtSerial = Boolean(getVehiclePtSerialValue(vehicle));
+      const hasFirstRead = hasParsableTime(getVehiclePtFirstReadValue(vehicle));
+      const hasLastRead = hasParsableTime(getVehiclePtLastReadValue(vehicle));
+      if (!force && hasPtSerial && hasFirstRead && hasLastRead) return false;
+
+      const vehicleKey = getVehicleKey(vehicle);
+      if (!vehicleKey) return false;
+      const pending = vehiclePtSnapshotPendingRequests.get(vehicleKey);
+      if (pending) return pending;
+
+      const request = (async () => {
+        const vin = gpsHistoryManager.getVehicleVin(vehicle);
+        const vehicleId = gpsHistoryManager.getVehicleId(vehicle);
+        if (!vin && !vehicleId) return false;
+
+        const { records, error } = await gpsHistoryManager.fetchGpsHistory({ vin, vehicleId });
+        if (error || !Array.isArray(records) || !records.length) return false;
+
+        await getGpsDeviceBlacklistSerials().catch(() => new Map());
+        const winnerSerial = typeof gpsHistoryManager.resolveVehicleWinnerSerialFromRecords === 'function'
+          ? gpsHistoryManager.resolveVehicleWinnerSerialFromRecords(vehicle, records)
+          : gpsHistoryManager.getVehicleWinnerSerial(vehicle);
+        const getRecordSerial = typeof gpsHistoryManager.getRecordSerial === 'function'
+          ? gpsHistoryManager.getRecordSerial
+          : () => '';
+
+        let changed = false;
+        if (winnerSerial) {
+          const currentSerial = getVehiclePtSerialValue(vehicle);
+          if (`${currentSerial}`.trim() !== `${winnerSerial}`.trim()) {
+            vehicle.ptSerial = winnerSerial;
+            if (vehicle?.details && typeof vehicle.details === 'object') {
+              vehicle.details['pt serial'] = winnerSerial;
+              vehicle.details.pt_serial = winnerSerial;
+              vehicle.details['PT Serial'] = winnerSerial;
+              vehicle.details['PT Serial '] = winnerSerial;
+              vehicle.details.winner_serial = winnerSerial;
+              vehicle.details['Winner Serial'] = winnerSerial;
+            }
+            changed = true;
+          }
+        }
+
+        if (applyVehiclePtReadBoundsFromRecords(vehicle, records, { winnerSerial, getRecordSerial })) {
+          changed = true;
+        }
+
+        if (changed) {
+          renderVehicles({ preserveScrollTop: true });
+        }
+        return changed;
+      })().finally(() => {
+        vehiclePtSnapshotPendingRequests.delete(vehicleKey);
+      });
+
+      vehiclePtSnapshotPendingRequests.set(vehicleKey, request);
+      return request;
+    };
+
     const toComparableTimeMs = (value) => {
       if (!value) return null;
       const parsed = Date.parse(value);
@@ -3349,7 +3415,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
 
     const normalizeGpsSerial = (serial = '') => `${serial ?? ''}`.trim().toUpperCase();
 
-    const isWiredGpsSerial = (serial = '') => /^[0-7]/.test(normalizeGpsSerial(serial));
+    const isWiredGpsSerial = (serial = '') => /^6/.test(normalizeGpsSerial(serial));
 
     const normalizeGpsBlacklistColumnName = (value = '') => `${value ?? ''}`
       .trim()
@@ -7511,6 +7577,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       }
       renderVehicles({ preserveScrollTop: true });
       if (willExpand && vehicle) {
+        void hydrateVehiclePtSnapshotFromGpsHistory(vehicle);
         void hydrateVehicleAverageMovingMilesPerDay(vehicle);
       }
     }
@@ -7869,18 +7936,9 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
           const latLabel = Number.isFinite(Number(vehicle.lat)) ? Number(vehicle.lat).toFixed(5) : '—';
           const longLabel = Number.isFinite(Number(vehicle.lng)) ? Number(vehicle.lng).toFixed(5) : '—';
           const oldestOpenInvoiceDateLabel = escapeHTML(vehicle.oldestOpenInvoiceDateDisplay || '—');
-          const ptLastReadLabel = formatDateTime(
-            vehicle.lastRead
-            ?? vehicle?.details?.pt_last_read
-            ?? vehicle?.details?.['PT Last Read']
-          );
-          const ptFirstReadLabel = formatDateTime(
-            vehicle.firstRead
-            ?? vehicle?.details?.pt_first_read
-            ?? vehicle?.details?.['PT First Read']
-            ?? vehicle?.details?.pt_first_trip
-            ?? vehicle?.details?.['PT First Trip']
-          );
+          const ptSerialLabel = escapeHTML(getVehiclePtSerialValue(vehicle) || '—');
+          const ptLastReadLabel = formatDateTime(getVehiclePtLastReadValue(vehicle));
+          const ptFirstReadLabel = formatDateTime(getVehiclePtFirstReadValue(vehicle));
           const locationDisplay = formatVehicleSidebarAddress(
             vehicle.shortLocation || vehicle.lastLocation || '',
             vehicle.zipcode || ''
@@ -7945,6 +8003,7 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
               <div class="rounded-lg border border-slate-800 bg-slate-950/70 px-2 py-1.5 flex items-center gap-2 text-slate-200">
                 ${svgIcon('clock', 'h-3 w-3 text-blue-400')}
                 <div class="text-left leading-tight">
+                  <p class="text-[10px] text-slate-300">Serial <span class="text-slate-100 font-semibold">${ptSerialLabel}</span></p>
                   <p class="text-[10px] text-slate-400">Last ${ptLastReadLabel}</p>
                   <p class="text-[10px] text-slate-500">First ${ptFirstReadLabel}</p>
                 </div>
@@ -8191,6 +8250,10 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
     }
 
     function getDaysParkedValue(vehicle) {
+      if (getMovingStatus(vehicle) === 'unknown') {
+        return Number.NEGATIVE_INFINITY;
+      }
+
       const movementDaysV2 = parseDaysParkedCandidate(
         vehicle?.movementDaysStationaryV2
         ?? vehicle?.details?.movement_days_stationary_v2
@@ -8213,6 +8276,40 @@ import { setupBackgroundManager } from '../../scripts/backgroundManager.js?v=mov
       }
 
       return parsedDays;
+    }
+
+    function getVehiclePtSerialValue(vehicle) {
+      return String(
+        vehicle?.ptSerial
+        ?? vehicle?.winnerSerial
+        ?? vehicle?.details?.['pt serial']
+        ?? vehicle?.details?.pt_serial
+        ?? vehicle?.details?.['PT Serial']
+        ?? vehicle?.details?.['PT Serial ']
+        ?? vehicle?.details?.winner_serial
+        ?? vehicle?.details?.['Winner Serial']
+        ?? ''
+      ).trim();
+    }
+
+    function getVehiclePtLastReadValue(vehicle) {
+      return vehicle?.lastRead
+        ?? vehicle?.details?.['pt last read']
+        ?? vehicle?.details?.pt_last_read
+        ?? vehicle?.details?.['PT Last Read']
+        ?? vehicle?.details?.['PT Last Read ']
+        ?? '';
+    }
+
+    function getVehiclePtFirstReadValue(vehicle) {
+      return vehicle?.firstRead
+        ?? vehicle?.details?.['pt first read']
+        ?? vehicle?.details?.pt_first_read
+        ?? vehicle?.details?.['PT First Read']
+        ?? vehicle?.details?.['PT First Read ']
+        ?? vehicle?.details?.pt_first_trip
+        ?? vehicle?.details?.['PT First Trip']
+        ?? '';
     }
 
     function getDaysParkedDisplay(vehicle) {

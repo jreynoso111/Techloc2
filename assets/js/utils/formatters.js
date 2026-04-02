@@ -1,3 +1,5 @@
+import { getAppSettings } from '../../scripts/appSettings.js';
+
 export const toStateCode = (value = '') => {
   if (!value) return '';
   const match = `${value}`.match(/([A-Z]{2})/i);
@@ -113,9 +115,11 @@ const getPtLastReadStatus = (value) => {
   const ageMs = getPtLastReadAgeMs(value);
   if (ageMs === null) return 'fresh';
   if (ageMs <= 0) return 'fresh';
+  const settings = getAppSettings();
+  const staleDays = Math.max(0, Number(settings?.vehicleMarkerStalePingDays) || 0);
+  const staleMs = staleDays * 24 * 60 * 60 * 1000;
   const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  if (ageMs > sevenDaysMs) return 'unknown';
+  if (staleMs > 0 && ageMs > staleMs) return 'unknown';
   if (ageMs > twoDaysMs) return 'stale';
   return 'fresh';
 };
@@ -158,6 +162,9 @@ const parseMovingIndicator = (...candidates) => {
     ) {
       return 'stopped';
     }
+    if (normalized === 'unknown') {
+      return 'unknown';
+    }
   }
   return null;
 };
@@ -184,19 +191,35 @@ const parseStationaryDays = (...candidates) => {
 };
 
 export const getMovingStatus = (vehicle = {}) => {
-  const stationaryDays = parseStationaryDays(
+  const explicitV2Status = parseMovingIndicator(
+    vehicle?.movementStatusV2,
+    vehicle?.details?.movement_status_v2
+  );
+  if (explicitV2Status === 'moving' || explicitV2Status === 'stopped' || explicitV2Status === 'unknown') {
+    return explicitV2Status;
+  }
+
+  const v2StationaryDays = parseStationaryDays(
     vehicle?.movementDaysStationaryV2,
-    vehicle?.details?.movement_days_stationary_v2,
+    vehicle?.details?.movement_days_stationary_v2
+  );
+  if (v2StationaryDays !== null) {
+    return v2StationaryDays <= 0 ? 'moving' : 'stopped';
+  }
+
+  const lastReadStatus = getPtLastReadStatus(getVehicleLastReadCandidate(vehicle));
+  if (lastReadStatus === 'unknown') {
+    return 'unknown';
+  }
+
+  const stationaryDays = parseStationaryDays(
     vehicle?.daysStationary,
     vehicle?.details?.days_stationary,
     vehicle?.details?.['Days Stationary'],
     vehicle?.details?.['Days stationary'],
     vehicle?.details?.['Days Parked']
   );
-
-  const explicitStatus = parseMovingIndicator(
-    vehicle?.movementStatusV2,
-    vehicle?.details?.movement_status_v2,
+  const explicitLegacyStatus = parseMovingIndicator(
     vehicle?.moving,
     vehicle?.movingCalc,
     vehicle?.gpsMoving,
@@ -207,14 +230,8 @@ export const getMovingStatus = (vehicle = {}) => {
     vehicle?.details?.['Moving (Calc)'],
     vehicle?.details?.['GPS Moving']
   );
-
-  if (explicitStatus === 'moving' || explicitStatus === 'stopped') {
-    return explicitStatus;
-  }
-
-  const lastReadStatus = getPtLastReadStatus(getVehicleLastReadCandidate(vehicle));
-  if (lastReadStatus === 'unknown') {
-    return 'unknown';
+  if (explicitLegacyStatus === 'moving' || explicitLegacyStatus === 'stopped') {
+    return explicitLegacyStatus;
   }
 
   if (stationaryDays !== null && stationaryDays > 0) {
